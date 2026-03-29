@@ -244,7 +244,14 @@ class TTSInferencer:
         try:
             enable_precapture = os.environ.get("ENABLE_CUDA_GRAPH_PRECAPTURE", "1") == "1"
             decoder = getattr(self.t2s_model, "model", None)
-            if not enable_precapture or decoder is None or not getattr(decoder, "cuda_graph_enabled", False):
+            if not enable_precapture or decoder is None:
+                return
+            # cuda_graph_enabled 由 ENABLE_CUDA_GRAPH 环境变量控制，
+            # 但 force_graph=True 路径在运行时可以绕过该标志直接使用 graph。
+            # 因此，只要 use_static_kv_cache=True（CUDA 可用即成立），就应该预捕获。
+            can_use_graph = (getattr(decoder, "cuda_graph_enabled", False)
+                             or getattr(decoder, "use_static_kv_cache", False))
+            if not can_use_graph:
                 return
 
             bucket_env = os.environ.get("CUDA_GRAPH_PRECAPTURE_BUCKETS", "")
