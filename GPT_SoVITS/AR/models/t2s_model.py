@@ -498,8 +498,9 @@ class Text2SemanticDecoder(nn.Module):
         self._bucket_locks_guard = threading.Lock()
         
         # 定义桶大小：覆盖常见的文本+prompt长度
-        # 根据实际场景调整，这里选择 [128, 256, 512, 768, 1024]
-        self.kv_cache_buckets = [128, 256, 512, 768, 1024] if self.use_static_kv_cache else []
+        # 448 桶专门覆盖 initial_len 330-415 的场景（原先命中 512），
+        # attention 计算量从 512 降到 448，减少约 12.5%。
+        self.kv_cache_buckets = [128, 256, 448, 512, 768, 1024] if self.use_static_kv_cache else []
         
         # 每个桶维护独立的 CUDA Graph 和静态缓冲区
         self.bucket_graphs = {}  # {bucket_size: cuda_graph}
