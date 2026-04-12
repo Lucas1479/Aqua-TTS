@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+import threading
 import torch
 import soundfile as sf
 import logging
@@ -123,6 +125,9 @@ class TTSInferencer:
 
             # 会话级缓存：按(ref_audio_path, prompt_text, prompt_language_code, model_version, is_half)键控
             self._session_cache = {}
+            self._sovits_decode_lock = threading.Lock()
+            # 仅在需要做性能剖析时开启；默认关闭以避免流式首句每块都强制同步 GPU。
+            self._stream_sync_timing_enabled = os.environ.get("TTS_STREAM_SYNC_TIMING", "0") == "1"
 
         except Exception as e:
             logger.error(f"❌ 初始化TTS推理器失败: {str(e)}")
@@ -265,12 +270,27 @@ class TTSInferencer:
                         buckets.append(int(token))
                     except ValueError:
                         logger.warning(f"⚠️ 跳过非法桶配置: {token}")
+            available_buckets = list(getattr(decoder, "kv_cache_buckets", []) or [])
+            if not available_buckets:
+                # 没有定义桶就直接返回
+                return
+
+            # 首句实测高频落在 448，其次是 512。无论环境变量是否显式指定，
+            # 都优先补上这两个常用桶，避免预热和真实运行落在不同桶上。
+            preferred_buckets = [448, 512]
+            preferred_buckets = [b for b in preferred_buckets if b in available_buckets]
+
             # 默认：预热所有可用的 KV Cache 桶，避免在首句推理时临时捕获造成额外延迟
             if not buckets:
-                buckets = list(getattr(decoder, "kv_cache_buckets", []) or [])
-                if not buckets:
-                    # 没有定义桶就直接返回
-                    return
+                buckets = list(available_buckets)
+            else:
+                buckets = [b for b in buckets if b in available_buckets]
+
+            merged_buckets = []
+            for bucket in preferred_buckets + buckets:
+                if bucket not in merged_buckets:
+                    merged_buckets.append(bucket)
+            buckets = merged_buckets
 
             logger.info(f"🚀 触发 CUDA Graph 预捕获，目标桶: {buckets}")
             results = decoder.precapture_cuda_graph(buckets)
@@ -460,12 +480,35 @@ class TTSInferencer:
                 mel2 = norm_spec(mel2)
                 cache_item["mel2_norm"] = mel2
 
+                # 5) v3 额外缓存：prompt 侧 decode_encp 结果，避免每句重复做同一份参考编码
+                phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+                with torch.no_grad():
+                    prompt_fea_ref, prompt_ge = self.vq_model.decode_encp(
+                        cache_item["prompt"].unsqueeze(0),
+                        phoneme_ids0,
+                        refer,
+                    )
+                cache_item["prompt_fea_ref"] = prompt_fea_ref
+                cache_item["prompt_ge"] = prompt_ge
+
             self._session_cache[key] = cache_item
             return cache_item
         except Exception:
             logger.warning("构建会话缓存失败，回退到逐句计算。")
             logger.warning(traceback.format_exc())
             return {}
+
+    def _clone_cached_value(self, value):
+        """避免读取会话缓存后被后续推理路径原地复用/污染。"""
+        if torch.is_tensor(value):
+            return value.clone()
+        if isinstance(value, list):
+            return [self._clone_cached_value(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._clone_cached_value(item) for item in value)
+        if isinstance(value, dict):
+            return {k: self._clone_cached_value(v) for k, v in value.items()}
+        return value
 
     def get_bert_feature(self, text, word2ph):
         """获取BERT特征"""
@@ -857,8 +900,11 @@ class TTSInferencer:
                     phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
                     phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
 
-                    # 提取参考音频特征
-                    fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
+                    # 提取参考音频特征（优先使用会话缓存）
+                    fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
+                    ge = self._clone_cached_value(sess.get("prompt_ge"))
+                    if fea_ref is None or ge is None:
+                        fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
 
                     # 加载并处理参考音频
                     ref_audio, ref_sr = torchaudio.load(ref_audio_path)
@@ -1279,144 +1325,200 @@ class TTSInferencer:
                     # v3模型解码
                     import torchaudio
 
-                    # 根据is_half决定是否使用half
-                    refer = sess.get("refer_spec")
-                    if refer is None:
-                        refer = self.get_spepc(ref_audio_path).to(self.device)
-                        refer = refer.half() if self.is_half else refer.float()
+                    # ????????? graph ?????????? v3 ????
+                    # ????????? GPT????? SoVITS / BigVGAN ?????
+                    with self._sovits_decode_lock:
+                        # 根据is_half决定是否使用half
+                        refer = sess.get("refer_spec")
+                        if refer is None:
+                            refer = self.get_spepc(ref_audio_path).to(self.device)
+                            refer = refer.half() if self.is_half else refer.float()
 
-                    phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
-                    phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                        phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+                        phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
 
-                    # 提取参考音频特征
-                    fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
+                        # 提取参考音频特征（优先使用会话缓存）
+                        fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
+                        ge = self._clone_cached_value(sess.get("prompt_ge"))
+                        if fea_ref is None or ge is None:
+                            fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
 
-                    # 加载并处理参考音频
-                    # 提取mel特征（缓存优先）
-                    mel2 = sess.get("mel2_norm")
-                    # 归一化/反归一化参数与函数（无论是否命中缓存，都需要用于后续 denorm）
-                    spec_min, spec_max = -12, 2
-                    denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
-                    if mel2 is None:
-                        ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-                        ref_audio = ref_audio.to(self.device)
-                        ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
-                        if ref_audio.shape[0] == 2:  # 转单声道
-                            ref_audio = ref_audio.mean(0).unsqueeze(0)
-                        if ref_sr != 24000:
-                            ref_audio = self._resample(ref_audio, ref_sr)
-                        mel_fn = lambda x: mel_spectrogram_torch(x, **{
-                            "n_fft": 1024,
-                            "win_size": 1024,
-                            "hop_size": 256,
-                            "num_mels": 100,
-                            "sampling_rate": 24000,
-                            "fmin": 0,
-                            "fmax": None,
-                            "center": False
-                        })
-                        norm_spec = lambda x: (x - spec_min) / (spec_max - spec_min) * 2 - 1
-                        mel2 = mel_fn(ref_audio)
-                        mel2 = norm_spec(mel2)
+                        # 加载并处理参考音频
+                        # 提取mel特征（缓存优先）
+                        mel2 = sess.get("mel2_norm")
+                        # 归一化/反归一化参数与函数（无论是否命中缓存，都需要用于后续 denorm）
+                        spec_min, spec_max = -12, 2
+                        denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
+                        if mel2 is None:
+                            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
+                            ref_audio = ref_audio.to(self.device)
+                            ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
+                            if ref_audio.shape[0] == 2:  # 转单声道
+                                ref_audio = ref_audio.mean(0).unsqueeze(0)
+                            if ref_sr != 24000:
+                                ref_audio = self._resample(ref_audio, ref_sr)
+                            mel_fn = lambda x: mel_spectrogram_torch(x, **{
+                                "n_fft": 1024,
+                                "win_size": 1024,
+                                "hop_size": 256,
+                                "num_mels": 100,
+                                "sampling_rate": 24000,
+                                "fmin": 0,
+                                "fmax": None,
+                                "center": False
+                            })
+                            norm_spec = lambda x: (x - spec_min) / (spec_max - spec_min) * 2 - 1
+                            mel2 = mel_fn(ref_audio)
+                            mel2 = norm_spec(mel2)
 
-                    # 调整长度
-                    T_min = min(mel2.shape[2], fea_ref.shape[2])
-                    mel2 = mel2[:, :, :T_min]
-                    fea_ref = fea_ref[:, :, :T_min]
-                    if (T_min > 468):
-                        mel2 = mel2[:, :, -468:]
-                        fea_ref = fea_ref[:, :, -468:]
-                        T_min = 468
+                        # 调整长度
+                        T_min = min(mel2.shape[2], fea_ref.shape[2])
+                        mel2 = mel2[:, :, :T_min]
+                        fea_ref = fea_ref[:, :, :T_min]
+                        if (T_min > 468):
+                            mel2 = mel2[:, :, -468:]
+                            fea_ref = fea_ref[:, :, -468:]
+                            T_min = 468
 
-                    # 设置块长度
-                    chunk_len = 934 - T_min
-                    # 根据is_half决定是否使用half
-                    if self.is_half:
-                        mel2 = mel2.half()
-                    else:
-                        mel2 = mel2.float()
+                        # 设置块长度
+                        default_chunk_len = 934 - T_min
+                        chunk_len = default_chunk_len
+                        stream_v3_chunks = chunk_samples is not None and chunk_samples > 0
+                        if stream_v3_chunks:
+                            target_chunk_frames = max(
+                                8, int(round((chunk_samples / float(sr)) * (sr / 256.0)))
+                            )
+                            chunk_len = max(8, min(default_chunk_len, target_chunk_frames))
+                            logger.info(
+                                "[v3-stream] enable true streaming: mel_chunk=%s (default=%s, target_frames=%s)"
+                                % (chunk_len, default_chunk_len, target_chunk_frames)
+                            )
+                        # ??is_half??????half
+                        if self.is_half:
+                            mel2 = mel2.half()
+                        else:
+                            mel2 = mel2.float()
 
-                    # 解码目标特征
-                    fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
+                        # ??????
+                        fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
 
-                    # 分块处理
-                    cfm_resss = []
-                    idx = 0
-                    while True:
-                        fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
-                        if fea_todo_chunk.shape[-1] == 0:
-                            break
+                        # ????
+                        cfm_resss = []
+                        _t_cfm_total = 0.0
+                        idx = 0
+                        total_todo_frames = fea_todo.shape[2]
+                        stream_chunk_index = 0
+                        while True:
+                            chunk_end = min(total_todo_frames, idx + chunk_len)
+                            fea_todo_chunk = fea_todo[:, :, idx:chunk_end]
+                            if fea_todo_chunk.shape[-1] == 0:
+                                break
 
-                        idx += chunk_len
-                        fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+                            idx = chunk_end
+                            fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
 
-                        # CFM推理
-                        cfm_res = self.vq_model.cfm.inference(
-                            fea,
-                            torch.LongTensor([fea.size(1)]).to(fea.device),
-                            mel2,
-                            sample_steps,
-                            inference_cfg_rate=0
-                        )
+                            # CFM??
+                            _t0 = time.perf_counter()
+                            cfm_res = self.vq_model.cfm.inference(
+                                fea,
+                                torch.LongTensor([fea.size(1)]).to(fea.device),
+                                mel2,
+                                sample_steps,
+                                inference_cfg_rate=0
+                            )
+                            if self._stream_sync_timing_enabled and str(self.device) != "cpu":
+                                torch.cuda.synchronize()
+                            _t_cfm_chunk = (
+                                time.perf_counter() - _t0
+                                if self._stream_sync_timing_enabled
+                                else None
+                            )
 
-                        cfm_res = cfm_res[:, :, mel2.shape[2]:]
-                        mel2 = cfm_res[:, :, -T_min:]
-                        fea_ref = fea_todo_chunk[:, :, -T_min:]
-                        cfm_resss.append(cfm_res)
+                            cfm_res = cfm_res[:, :, mel2.shape[2]:]
+                            mel2 = cfm_res[:, :, -T_min:]
+                            fea_ref = fea_todo_chunk[:, :, -T_min:]
+                            if _t_cfm_chunk is not None:
+                                _t_cfm_total = _t_cfm_total + _t_cfm_chunk
 
-                    # 合并结果
-                    cmf_res = torch.cat(cfm_resss, 2)
-                    cmf_res = denorm_spec(cmf_res)
+                            if stream_v3_chunks:
+                                stream_chunk_index += 1
+                                is_last_stream_chunk = idx >= total_todo_frames
+                                chunk_mel = denorm_spec(cfm_res)
+                                _t1 = time.perf_counter()
+                                with torch.inference_mode():
+                                    wav_gen = self.bigvgan_model(chunk_mel)
+                                    audio = wav_gen[0][0]
+                                if self._stream_sync_timing_enabled and str(self.device) != "cpu":
+                                    torch.cuda.synchronize()
+                                if self._stream_sync_timing_enabled:
+                                    logger.info(
+                                        "[v3-stream] chunk=%s cfm=%.1fms bigvgan=%.1fms mel_T=%s"
+                                        % (
+                                            stream_chunk_index,
+                                            _t_cfm_chunk * 1000.0,
+                                            (time.perf_counter() - _t1) * 1000.0,
+                                            chunk_mel.shape[2],
+                                        )
+                                    )
+                                else:
+                                    logger.info(
+                                        "[v3-stream] chunk=%s mel_T=%s"
+                                        % (stream_chunk_index, chunk_mel.shape[2])
+                                    )
 
-                    # BigVGAN生成波形
-                    with torch.inference_mode():
-                        wav_gen = self.bigvgan_model(cmf_res)
-                        audio = wav_gen[0][0]
+                                max_audio = torch.abs(audio).max()
+                                if max_audio > 1:
+                                    audio = audio / max_audio
 
-                    # 防止爆音
-                    max_audio = torch.abs(audio).max()
-                    if max_audio > 1:
-                        audio = audio / max_audio
+                                audio_chunk = self._finalize_stream_chunk(
+                                    audio,
+                                    sr,
+                                    if_sr=if_sr,
+                                    is_last_chunk=is_last_stream_chunk,
+                                    apply_fade_in=(stream_chunk_index > 1),
+                                )
+                                yield sr, audio_chunk, text_item if stream_chunk_index == 1 else ""
+                            else:
+                                cfm_resss.append(cfm_res)
 
-                    # 音频超分(仅v3模型支持)
-                    audio_chunk = audio
-                    if if_sr and self.model_version == "v3":
-                        try:
-                            logger.info("执行音频超分...")
-                            # 初始化超分模型（如果未初始化）
-                            if not hasattr(self, 'sr_model') or self.sr_model is None:
-                                self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
+                        if not stream_v3_chunks:
+                            # ????
+                            cmf_res = torch.cat(cfm_resss, 2)
+                            cmf_res = denorm_spec(cmf_res)
 
-                            # 进行音频超分
-                            audio_chunk, sr = self.sr_model(audio.unsqueeze(0), sr)
+                            # BigVGAN????
+                            _t1 = time.perf_counter()
+                            with torch.inference_mode():
+                                wav_gen = self.bigvgan_model(cmf_res)
+                                audio = wav_gen[0][0]
+                            if str(self.device) != "cpu":
+                                torch.cuda.synchronize()
+                            print("[sovits-timing] cfm=%.1fms  bigvgan=%.1fms  mel_T=%s" % (
+                                _t_cfm_total * 1000.0,
+                                (time.perf_counter() - _t1) * 1000.0,
+                                cmf_res.shape[2],
+                            ))
 
-                            # 再次防止爆音
-                            max_audio = np.abs(audio_chunk).max()
+                            # ????
+                            max_audio = torch.abs(audio).max()
                             if max_audio > 1:
-                                audio_chunk = audio_chunk / max_audio
-                        except Exception as e:
-                            logger.warning(f"音频超分失败: {e}")
-                            logger.warning(traceback.format_exc())
-                            audio_chunk = audio.cpu().detach().numpy()
-                    else:
-                        audio_chunk = audio.cpu().detach().numpy()
+                                audio = audio / max_audio
 
-                    # 确保音频数据是float32类型
-                    if hasattr(audio_chunk, 'dtype') and 'float16' in str(audio_chunk.dtype):
-                        audio_chunk = audio_chunk.astype(np.float32)
+                            audio_chunk = self._finalize_stream_chunk(
+                                audio,
+                                sr,
+                                if_sr=if_sr,
+                                is_last_chunk=True,
+                            )
 
-                    # 句尾淡出，消除突然截断的爆音感
-                    audio_chunk = self._apply_fade_out(audio_chunk, sr)
+                            # ??????????????????????
+                            for _sr, _chunk, _text in _yield_audio_segments(audio_chunk, text_item):
+                                yield _sr, _chunk, _text
 
-                    # 流式返回当前句子的音频和对应的文本（可分块）
-                    for _sr, _chunk, _text in _yield_audio_segments(audio_chunk, text_item):
-                        yield _sr, _chunk, _text
-
-                    # 返回句间停顿
-                    pause_chunk = zero_wav.cpu().detach().numpy()
-                    if hasattr(pause_chunk, 'dtype') and 'float16' in str(pause_chunk.dtype):
-                        pause_chunk = pause_chunk.astype(np.float32)
-                    yield sr, pause_chunk, ""  # 停顿不需要文本
+                        pause_chunk = zero_wav.cpu().detach().numpy()
+                        if hasattr(pause_chunk, 'dtype') and 'float16' in str(pause_chunk.dtype):
+                            pause_chunk = pause_chunk.astype(np.float32)
+                        yield sr, pause_chunk, ""  # 停顿不需要文本
 
         except Exception as e:
             logger.error(f"流式推理失败: {str(e)}")
@@ -1433,6 +1535,50 @@ class TTSInferencer:
             audio = audio.copy()
             audio[-fade_samples:] *= np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
         return audio
+
+    def _apply_fade_in(self, audio: np.ndarray, sr: int, duration_ms: int = 8) -> np.ndarray:
+        fade_samples = min(int(sr * duration_ms / 1000), len(audio) // 4)
+        if fade_samples > 0:
+            audio = audio.copy()
+            audio[:fade_samples] *= np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
+        return audio
+
+    def _finalize_stream_chunk(
+        self,
+        audio_chunk,
+        sr: int,
+        *,
+        if_sr: bool = False,
+        is_last_chunk: bool = False,
+        apply_fade_in: bool = False,
+    ) -> np.ndarray:
+        if torch.is_tensor(audio_chunk):
+            if if_sr and self.model_version == "v3":
+                try:
+                    logger.info("执行音频超分...")
+                    if not hasattr(self, 'sr_model') or self.sr_model is None:
+                        self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
+                    audio_chunk, sr = self.sr_model(audio_chunk.unsqueeze(0), sr)
+                    max_audio = np.abs(audio_chunk).max()
+                    if max_audio > 1:
+                        audio_chunk = audio_chunk / max_audio
+                except Exception as e:
+                    logger.warning(f"音频超分失败: {e}")
+                    logger.warning(traceback.format_exc())
+                    audio_chunk = audio_chunk.cpu().detach().numpy()
+            else:
+                audio_chunk = audio_chunk.cpu().detach().numpy()
+
+        if hasattr(audio_chunk, 'dtype') and 'float16' in str(audio_chunk.dtype):
+            audio_chunk = audio_chunk.astype(np.float32)
+        elif getattr(audio_chunk, "dtype", None) != np.float32:
+            audio_chunk = np.asarray(audio_chunk, dtype=np.float32)
+
+        if apply_fade_in:
+            audio_chunk = self._apply_fade_in(audio_chunk, sr)
+        if is_last_chunk:
+            audio_chunk = self._apply_fade_out(audio_chunk, sr)
+        return audio_chunk
 
     def _resample(self, audio_tensor, sr0):
         """重采样音频"""
