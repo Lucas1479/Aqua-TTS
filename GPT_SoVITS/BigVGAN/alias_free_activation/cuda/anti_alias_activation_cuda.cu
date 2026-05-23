@@ -20,6 +20,7 @@
 #include <cuda_fp16.h>
 #include <cuda_profiler_api.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
 #include "type_shim.h"
 #include <assert.h>
@@ -211,6 +212,12 @@ namespace
 
 extern "C" torch::Tensor fwd_cuda(torch::Tensor const &input, torch::Tensor const &up_filter, torch::Tensor const &down_filter, torch::Tensor const &alpha, torch::Tensor const &beta)
 {
+    // Ensure the kernel and all CUDA stream operations run on the same device
+    // as the input tensor.  Without this guard, at::cuda::getCurrentCUDAStream()
+    // falls back to device 0 when TTS is placed on a non-default device (e.g.
+    // cuda:1), causing an illegal-memory-access / CUDNN_STATUS_MAPPING_ERROR.
+    const at::cuda::CUDAGuard device_guard(input.device());
+
     // Input is a 3d tensor with dimensions [batches, channels, seq_len]
     const int batches = input.size(0);
     const int channels = input.size(1);

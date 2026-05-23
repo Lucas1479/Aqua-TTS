@@ -47,6 +47,7 @@ def main():
     parser.add_argument("--no-bigvgan-kernel", action="store_true")
     args = parser.parse_args()
 
+    # Configure optimizations via env vars before importing TTSInferencer
     if args.no_cuda_graph:
         os.environ["ENABLE_CUDA_GRAPH"] = "0"
     else:
@@ -74,6 +75,7 @@ def main():
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
     )
+    # BigVGAN kernel toggle (set before first inference)
     if args.no_bigvgan_kernel and hasattr(inferencer, 'bigvgan_model'):
         inferencer.bigvgan_model.use_cuda_kernel = False
     print(f"[bench] Loaded in {time.perf_counter() - t0:.2f}s")

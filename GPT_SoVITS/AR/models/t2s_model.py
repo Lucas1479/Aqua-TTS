@@ -574,19 +574,43 @@ class Text2SemanticDecoder(nn.Module):
         self.t2s_transformer = T2STransformer(self.num_layers, blocks)
         self.t2s_transformer_static = T2STransformerWithStaticCache(self.num_layers, blocks_static)
 
+    # 选桶时保留的最小生成槽位数。
+    # 必须满足 aligned_kv + _BUCKET_MIN_GEN_SLOTS < bucket_size 才会选该桶。
+    #
+    # 设为 96（约 1.92s @ 50Hz）：
+    #   - 单句 kv=330-387 → bucket=512，slots=128-160   → ~440 it/s ✓
+    #   - 3句合并 kv=420+  → bucket=768，slots=256-320  → 与 192 路由相同 ✓
+    #   192 只会让单句也跳到 bucket=768，徒增约 40% 注意力开销，无收益。
+    # 分析依据见 tools/analyze_bucket_routing.py。
+    _BUCKET_MIN_GEN_SLOTS: int = 96
+
     def _select_bucket(self, kv_cache_len):
         """
-        根据 KV cache 的实际长度，选择最小的合适桶
-        如果没有合适的桶，返回 None（使用正常模式）
+        根据 KV cache 的实际长度，选择最小的合适桶。
+
+        策略：
+          aligned = ceil(kv_cache_len / stride) * stride
+          选最小的 bucket_size 满足 aligned + MIN_GEN_SLOTS < bucket_size
+
+        两点保证：
+          1. aligned < bucket_size  → 对齐后 prompt 不会越界
+          2. 预留 MIN_GEN_SLOTS 生成槽 → 3 句合并（kv≈420-510）路由到 bucket 768
+             而非 512（否则仅剩 64 槽，立即触发频繁滑动窗口）
+
+        如果没有合适的桶，返回 None（退回纯动态模式）。
         """
         if not self.kv_cache_buckets:
             return None
-        
+
+        _s = _GRAPH_INITIAL_LEN_STRIDE
+        aligned = ((kv_cache_len + _s - 1) // _s) * _s
+        min_needed = aligned + self._BUCKET_MIN_GEN_SLOTS
+
         for bucket_size in self.kv_cache_buckets:
-            if kv_cache_len <= bucket_size:
+            if min_needed < bucket_size:
                 return bucket_size
-        
-        # 超出最大桶，无法使用 CUDA Graph
+
+        # 所有桶都不够用，退回动态模式
         return None
     
     def _pad_kv_cache_to_bucket(self, k_cache, v_cache, bucket_size):
@@ -694,14 +718,22 @@ class Text2SemanticDecoder(nn.Module):
             xy_pos = torch.randn(batch_size, 1, hidden_dim, dtype=model_dtype, device=device)
             pos_idx = torch.full((batch_size, 1, hidden_dim), initial_len, dtype=torch.long, device=device)
             
-            # 捕获 CUDA Graph
-            cuda_graph = torch.cuda.CUDAGraph()
-            
-            with torch.cuda.graph(cuda_graph, capture_error_mode='relaxed'):
-                xy_dec, k_cache_out, v_cache_out = self.t2s_transformer_static.decode_next_token_with_static_cache(
-                    xy_pos, k_cache, v_cache, pos_idx
-                )
-                logits = self.ar_predict_layer(xy_dec[:, -1])
+            # 捕获 CUDA Graph（必须在目标设备上下文内创建，避免多卡时 stream 关联到 cuda:0）
+            # capture_error_mode='relaxed' 在 PyTorch 2.1+ 才支持，低版本直接省略该参数。
+            import inspect as _inspect
+            _graph_extra = (
+                {"capture_error_mode": "relaxed"}
+                if "capture_error_mode" in _inspect.signature(torch.cuda.graph.__init__).parameters
+                else {}
+            )
+            with torch.cuda.device(device):
+                cuda_graph = torch.cuda.CUDAGraph()
+
+                with torch.cuda.graph(cuda_graph, **_graph_extra):
+                    xy_dec, k_cache_out, v_cache_out = self.t2s_transformer_static.decode_next_token_with_static_cache(
+                        xy_pos, k_cache, v_cache, pos_idx
+                    )
+                    logits = self.ar_predict_layer(xy_dec[:, -1])
             
             capture_time = time.perf_counter() - capture_start
             self.cuda_graph_stats["capture_time"][graph_key] = capture_time
@@ -754,20 +786,32 @@ class Text2SemanticDecoder(nn.Module):
                 results[bucket] = False
                 continue
 
-            # 根据桶大小推算 kv_cache_len 的合理范围：
-            # 下限 = bucket * 0.55（实际 prompt 极少小于桶的一半），
-            # 上限 = bucket * 0.92（留出至少 8% 的生成空间，极长 prompt 走 fallback 即可）。
-            # 这样每个 bucket 约捕获 7-8 张 graph，避免对大 bucket 产生指数级开销。
-            lo, hi = kv_len_range if kv_len_range else (
-                int(bucket * 0.55),
-                int(bucket * 0.92)
-            )
-            # 枚举 [lo, hi] 范围内所有 kv_cache_len 对齐后的 initial_len。
-            # initial_len = ceil(kv_cache_len / stride) * stride，
-            # 所以只需从 ceil(lo/stride)*stride 到 ceil(hi/stride)*stride，步长 stride。
+            # 根据 _BUCKET_MIN_GEN_SLOTS 精确推算路由到本桶的 init_len 范围：
+            #
+            #   路由条件：align(kv) + G < bucket  且  align(kv) + G >= prev_bucket
+            #   → init_len ∈ [prev_bucket - G,  bucket - G - 1]
+            #
+            # 与旧的 bucket * 0.55 / 0.92 相比的改进：
+            #   ① lo 精确对齐到桶边界，不再遗漏关键 key（如 (768, 416)）。
+            #   ② hi 限制在 bucket * 0.75，截断极长 prompt 的长尾 key（这类 case
+            #      live-capture 一次后即缓存，无需预热浪费启动时间）。
             _s = _GRAPH_INITIAL_LEN_STRIDE
+            if kv_len_range:
+                lo, hi = kv_len_range
+            else:
+                G        = self._BUCKET_MIN_GEN_SLOTS
+                _sb      = sorted(self.kv_cache_buckets)
+                _bi      = _sb.index(bucket)
+                prev_b   = _sb[_bi - 1] if _bi > 0 else 0
+                # lo：路由到本桶的最小 init_len；用 stride*8=256 作为绝对下限
+                lo = max(_s * 8, prev_b - G)
+                # hi：理论上限 bucket-G-1，进一步限制在 bucket*0.75 截断长尾
+                hi = min(bucket - G - 1, int(bucket * 0.75))
+
+            # 枚举 [lo, hi] 内所有对齐的 initial_len（步长 = stride）。
+            # min_il 向上对齐（ceil），max_il 向下对齐（floor），避免多捕获一个。
             min_il = ((lo + _s - 1) // _s) * _s
-            max_il = ((hi + _s - 1) // _s) * _s
+            max_il = (hi // _s) * _s
             initial_lens = [il for il in range(min_il, max_il + 1, _s) if il < bucket]
 
             bucket_ok = True
@@ -1484,8 +1528,8 @@ class Text2SemanticDecoder(nn.Module):
                             static_inputs['pos_idx'].fill_(graph_initial_len + graph_step_count)
                             
                             cuda_graph.replay()
-                            torch.cuda.synchronize()
-                            
+                            torch.cuda.synchronize(xy_pos.device)  # 必须同步 TTS 所在设备，而非默认 cuda:0
+
                             logits = static_outputs['logits']
                             
                             self.cuda_graph_stats["graph_replay_steps"] += 1

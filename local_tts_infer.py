@@ -12,6 +12,26 @@ from pathlib import Path
 import string
 from string import punctuation
 
+# TTS 语言配置（通过环境变量 TTS_OUTPUT_LANGUAGE 切换，默认日文）
+try:
+    from config.settings import TTS_OUTPUT_LANGUAGE as _TTS_OUTPUT_LANGUAGE
+    from config.settings import TTS_REF_TEXT_JA as _TTS_REF_TEXT_JA
+    from config.settings import TTS_REF_TEXT_EN as _TTS_REF_TEXT_EN
+except ImportError:
+    _TTS_OUTPUT_LANGUAGE = "日文"
+    _TTS_REF_TEXT_JA = "そうやって全部私に頼るのね……まったく"
+    _TTS_REF_TEXT_EN = ""
+
+def _default_lang_code() -> str:
+    """返回当前语言对应的 GPT-SoVITS 内部语言代码（用于 fallback）。"""
+    return "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "ja"
+
+def _default_ref_free_prompt() -> str:
+    """v3 ref_free 兜底 prompt 文本。"""
+    if _TTS_OUTPUT_LANGUAGE == "英文":
+        return _TTS_REF_TEXT_EN or "I see, let me think about that."
+    return _TTS_REF_TEXT_JA or "そうやって全部私に頼るのね……まったく"
+
 
 # 设置日志记录
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -80,7 +100,18 @@ class TTSInferencer:
             # 确定模型路径
             base_dir = root_dir
             self.device = device
-            self.is_half = torch.cuda.is_available() and device == "cuda"
+            device_name = str(device).lower()
+            self.is_half = torch.cuda.is_available() and device_name.startswith("cuda")
+
+            # CUDA device index — used to set the current CUDA device before custom
+            # CUDA kernel calls (BigVGAN's fused anti-alias activation), which rely on
+            # at::cuda::getCurrentCUDAStream() internally.  Without explicitly setting
+            # the device, that function defaults to device 0 even when all tensors live
+            # on a different device, causing CUDNN_STATUS_MAPPING_ERROR.
+            try:
+                self._tts_device_idx = int(device_name.split(":")[-1])
+            except (ValueError, IndexError):
+                self._tts_device_idx = 0
 
             # 默认模型路径
             default_gpt_path = os.path.join(base_dir, "GPT_weights_v3", "xxx-e15.ckpt")
@@ -275,9 +306,9 @@ class TTSInferencer:
                 # 没有定义桶就直接返回
                 return
 
-            # 首句实测高频落在 448，其次是 512。无论环境变量是否显式指定，
-            # 都优先补上这两个常用桶，避免预热和真实运行落在不同桶上。
-            preferred_buckets = [448, 512]
+            # 首句实测高频落在 448/512；较长 prompt 需要 768 留出生成余量。
+            # 无论环境变量是否显式指定，都优先补上这些常用桶，避免真实运行临时捕获。
+            preferred_buckets = [448, 512, 768]
             preferred_buckets = [b for b in preferred_buckets if b in available_buckets]
 
             # 默认：预热所有可用的 KV Cache 桶，避免在首句推理时临时捕获造成额外延迟
@@ -400,7 +431,69 @@ class TTSInferencer:
                                         "models--nvidia--bigvgan_v2_24khz_100band_256x")
             logger.info(f"加载BigVGAN模型: {bigvgan_path}")
 
-            self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=False)
+            # use_cuda_kernel=True：编译 anti-aliased activation 的融合 CUDA kernel，
+            # 减少内存读写，对 CUDA Graph 之后的 L2 cache miss 不敏感。
+            # 优先检查预编译 .pyd 缓存（无需 cl.exe/nvcc），否则尝试现场编译。
+            import pathlib as _pathlib
+            # Use the device index that was resolved at __init__ time.
+            _tts_device_idx = self._tts_device_idx
+            _cache_id = os.environ.get("BIGVGAN_CACHE_ID", "").strip()
+            if _cache_id:
+                import re as _re
+                _cache_suffix = _re.sub(r"[^A-Za-z0-9_.-]+", "_", _cache_id.lower()).strip("_") or "unknown"
+            elif torch.cuda.is_available():
+                try:
+                    import re as _re
+                    _props = torch.cuda.get_device_properties(_tts_device_idx)
+                    _name = _re.sub(r"[^A-Za-z0-9_.-]+", "_", _props.name.lower()).strip("_") or "unknown"
+                    _mem_gb = int(round(_props.total_memory / (1024 ** 3)))
+                    _cache_suffix = f"sm{_props.major}{_props.minor}_{_mem_gb}gb_{_name}"
+                except Exception:
+                    _cache_suffix = f"device{_tts_device_idx}"
+            else:
+                _cache_suffix = f"device{_tts_device_idx}"
+            _cuda_pyd = (
+                _pathlib.Path(__file__).parent
+                / "GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
+                / f"build_{_cache_suffix}"
+                / "anti_alias_activation_cuda.pyd"
+            )
+            _use_cuda_kernel = False
+            if _cuda_pyd.exists():
+                _use_cuda_kernel = True
+                logger.info(f"[BigVGAN] 检测到已编译 CUDA kernel 缓存，直接加载")
+            else:
+                try:
+                    import subprocess as _sp
+                    _nvcc = _sp.run(["nvcc", "--version"], capture_output=True, timeout=5)
+                    if _nvcc.returncode == 0:
+                        _use_cuda_kernel = True
+                        logger.info("[BigVGAN] nvcc 可用，尝试编译 CUDA kernel 加速")
+                except Exception:
+                    logger.info("[BigVGAN] nvcc 不可用，使用 PyTorch 实现")
+
+            kernel_override = os.environ.get("BIGVGAN_USE_CUDA_KERNEL", "").strip().lower()
+            if kernel_override in {"0", "false", "off", "no"}:
+                _use_cuda_kernel = False
+                logger.info("[BigVGAN] BIGVGAN_USE_CUDA_KERNEL=0, forcing PyTorch path")
+            elif kernel_override in {"1", "true", "on", "yes"}:
+                _use_cuda_kernel = True
+                logger.info("[BigVGAN] BIGVGAN_USE_CUDA_KERNEL=1, forcing CUDA kernel path")
+
+            # activation1d.py 在首次 import 时执行模块级 load.load()，
+            # 若此时无设备上下文则 CUDA kernel 内部状态绑定到 cuda:0，
+            # 之后模型移到 cuda:1 会触发 CUDNN_STATUS_MAPPING_ERROR。
+            # 用 torch.cuda.device() 确保 kernel 初始化在正确设备上进行。
+            try:
+                with torch.cuda.device(_tts_device_idx):
+                    self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=_use_cuda_kernel)
+            except Exception as _kernel_err:
+                if _use_cuda_kernel:
+                    logger.warning(f"[BigVGAN] CUDA kernel 编译失败，回退到 PyTorch 实现: {_kernel_err}")
+                    with torch.cuda.device(_tts_device_idx):
+                        self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=False)
+                else:
+                    raise
             self.bigvgan_model.remove_weight_norm()
             self.bigvgan_model = self.bigvgan_model.eval()
 
@@ -438,7 +531,7 @@ class TTSInferencer:
                 cache_item["prompt"] = prompt_semantic.unsqueeze(0).to(self.device)
 
             # 2) Prompt 文本 phones/bert
-            phones1, bert1, _ = self.get_phones_and_bert(prompt_text or "", prompt_language_code or "ja")
+            phones1, bert1, _ = self.get_phones_and_bert(prompt_text or "", prompt_language_code or _default_lang_code())
             cache_item["phones1"] = phones1
             cache_item["bert1"] = bert1
 
@@ -713,8 +806,8 @@ class TTSInferencer:
             if text_language in self.dict_language:
                 text_language_code = self.dict_language[text_language]
             else:
-                text_language_code = "ja"  # 默认日文
-                logger.warning(f"未知语言: {text_language}，使用默认语言: 日文")
+                text_language_code = _default_lang_code()
+                logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
             # 如果没有提供参考文本，则使用无参考模式
             if prompt_text is None or prompt_text.strip() == "":
@@ -729,7 +822,7 @@ class TTSInferencer:
                 if prompt_language in self.dict_language:
                     prompt_language_code = self.dict_language[prompt_language]
                 else:
-                    prompt_language_code = "ja"  # 默认日文
+                    prompt_language_code = _default_lang_code()
 
                 logger.info(f"参考文本: '{prompt_text}'")
 
@@ -738,10 +831,10 @@ class TTSInferencer:
                 logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
                 ref_free = False
 
-                # 如果没有参考文本，使用默认文本
+                # 如果没有参考文本，使用当前语言的默认文本
                 if not prompt_text:
-                    prompt_text = "そうやって全部私に頼るのね……まったく"
-                    prompt_language_code = "all_ja"
+                    prompt_text = _default_ref_free_prompt()
+                    prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
 
             # 根据选择的切分方式处理文本
             logger.info(f"文本切分方式: {how_to_cut}")
@@ -773,7 +866,7 @@ class TTSInferencer:
             ).to(self.device)
 
             # 处理参考音频（会话级缓存优先）
-            sess_lang = prompt_language_code if not ref_free else "ja"
+            sess_lang = prompt_language_code if not ref_free else _default_lang_code()
             sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
             prompt = sess.get("prompt")
 
@@ -990,9 +1083,13 @@ class TTSInferencer:
                     cmf_res = denorm_spec(cmf_res)
 
                     # BigVGAN生成波形
-                    with torch.inference_mode():
-                        wav_gen = self.bigvgan_model(cmf_res)
-                        audio = wav_gen[0][0]
+                    # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
+                    # inside the fused CUDA kernel uses the correct device stream,
+                    # preventing CUDNN_STATUS_MAPPING_ERROR on non-default GPUs.
+                    with torch.cuda.device(self._tts_device_idx):
+                        with torch.inference_mode():
+                            wav_gen = self.bigvgan_model(cmf_res)
+                            audio = wav_gen[0][0]
 
                     # 防止爆音
                     max_audio = torch.abs(audio).max()
@@ -1107,8 +1204,8 @@ class TTSInferencer:
             if text_language in self.dict_language:
                 text_language_code = self.dict_language[text_language]
             else:
-                text_language_code = "ja"  # 默认日文
-                logger.warning(f"未知语言: {text_language}，使用默认语言: 日文")
+                text_language_code = _default_lang_code()
+                logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
             # 如果没有提供参考文本，则使用无参考模式
             if prompt_text is None or prompt_text.strip() == "":
@@ -1123,7 +1220,7 @@ class TTSInferencer:
                 if prompt_language in self.dict_language:
                     prompt_language_code = self.dict_language[prompt_language]
                 else:
-                    prompt_language_code = "ja"  # 默认日文
+                    prompt_language_code = _default_lang_code()
 
                 logger.info(f"参考文本: '{prompt_text}'")
 
@@ -1132,10 +1229,10 @@ class TTSInferencer:
                 logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
                 ref_free = False
 
-                # 如果没有参考文本，使用默认文本
+                # 如果没有参考文本，使用当前语言的默认文本
                 if not prompt_text:
-                    prompt_text = "そうやって全部私に頼るのね……まったく"
-                    prompt_language_code = "all_ja"
+                    prompt_text = _default_ref_free_prompt()
+                    prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
 
             # 根据选择的切分方式处理文本
             logger.info(f"文本切分方式: {how_to_cut}")
@@ -1190,7 +1287,7 @@ class TTSInferencer:
                     start = end
 
             # 处理参考音频（会话级缓存优先）
-            sess_lang = prompt_language_code if not ref_free else "ja"
+            sess_lang = prompt_language_code if not ref_free else _default_lang_code()
             sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
             prompt = sess.get("prompt")
 
@@ -1445,9 +1542,10 @@ class TTSInferencer:
                                 is_last_stream_chunk = idx >= total_todo_frames
                                 chunk_mel = denorm_spec(cfm_res)
                                 _t1 = time.perf_counter()
-                                with torch.inference_mode():
-                                    wav_gen = self.bigvgan_model(chunk_mel)
-                                    audio = wav_gen[0][0]
+                                with torch.cuda.device(self._tts_device_idx):
+                                    with torch.inference_mode():
+                                        wav_gen = self.bigvgan_model(chunk_mel)
+                                        audio = wav_gen[0][0]
                                 if self._stream_sync_timing_enabled and str(self.device) != "cpu":
                                     torch.cuda.synchronize()
                                 if self._stream_sync_timing_enabled:
@@ -1488,9 +1586,10 @@ class TTSInferencer:
 
                             # BigVGAN????
                             _t1 = time.perf_counter()
-                            with torch.inference_mode():
-                                wav_gen = self.bigvgan_model(cmf_res)
-                                audio = wav_gen[0][0]
+                            with torch.cuda.device(self._tts_device_idx):
+                                with torch.inference_mode():
+                                    wav_gen = self.bigvgan_model(cmf_res)
+                                    audio = wav_gen[0][0]
                             if str(self.device) != "cpu":
                                 torch.cuda.synchronize()
                             print("[sovits-timing] cfm=%.1fms  bigvgan=%.1fms  mel_T=%s" % (
