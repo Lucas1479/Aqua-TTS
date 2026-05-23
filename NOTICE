@@ -1,0 +1,19 @@
+Spectralis-TTS
+
+This project includes code from the following third-party projects:
+
+---
+
+## NVIDIA BigVGAN
+
+Files: spectralis/bigvgan/cuda/anti_alias_activation.cpp
+       spectralis/bigvgan/cuda/anti_alias_activation_cuda.cu
+       spectralis/bigvgan/cuda/compat.h
+       spectralis/bigvgan/cuda/type_shim.h
+
+Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Licensed under the Apache License, Version 2.0.
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Modifications: Added at::cuda::CUDAGuard for multi-device safety.

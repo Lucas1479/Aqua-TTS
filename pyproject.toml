@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectralis-tts"
+version = "1.0.0"
+description = "GPU-optimized inference wrapper for GPT-SoVITS with static KV cache and CUDA Graph acceleration"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Siqi Li" },
+]
+keywords = ["tts", "gpt-sovits", "cuda-graph", "inference", "voice-synthesis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch>=2.0",
+    "numpy>=1.23",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+]
+
+[project.urls]
+Homepage = "https://github.com/SiqiLiOcean/spectralis-tts"
+Repository = "https://github.com/SiqiLiOcean/spectralis-tts"
+
+[tool.setuptools.packages.find]
+include = ["spectralis*"]
