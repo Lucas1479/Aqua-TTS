@@ -22,16 +22,9 @@
 
 Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces model-side first-audio latency from 1.0–3.6 s to **~0.26–0.40 s**. In the full streaming player pipeline, practical first-audio latency is typically **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead — see [Highlights](#highlights) for the full comparison.
 
-> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
-
-> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
-
 ## Highlights
 
-> **Latency definitions** — three numbers mean three different things:
-> - **TTFP benchmark**: model-side first audio generation latency under controlled warm-cache conditions (what the table below shows).
-> - **E2E first-audio latency**: full player pipeline latency including text splitting, scheduling, audio buffer, and playback startup — typically **0.4–0.7 s** in practice.
-> - **Cold start**: initialization + model loading + first inference — dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).
+<sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
 | | GPT-SoVITS (official) | + CUDA Graph | Aqua-TTS |
 |---|---|---|---|
@@ -58,6 +51,10 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
 - **Source install** — `pip install -e ".[runtime]"` → `from aquatts import TTSInferencer`
+
+> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
+
+> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
 
 ## Supported Languages
 
