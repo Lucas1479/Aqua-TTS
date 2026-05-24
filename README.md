@@ -105,7 +105,7 @@ See **[TECHNICAL.md](TECHNICAL.md)** for deep technical documentation.
 | Python | 3.10 | 3.11 / 3.12 |
 | OS | Windows 10+ | Windows 11 |
 
-Linux should work with a standard CUDA stack but has not been tested. macOS is not supported — Aqua-TTS requires CUDA.
+Linux CI (Ubuntu) passes for all unit tests. GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been tested on Linux hardware. macOS is not supported — Aqua-TTS requires CUDA.
 
 > On 6 GB cards, use `cuda_graph_preset="lazy"` or `"off"` to reduce VRAM pressure from pre-captured graphs.
 
@@ -240,6 +240,10 @@ python -m aquatts.server \
     --sovits-model SoVITS_weights_v3/model.pth \
     --cuda-graph-preset full \
     --host 127.0.0.1 --port 8000
+
+# With authentication (required when binding to a non-loopback address)
+python -m aquatts.server ... --host 0.0.0.0 --api-key mysecrettoken
+# or: export AQUA_API_KEY=mysecrettoken
 ```
 
 Endpoints:
@@ -308,7 +312,8 @@ export AQUA_VOICE_JSON=/data/voices.json
 | Env variable | Default | Description |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(required)* | Path to GPT-SoVITS repo root |
-| `AQUA_VOICE_JSON` | `./voices.json` | Path to voice registry JSON file |
+| `AQUA_API_KEY` | *(unset)* | Bearer token for all server endpoints; unset = no auth |
+| `AQUA_VOICE_JSON` | `./voices.json` | Path to voice registry JSON file. **Always set this** — default is relative to process CWD and will be lost on directory change |
 | `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph replay |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at startup |

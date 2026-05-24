@@ -105,7 +105,7 @@ aqua-tts/
 | Python | 3.10 | 3.11 / 3.12 |
 | 系统 | Windows 10+ | Windows 11 |
 
-Linux 理论上兼容标准 CUDA 环境，但尚未测试。macOS 不支持——Aqua-TTS 依赖 CUDA。
+Linux CI（Ubuntu）的单元测试全部通过。GPU 相关路径（CUDA Graph、BigVGAN 内核）尚未在 Linux 硬件上测试。macOS 不支持——Aqua-TTS 依赖 CUDA。
 
 > 6 GB 显存显卡建议使用 `cuda_graph_preset="lazy"` 或 `"off"` 以减少预捕获图的显存占用。
 
@@ -308,7 +308,8 @@ export AQUA_VOICE_JSON=/data/voices.json
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(必填)* | GPT-SoVITS 仓库根目录路径 |
-| `AQUA_VOICE_JSON` | `./voices.json` | 角色注册表 JSON 文件路径 |
+| `AQUA_API_KEY` | *(未设置)* | 服务器所有端点的 Bearer 令牌；未设置则无鉴权 |
+| `AQUA_VOICE_JSON` | `./voices.json` | 角色注册表 JSON 文件路径。**建议始终设置**——默认值相对于进程 CWD，目录切换后数据将丢失 |
 | `AQUA_SESSION_CACHE_MAX` | `8` | 参考音频 session 最大缓存数量 |
 | `ENABLE_CUDA_GRAPH` | `1` | 启用 CUDA Graph 回放 |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | 启动时预捕获所有桶图 |

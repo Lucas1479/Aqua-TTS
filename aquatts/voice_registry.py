@@ -117,4 +117,9 @@ def registry_from_env() -> VoiceRegistry:
     path = os.environ.get("AQUA_VOICE_JSON")
     if not path:
         path = os.path.join(os.getcwd(), "voices.json")
+        logger.warning(
+            "AQUA_VOICE_JSON is not set — voice registry will be written to %s "
+            "(process CWD). Set AQUA_VOICE_JSON to a fixed path for reliable persistence.",
+            path,
+        )
     return VoiceRegistry(json_path=str(Path(path)))

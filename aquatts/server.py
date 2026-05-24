@@ -19,6 +19,7 @@ DELETE /voices/{name}  — remove a registered voice / 移除已注册的声音
 import io
 import logging
 import os
+import secrets
 import wave
 from typing import Optional
 
@@ -43,7 +44,7 @@ def _build_wav(audio: np.ndarray, sample_rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
-def _create_app(inferencer, voice_registry=None):
+def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
     """Build a FastAPI app wired to the given TTSInferencer instance.
     / 构建一个与给定 TTSInferencer 实例连接的 FastAPI 应用。
 
@@ -54,13 +55,25 @@ def _create_app(inferencer, voice_registry=None):
             or falls back to ``./voices.json``.
             / 可选的 VoiceRegistry。如果为 None，则使用 ``registry_from_env()``，
             该函数读取 AQUA_VOICE_JSON 环境变量，否则回退到 ``./voices.json``。
+        api_key: Optional Bearer token. When set, all endpoints require an
+            ``Authorization: Bearer <key>`` header.
+            / 可选的 Bearer 令牌。设置后，所有端点都需要 ``Authorization: Bearer <key>`` 请求头。
     """
-    from fastapi import FastAPI, HTTPException, Query
+    from fastapi import FastAPI, HTTPException, Query, Request
     from fastapi.responses import Response, StreamingResponse
     from pydantic import BaseModel
 
     if voice_registry is None:
         voice_registry = registry_from_env()
+
+    def _check_auth(request: Request) -> None:
+        if not api_key:
+            return
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or not secrets.compare_digest(
+            auth[len("Bearer "):], api_key
+        ):
+            raise HTTPException(401, "Unauthorized")
 
     def _resolve_voice(voice_name, ref_audio_path, prompt_text, prompt_language):
         """Resolve a voice name to (ref_audio_path, prompt_text, prompt_language).
@@ -94,7 +107,8 @@ def _create_app(inferencer, voice_registry=None):
     # ── Status & presets (状态与预设) ─────────────────────────────────────────────────
 
     @app.get("/health")
-    async def health():
+    async def health(request: Request):
+        _check_auth(request)
         return {
             "status": "ok",
             "device": str(inferencer.device),
@@ -104,7 +118,8 @@ def _create_app(inferencer, voice_registry=None):
         }
 
     @app.get("/presets")
-    async def list_presets():
+    async def list_presets(request: Request):
+        _check_auth(request)
         from aquatts.inference.presets import (
             GENERATION_PRESETS,
             CUDA_GRAPH_PRESETS,
@@ -118,16 +133,26 @@ def _create_app(inferencer, voice_registry=None):
     # ── Voice management (声音管理) ─────────────────────────────────────────────────
 
     @app.get("/voices")
-    async def list_voices():
+    async def list_voices(request: Request):
         """List all registered voices. / 列出所有已注册的声音。"""
+        _check_auth(request)
         return {"voices": [v.to_dict() for v in voice_registry.list()]}
 
     @app.post("/voices/add")
-    async def add_voice(req: VoiceAddRequest):
+    async def add_voice(req: VoiceAddRequest, request: Request):
         """Register a new voice or update an existing one. / 注册新声音或更新已有声音。"""
+        _check_auth(request)
+        # Reject path traversal attempts
+        import pathlib
+        try:
+            resolved = pathlib.Path(req.ref_audio_path).resolve()
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, f"Invalid ref_audio_path: {exc}")
+        if ".." in pathlib.Path(req.ref_audio_path).parts:
+            raise HTTPException(400, "ref_audio_path must not contain '..'")
         voice = Voice(
             name=req.name,
-            ref_audio_path=req.ref_audio_path,
+            ref_audio_path=str(resolved),
             prompt_text=req.prompt_text,
             prompt_language=req.prompt_language,
         )
@@ -136,8 +161,9 @@ def _create_app(inferencer, voice_registry=None):
         return {"status": "ok", "voice": voice.to_dict()}
 
     @app.delete("/voices/{name}")
-    async def remove_voice(name: str):
+    async def remove_voice(name: str, request: Request):
         """Remove a registered voice by name. / 按名称移除已注册的声音。"""
+        _check_auth(request)
         if voice_registry.remove(name):
             logger.info(f"Voice removed: {name}")
             return {"status": "ok", "message": f"Voice {name!r} removed"}
@@ -147,6 +173,7 @@ def _create_app(inferencer, voice_registry=None):
 
     @app.post("/tts")
     async def tts_stream(
+        request: Request,
         text: str = Query(..., description="Text to synthesize / 要合成的文本"),
         ref_audio_path: Optional[str] = Query(None, description="Path to reference audio (.wav) / 参考音频路径 (.wav)"),
         voice: Optional[str] = Query(None, description="Voice name from registry (overrides ref_audio_path) / 注册表中的声音名称（覆盖 ref_audio_path）"),
@@ -163,6 +190,7 @@ def _create_app(inferencer, voice_registry=None):
         / 以多部分流的形式生成 PCM 音频块。利用 Aqua CUDA Graph + 静态 KV 缓存优化，
         实现低首包延迟 (TTFP)。
         """
+        _check_auth(request)
         if not text.strip():
             raise HTTPException(400, "text must not be empty")
 
@@ -209,6 +237,7 @@ def _create_app(inferencer, voice_registry=None):
 
     @app.post("/tts/file")
     async def tts_file(
+        request: Request,
         text: str = Query(..., description="Text to synthesize / 要合成的文本"),
         ref_audio_path: Optional[str] = Query(None, description="Path to reference audio (.wav) / 参考音频路径 (.wav)"),
         voice: Optional[str] = Query(None, description="Voice name from registry (overrides ref_audio_path) / 注册表中的声音名称（覆盖 ref_audio_path）"),
@@ -218,6 +247,7 @@ def _create_app(inferencer, voice_registry=None):
         preset: Optional[str] = Query(None, description="Quality preset: fast, balanced, quality / 质量预设：快速、均衡、高质量"),
     ):
         """One-shot TTS — collects all chunks and returns a downloadable .wav file. / 一次性 TTS — 收集所有音频块并返回可下载的 .wav 文件。"""
+        _check_auth(request)
         if not text.strip():
             raise HTTPException(400, "text must not be empty")
 
@@ -268,6 +298,7 @@ def start_server(
     port: int = 8000,
     log_level: str = "info",
     voice_registry=None,
+    api_key: Optional[str] = None,
 ):
     """Start the Aqua-TTS HTTP server (blocking). / 启动 Aqua-TTS HTTP 服务器（阻塞模式）。
 
@@ -278,11 +309,24 @@ def start_server(
         log_level: Uvicorn log level. / Uvicorn 日志级别。
         voice_registry: Optional VoiceRegistry. If None, auto-creates from env.
             / 可选的 VoiceRegistry。如果为 None，则从环境变量自动创建。
+        api_key: Optional Bearer token for all endpoints. If None, no auth is
+            enforced. Set AQUA_API_KEY env var or pass --api-key on the CLI.
+            / 可选的 Bearer 令牌。如果为 None，则不强制进行身份验证。
     """
     import uvicorn
 
-    app = _create_app(inferencer, voice_registry=voice_registry)
+    if host != "127.0.0.1" and not api_key:
+        logger.warning(
+            "Server bound to %s without --api-key / AQUA_API_KEY — "
+            "all endpoints are unauthenticated. Set an API key before exposing "
+            "this server to untrusted networks.",
+            host,
+        )
+
+    app = _create_app(inferencer, voice_registry=voice_registry, api_key=api_key)
     print(f"Aqua-TTS server starting on http://{host}:{port}")
+    if api_key:
+        print("  Auth:    Bearer token required (AQUA_API_KEY is set)")
     print(f"  Health:  http://{host}:{port}/health")
     print(f"  Presets: http://{host}:{port}/presets")
     print(f"  Voices:  http://{host}:{port}/voices")
@@ -307,8 +351,12 @@ def _main():
                         help="CUDA Graph capture strategy")
     parser.add_argument("--voice-registry", default=None,
                         help="Path to voice registry JSON file")
+    parser.add_argument("--api-key", default=None,
+                        help="Bearer token for all endpoints (overrides AQUA_API_KEY env var)")
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
+
+    api_key = args.api_key or os.environ.get("AQUA_API_KEY") or None
 
     os.environ.setdefault("ENABLE_CUDA_GRAPH", "1")
 
@@ -332,7 +380,7 @@ def _main():
     )
     logger.info("TTS pipeline ready.")
 
-    start_server(tts, host=args.host, port=args.port, voice_registry=voice_registry)
+    start_server(tts, host=args.host, port=args.port, voice_registry=voice_registry, api_key=api_key)
 
 
 if __name__ == "__main__":
