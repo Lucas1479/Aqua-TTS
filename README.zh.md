@@ -336,6 +336,10 @@ python benchmarks/bigvgan_raw_bench.py
 
 完整对比方法和结果见 [benchmarks/README.md](benchmarks/README.md)。
 
+## 致谢
+
+Aqua-TTS 的灵感来源于 [GENIE-TTS](https://github.com/w-okada/genie-tts)——它证明了一个专注、自包含的推理运行时能够切实缩短 GPT-SoVITS 的延迟。"优化运行时而非模型"这一思路，奠定了本项目的方向。
+
 ## 许可证
 
 MIT — 详见 [LICENSE](LICENSE)。

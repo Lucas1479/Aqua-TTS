@@ -336,6 +336,10 @@ python benchmarks/bigvgan_raw_bench.py
 
 See [benchmarks/README.md](benchmarks/README.md) for full methodology and results.
 
+## Acknowledgements
+
+Aqua-TTS was inspired by [GENIE-TTS](https://github.com/w-okada/genie-tts), which demonstrated that a focused, self-contained inference runtime could meaningfully close the latency gap in GPT-SoVITS. That framing — optimise the runtime, not the model — shaped the direction of this project.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
