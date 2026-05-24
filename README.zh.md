@@ -5,7 +5,7 @@
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> 低延迟推理运行时</h1>
 
 <p>为与 LoRA 角色实时语音对话而生</p>
-<p>GPT-SoVITS v3 &nbsp;·&nbsp; T2S 速度提升 5.5× &nbsp;·&nbsp; 首包延迟降低 2–7×</p>
+<p>GPT-SoVITS v3 &nbsp;·&nbsp; CUDA Graph 加速 &nbsp;·&nbsp; 流式优先设计</p>
 
 <p>
   中文 | <a href="README.md">English</a>
