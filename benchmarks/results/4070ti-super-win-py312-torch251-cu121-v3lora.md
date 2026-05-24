@@ -34,7 +34,9 @@ Reference text:
 
 ## TTFP Method
 
-TTFP means **Time-To-First-Playback**: the elapsed wall-clock time from entering `infer_stream()` to the first non-empty audio chunk that can be sent to playback.
+TTFP means **Time-To-First-Playback**: the elapsed wall-clock time from entering TTS inference to the first non-empty audio buffer that can be sent to playback.
+
+For non-streaming baselines, the first returned playable audio may coincide with full utterance completion. For Aqua-TTS, TTFP is the first streaming audio chunk returned by `infer_stream()`.
 
 Parameters:
 

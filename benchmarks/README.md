@@ -63,7 +63,9 @@ python benchmarks/bigvgan_raw_bench.py
 
 ### TTFP (Time-To-First-Playback)
 
-TTFP measures **text-ready to first-playable-audio latency** — the wall-clock time from calling `infer_stream(text=...)` to the first non-empty `(sr, chunk, text)` yield that can be sent to playback. This is the latency a user experiences before hearing the first sound.
+TTFP measures **text-ready to first-playable-audio latency** — the wall-clock time from calling TTS inference to the first non-empty audio buffer that can be sent to playback. This is the latency a user experiences before hearing the first sound.
+
+For non-streaming baselines, the first returned playable audio may coincide with full utterance completion. For Aqua-TTS, TTFP is the first streaming audio chunk returned by `infer_stream(text=...)`.
 
 **Measurement protocol:**
 
@@ -141,4 +143,4 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 | `empty_cache` | No | Every 100 steps | **Never in hot path** |
 | V3 streaming | Batch only | Batch only | **True streaming** |
 
-*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/aqua_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.5.1+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is first playable audio chunk latency with `chunk_size_seconds=0.25`, measured on 3 test texts with 5 repeats each (median reported).*
+*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/aqua_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.5.1+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is time to the first playable audio returned to the caller. For non-streaming baselines this may coincide with full utterance completion; for Aqua-TTS it is the first streaming chunk with `chunk_size_seconds=0.25`.*

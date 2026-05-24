@@ -37,7 +37,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 | BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
 | KV-cache allocation | Unbounded growth | Unbounded growth | **Bounded per bucket config** |
 
-*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is first playable audio chunk latency with `chunk_size_seconds=0.25`, measured on 3 test texts with 5 repeats each (median reported). See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
+*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is time to the first playable audio returned to the caller. For non-streaming baselines this may coincide with full utterance completion; for Aqua-TTS it is the first streaming audio chunk with `chunk_size_seconds=0.25`. See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
 
 ## Features
 
