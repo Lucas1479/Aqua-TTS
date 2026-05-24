@@ -63,7 +63,6 @@ def get_flash_attn_error() -> Optional[str]:
 # ===========================================================================
 
 
-@torch.jit.script
 class T2SBlockWithStaticCacheFlash:
     """
     T2SBlock variant using flash_attn_with_kvcache for the decode step.
@@ -279,7 +278,6 @@ class T2SBlockWithStaticCacheFlash:
         return x, k_cache, v_cache
 
 
-@torch.jit.script
 class T2STransformerWithStaticCacheFlash:
     """Transformer using FlashAttention T2S blocks."""
 

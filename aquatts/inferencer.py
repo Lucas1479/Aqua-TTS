@@ -336,15 +336,19 @@ class TTSInferencer:
             self._apply_vocoder_graph_if_available()
 
     def _apply_vocoder_graph_if_available(self):
-        """Create VocoderGraphManager and pre-capture CUDA Graphs for vocoder."""
+        """Create VocoderGraphManager and pre-capture CUDA Graphs for vocoder.
+
+        v2: wraps flow+decoder inside CUDA Graph
+        v3: wraps BigVGAN.forward() inside CUDA Graph
+        """
         try:
             from aquatts.modeling.vocoder_graph import VocoderGraphManager
-            vgm = VocoderGraphManager(self.vq_model)
-            device = next(self.vq_model.parameters()).device
-            if vgm.precapture(device):
+            bigvgan = getattr(self, "bigvgan_model", None)
+            vgm = VocoderGraphManager(self.vq_model, bigvgan_model=bigvgan)
+            if vgm.precapture():
                 vgm.patch()
                 self._vocoder_graph_manager = vgm
-                logger.info("[VocoderGraph] Vocoder CUDA Graph capture complete")
+                logger.info(f"[VocoderGraph] {'v3 BigVGAN' if vgm.is_v3 else 'v2 flow+dec'} CUDA Graph capture complete")
             else:
                 logger.warning("[VocoderGraph] Vocoder CUDA Graph capture failed, using normal path")
         except Exception:
