@@ -362,6 +362,15 @@ python benchmarks/bigvgan_raw_bench.py
 
 See [benchmarks/README.md](benchmarks/README.md) for full methodology and results.
 
+## Speaker Demo
+
+```bash
+pip install -e ".[playback]"
+python examples/play_ete.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
+```
+
+The demo plays three Kurisu-style Japanese utterances (short, medium, long) through PyAudio and prints first-audio latency plus RTF for each line.
+
 ## Acknowledgements
 
 Aqua-TTS was inspired by [GENIE-TTS](https://github.com/w-okada/genie-tts), which demonstrated that a focused, self-contained inference runtime could meaningfully close the latency gap in GPT-SoVITS. That framing — optimise the runtime, not the model — shaped the direction of this project.
