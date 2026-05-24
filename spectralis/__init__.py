@@ -38,11 +38,30 @@ if _VENDOR_DIR not in sys.path:
 # the full GPT-SoVITS import chain. Use `from spectralis import TTSInferencer`
 # or `from spectralis.inferencer import TTSInferencer` to load it.
 
-__all__ = ["__version__", "TTSInferencer"]
+__all__ = [
+    "__version__",
+    "TTSInferencer",
+    "apply_preset",
+    "list_presets",
+    "apply_cuda_graph_preset",
+    "list_cuda_graph_presets",
+    "start_server",
+]
+
+_LAZY_ATTRS = {
+    "TTSInferencer": ("spectralis.inferencer", "TTSInferencer"),
+    "apply_preset": ("spectralis.inference.presets", "apply_preset"),
+    "list_presets": ("spectralis.inference.presets", "list_presets"),
+    "apply_cuda_graph_preset": ("spectralis.inference.presets", "apply_cuda_graph_preset"),
+    "list_cuda_graph_presets": ("spectralis.inference.presets", "list_cuda_graph_presets"),
+    "start_server": ("spectralis.server", "start_server"),
+}
 
 
 def __getattr__(name):
-    if name == "TTSInferencer":
-        from spectralis.inferencer import TTSInferencer as _cls
-        return _cls
+    if name in _LAZY_ATTRS:
+        mod_name, attr = _LAZY_ATTRS[name]
+        import importlib
+        mod = importlib.import_module(mod_name)
+        return getattr(mod, attr)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

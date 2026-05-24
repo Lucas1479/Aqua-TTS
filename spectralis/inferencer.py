@@ -80,6 +80,10 @@ try:
 
     from GPT_SoVITS.text import chinese
 
+    from spectralis.inference.presets import (
+        apply_cuda_graph_preset as _apply_cg_preset,
+        apply_preset as _apply_preset,
+    )
 
 except ImportError as e:
     _missing = str(e)
@@ -103,7 +107,8 @@ class TTSInferencer:
                  sovits_path=None,
                  bert_path=None,
                  cnhubert_path=None,
-                 language="Auto"):
+                 language="Auto",
+                 cuda_graph_preset="full"):
         """
         初始化TTS推理器
 
@@ -114,7 +119,10 @@ class TTSInferencer:
             bert_path: BERT模型路径，如果为None则使用默认路径
             cnhubert_path: CNHuBERT模型路径，如果为None则使用默认路径
             language: 默认语言，可选"Auto"、"中文"、"英文"、"日文"等
+            cuda_graph_preset: CUDA Graph 捕获策略 — "full" (全桶预捕获),
+                "minimal" (最小桶集合), "lazy" (惰性捕获), "off" (纯 static KV)
         """
+        self._cuda_graph_preset = cuda_graph_preset
         try:
             # 确定模型路径
             base_dir = _gpt_sovits_home() or _PACKAGE_DIR
@@ -321,23 +329,23 @@ class TTSInferencer:
             pass  # warmup is best-effort; never block startup
 
     def _maybe_precapture_t2s_graph(self):
-        """根据环境变量可选地预捕获 T2S 阶段的 CUDA Graph"""
-        try:
-            enable_precapture = os.environ.get("ENABLE_CUDA_GRAPH_PRECAPTURE", "1") == "1"
-            decoder = getattr(self.t2s_model, "model", None)
-            if not enable_precapture or decoder is None:
-                return
-            # cuda_graph_enabled 由 ENABLE_CUDA_GRAPH 环境变量控制，
-            # 但 force_graph=True 路径在运行时可以绕过该标志直接使用 graph。
-            # 因此，只要 use_static_kv_cache=True（CUDA 可用即成立），就应该预捕获。
-            can_use_graph = (getattr(decoder, "cuda_graph_enabled", False)
-                             or getattr(decoder, "use_static_kv_cache", False))
-            if not can_use_graph:
-                return
+        """根据 CUDA Graph preset 预捕获 T2S 阶段的 CUDA Graph。
 
+        环境变量（ENABLE_CUDA_GRAPH, ENABLE_CUDA_GRAPH_PRECAPTURE,
+        CUDA_GRAPH_PRECAPTURE_BUCKETS）可作为 preset 的 override。
+        """
+        try:
+            # Resolve CUDA Graph preset (env vars override the named preset)
+            cg = _apply_cg_preset(self._cuda_graph_preset)
+
+            # Env var overrides (preserve backward compat)
+            if os.environ.get("ENABLE_CUDA_GRAPH", "").strip() in ("0", "1"):
+                cg["enable"] = os.environ["ENABLE_CUDA_GRAPH"] == "1"
+            if os.environ.get("ENABLE_CUDA_GRAPH_PRECAPTURE", "").strip() in ("0", "1"):
+                cg["precapture"] = os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] == "1"
             bucket_env = os.environ.get("CUDA_GRAPH_PRECAPTURE_BUCKETS", "")
-            buckets = []
             if bucket_env.strip():
+                buckets = []
                 for token in bucket_env.split(","):
                     token = token.strip()
                     if not token:
@@ -345,33 +353,37 @@ class TTSInferencer:
                     try:
                         buckets.append(int(token))
                     except ValueError:
-                        logger.warning(f"⚠️ 跳过非法桶配置: {token}")
-            available_buckets = list(getattr(decoder, "kv_cache_buckets", []) or [])
-            logger.info(f"[precapture] decoder.kv_cache_buckets={available_buckets} "
-                        f"use_static_kv={getattr(decoder, 'use_static_kv_cache', 'N/A')}")
-            if not available_buckets:
-                # 没有定义桶就直接返回
+                        logger.warning(f"跳过非法桶配置: {token}")
+                cg["buckets"] = buckets
+
+            if not cg["enable"]:
+                logger.info("[precapture] CUDA Graph disabled by preset/env")
                 return
 
-            # 首句实测高频落在 448/512；较长 prompt 需要 768 留出生成余量。
-            # 无论环境变量是否显式指定，都优先补上这些常用桶，避免真实运行临时捕获。
-            preferred_buckets = [448, 512, 768]
-            preferred_buckets = [b for b in preferred_buckets if b in available_buckets]
+            decoder = getattr(self.t2s_model, "model", None)
+            if decoder is None:
+                return
 
-            # 默认：预热所有可用的 KV Cache 桶，避免在首句推理时临时捕获造成额外延迟
+            can_use_graph = (getattr(decoder, "cuda_graph_enabled", False)
+                             or getattr(decoder, "use_static_kv_cache", False))
+            if not can_use_graph:
+                return
+
+            available_buckets = list(getattr(decoder, "kv_cache_buckets", []) or [])
+            logger.info(f"[precapture] preset={self._cuda_graph_preset!r} "
+                        f"available={available_buckets} cg={cg}")
+            if not available_buckets:
+                return
+
+            if not cg["precapture"]:
+                logger.info("[precapture] lazy mode — skipping pre-capture")
+                return
+
+            # Select buckets — use preset's list or default to all available
+            buckets = cg.get("buckets") or list(available_buckets)
+            buckets = [b for b in buckets if b in available_buckets]
             if not buckets:
-                buckets = list(available_buckets)
-            else:
-                buckets = [b for b in buckets if b in available_buckets]
-
-            logger.info(f"[precapture] env_buckets={bucket_env!r} parsed_buckets={buckets} "
-                        f"preferred={preferred_buckets} available={available_buckets}")
-
-            merged_buckets = []
-            for bucket in preferred_buckets + buckets:
-                if bucket not in merged_buckets:
-                    merged_buckets.append(bucket)
-            buckets = merged_buckets
+                return
 
             logger.info(f"[precapture] starting — target_buckets={buckets}")
             results = decoder.precapture_cuda_graph(buckets)
@@ -379,7 +391,7 @@ class TTSInferencer:
             logger.info(f"[precapture] done — buckets_ok={results} total_graphs={total_graphs} "
                         f"keys={sorted(decoder.bucket_graphs.keys())}")
         except Exception as exc:
-            logger.warning(f"⚠️ CUDA Graph 预捕获失败: {exc}")
+            logger.warning(f"CUDA Graph 预捕获失败: {exc}")
 
     def _load_sovits_model(self):
 
@@ -1202,7 +1214,8 @@ class TTSInferencer:
                      prompt_text=None,
                      text_language="日文",
                      prompt_language="日文",
-                     how_to_cut="按标点符号切",  # 默认使用按标点符号切，更适合流式处理
+                     how_to_cut="按标点符号切",
+                     preset: str = None,
                      top_k=20,
                      top_p=0.6,
                      temperature=0.6,
@@ -1228,7 +1241,10 @@ class TTSInferencer:
             prompt_text: 参考文本，如果为None则使用ref_free模式
             text_language: 目标文本的语言
             prompt_language: 参考文本的语言
-            how_to_cut: 文本切分方式，可选"不切"、"凑四句一切"、"凑50字一切"、"按中文句号。切"、"按英文句号.切"、"按标点符号切"
+            how_to_cut: 文本切分方式
+            preset: 质量预设名 — "fast", "balanced", "quality"。
+                如果设置，会覆盖 top_k/top_p/temperature/speed/sample_steps 的默认值。
+                显式传入的参数仍然优先。
             top_k, top_p, temperature: GPT采样参数
             speed: 语速控制
             sample_steps: v3模型的采样步数
@@ -1242,6 +1258,15 @@ class TTSInferencer:
         Returns:
             生成器：每次生成 (采样率, 音频数据片段)
         """
+        # Apply generation preset — sets top_k/top_p/temperature/speed/sample_steps
+        if preset is not None:
+            preset_params = _apply_preset(preset)
+            top_k = preset_params.get("top_k", top_k)
+            top_p = preset_params.get("top_p", top_p)
+            temperature = preset_params.get("temperature", temperature)
+            speed = preset_params.get("speed", speed)
+            sample_steps = preset_params.get("sample_steps", sample_steps)
+
         try:
             # 准备输入
             text = text.strip()
