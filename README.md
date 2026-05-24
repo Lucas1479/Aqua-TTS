@@ -1,16 +1,22 @@
 <div align="center">
-  <img src="assets/banner.png" alt="Aqua-TTS" width="640"/>
+
+<img src="assets/banner.png" width="720"/>
+
+<h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Low-Latency Inference Runtime</h1>
+
+<p>GPU-optimized inference for GPT-SoVITS v3 &nbsp;·&nbsp; 5.5× faster T2S &nbsp;·&nbsp; 2–7× lower TTFP</p>
+
+<p>
+  <a href="README.zh.md">中文</a> | English
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python"/>
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License"/>
+  <img src="https://img.shields.io/badge/CUDA-11.8%2B-brightgreen" alt="CUDA"/>
+</p>
+
 </div>
-
-# Aqua-TTS
-
-**GPU-optimized inference for GPT-SoVITS v3 — static KV cache + bucketed CUDA Graph + pre-compiled BigVGAN kernel.**
-
-[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![CUDA](https://img.shields.io/badge/CUDA-11.8%2B-brightgreen)](https://developer.nvidia.com/cuda-toolkit)
-
-**[中文](README.zh.md)**
 
 ---
 

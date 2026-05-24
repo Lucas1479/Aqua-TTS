@@ -1,16 +1,22 @@
 <div align="center">
-  <img src="assets/banner.png" alt="Aqua-TTS" width="640"/>
+
+<img src="assets/banner.png" width="720"/>
+
+<h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> 低延迟推理运行时</h1>
+
+<p>面向 GPT-SoVITS v3 的 GPU 优化推理 &nbsp;·&nbsp; T2S 速度提升 5.5× &nbsp;·&nbsp; 首包延迟降低 2–7×</p>
+
+<p>
+  中文 | <a href="README.md">English</a>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python"/>
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License"/>
+  <img src="https://img.shields.io/badge/CUDA-11.8%2B-brightgreen" alt="CUDA"/>
+</p>
+
 </div>
-
-# Aqua-TTS
-
-**GPT-SoVITS v3 的 GPU 优化推理运行时 — 静态 KV 缓存 + 分段 CUDA Graph + 预编译 BigVGAN 内核。**
-
-[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![CUDA](https://img.shields.io/badge/CUDA-11.8%2B-brightgreen)](https://developer.nvidia.com/cuda-toolkit)
-
-**[English](README.md)**
 
 ---
 
