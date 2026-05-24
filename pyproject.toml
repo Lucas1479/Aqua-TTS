@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aqua-tts"
-version = "1.0.0"
+version = "0.1.0"
 description = "GPU-optimized inference wrapper for GPT-SoVITS with static KV cache and CUDA Graph acceleration"
 readme = "README.md"
 license = { text = "MIT" }

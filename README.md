@@ -24,6 +24,8 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 
 > **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
 
+> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
+
 ## Highlights
 
 > **Latency definitions** — three numbers mean three different things:
@@ -194,6 +196,16 @@ The `models--nvidia--bigvgan_v2_24khz_100band_256x` directory name is the Huggin
 - **GPT weights (T2S)**: A `Text2SemanticLightningModule` checkpoint (e.g., `s1v3.ckpt` or self-trained `xxx-e15.ckpt`).
 - **SoVITS weights (vocoder)**: A `SynthesizerTrn` checkpoint with optional LoRA (e.g., `xxx_e2_s174_l32.pth`).
 - **Reference audio**: A 3-10 second 24 kHz WAV file with known transcript.
+
+### Quick sanity check
+
+Once `GPT_SOVITS_HOME` is set and models are in place, verify the package loads correctly:
+
+```bash
+python -c "from aquatts import TTSInferencer; print('aquatts OK')"
+```
+
+If this prints `aquatts OK`, the install is good. If it errors, check that `GPT_SOVITS_HOME` points to the right directory and all pretrained models are downloaded.
 
 ## Usage
 

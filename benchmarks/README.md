@@ -133,9 +133,9 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 | Metric | Official (no Graph) | Official (CUDA Graph) | Aqua |
 |--------|---------------------|-----------------------|------------|
 | T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
-| TTFP Short | 1061ms | 1016ms | **262ms** |
-| TTFP Medium | 1599ms | 1476ms | **318ms** |
-| TTFP Long | 3598ms | 2852ms | **409ms** |
+| TTFP Short | 1061ms | 1016ms | **~257ms** |
+| TTFP Medium | 1599ms | 1476ms | **~301ms** |
+| TTFP Long | 3598ms | 2852ms | **~404ms** |
 | KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_`** |
 | CUDA Graph | None | Single graph, lazy capture | **17 graphs, pre-captured** |
 | BigVGAN | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
