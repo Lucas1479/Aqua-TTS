@@ -27,6 +27,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[server]"
-      - run: pip install pytest pytest-cov
-      - run: python -m pytest tests/ -v --cov=aqua --cov-report=term
+      - run: pip install -e "." pytest pytest-cov numpy
+      - name: Run unit tests (no GPT-SoVITS required)
+        run: |
+          python -m pytest tests/ -v \
+            --ignore=tests/test_server.py \
+            --ignore=tests/test_vendor_paths.py \
+            --cov=aqua \
+            --cov-report=term
