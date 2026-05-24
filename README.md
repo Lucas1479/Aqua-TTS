@@ -2,10 +2,9 @@
 
 <img src="assets/banner.png" width="720"/>
 
-<h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Low-Latency Inference Runtime</h1>
+<h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Low-Latency Inference Runtime on GPU</h1>
 
 <p>Built for real-time voice conversation with your LoRA characters</p>
-<p>GPT-SoVITS v3 &nbsp;·&nbsp; CUDA Graph acceleration &nbsp;·&nbsp; Streaming-first design</p>
 
 <p>
   <a href="README.zh.md">中文</a> | English
