@@ -16,9 +16,11 @@
 
 <a id="english"></a>
 
-Spectralis-TTS is a **GPU-optimized runtime service layer** for [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. The result is **5.5x faster** T2S decoding and **2-7x lower** time-to-first-packet.
+Aqua-TTS is a **GPU-optimized runtime service layer** for [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. The result is **5.5x faster** T2S decoding and **2-7x lower** time-to-first-packet.
 
 [中文版本](#chinese)
+
+> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aqua/modeling/` and `aqua/_vendor/` are the right starting points for adaptation.
 
 ## Highlights
 
@@ -44,15 +46,15 @@ Spectralis-TTS is a **GPU-optimized runtime service layer** for [GPT-SoVITS](htt
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
-- **pip-installable** — `pip install spectralis-tts` → `from spectralis import TTSInferencer`
+- **pip-installable** — `pip install aqua-tts` → `from aqua import TTSInferencer`
 
 ## How it works
 
-Spectralis-TTS vendors overrides for two GPT-SoVITS files inside `spectralis/_vendor/` using Python namespace packages (`pkgutil.extend_path`). When you `import spectralis`, the package automatically configures `sys.path` so the vendored files take precedence over the main GPT-SoVITS repo. Set `GPT_SOVITS_HOME` to point at your GPT-SoVITS installation — Spectralis handles the rest:
+Aqua-TTS vendors overrides for two GPT-SoVITS files inside `aqua/_vendor/` using Python namespace packages (`pkgutil.extend_path`). When you `import aqua`, the package automatically configures `sys.path` so the vendored files take precedence over the main GPT-SoVITS repo. Set `GPT_SOVITS_HOME` to point at your GPT-SoVITS installation — Aqua-TTS handles the rest:
 
 ```
-spectralis-tts/
-├── spectralis/                    # Pure Python package (pip-installable)
+aqua-tts/
+├── aqua/                          # Pure Python package (pip-installable)
 │   ├── __init__.py                # sys.path configuration + lazy exports
 │   ├── inferencer.py              # TTSInferencer — main entry point
 │   ├── server.py                  # FastAPI HTTP server
@@ -85,7 +87,7 @@ See **[TECHNICAL.md](TECHNICAL.md)** for deep technical documentation.
 
 ### 1. Install GPT-SoVITS
 
-You need a working GPT-SoVITS v3 installation. Spectralis-TTS imports from it.
+You need a working GPT-SoVITS v3 installation. Aqua-TTS imports from it.
 
 ```bash
 git clone https://github.com/RVC-Boss/GPT-SoVITS.git
@@ -93,23 +95,23 @@ cd GPT-SoVITS
 pip install -r requirements.txt
 ```
 
-Spectralis-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
+Aqua-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
 
 ### 2. Install Aqua-TTS
 
 ```bash
 # Core + runtime dependencies
-pip install "spectralis-tts[runtime]"
+pip install "aqua-tts[runtime]"
 
 # Or with HTTP server support (includes runtime + fastapi + uvicorn)
-pip install "spectralis-tts[runtime,server]"
+pip install "aqua-tts[runtime,server]"
 ```
 
 For development:
 
 ```bash
-git clone https://github.com/SiqiLiOcean/spectralis-tts.git
-cd spectralis-tts
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd aqua-tts
 pip install -e ".[runtime,server]"
 ```
 
@@ -131,7 +133,7 @@ export GPT_SOVITS_HOME=/path/to/GPT-SoVITS
 
 ### 4. Download pretrained models
 
-Spectralis needs BigVGAN v2 pretrained weights from [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x). Place them inside your GPT-SoVITS repo:
+Aqua-TTS needs BigVGAN v2 pretrained weights from [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x). Place them inside your GPT-SoVITS repo:
 
 ```
 GPT_SoVITS/pretrained_models/models--nvidia--bigvgan_v2_24khz_100band_256x/
@@ -152,7 +154,7 @@ import os
 os.environ["GPT_SOVITS_HOME"] = "/path/to/GPT-SoVITS"
 os.environ["ENABLE_CUDA_GRAPH"] = "1"
 
-from spectralis import TTSInferencer
+from aqua import TTSInferencer
 
 tts = TTSInferencer(
     device="cuda",
@@ -199,7 +201,7 @@ Two layers of presets control quality/speed trade-offs:
 | `off` | Disabled | none | Static KV only, no graphs |
 
 ```python
-from spectralis import apply_preset, list_presets
+from aqua import apply_preset, list_presets
 
 print(list_presets())  # ["balanced", "fast", "quality"]
 params = apply_preset("fast", overrides={"top_k": 5})
@@ -210,7 +212,7 @@ params = apply_preset("fast", overrides={"top_k": 5})
 Start a lightweight inference server:
 
 ```bash
-python -m spectralis.server \
+python -m aqua.server \
     --gpt-model GPT_weights_v3/s1v3.ckpt \
     --sovits-model SoVITS_weights_v3/model.pth \
     --cuda-graph-preset full \
@@ -244,7 +246,7 @@ curl -X POST "http://127.0.0.1:8000/tts/file?text=Hello&voice=alice" -o output.w
 Manage multiple characters/voices without repeating paths:
 
 ```python
-from spectralis import Voice, VoiceRegistry
+from aqua import Voice, VoiceRegistry
 
 registry = VoiceRegistry(json_path="./voices.json")
 
@@ -275,9 +277,9 @@ curl -X POST "http://127.0.0.1:8000/tts?text=Hello&voice=alice"
 For production deployments, pass an explicit registry path to avoid writing to the process CWD:
 
 ```bash
-python -m spectralis.server ... --voice-registry /data/voices.json
+python -m aqua.server ... --voice-registry /data/voices.json
 # or
-export SPECTRALIS_VOICE_JSON=/data/voices.json
+export AQUA_VOICE_JSON=/data/voices.json
 ```
 
 ## Configuration
@@ -285,19 +287,23 @@ export SPECTRALIS_VOICE_JSON=/data/voices.json
 | Env variable | Default | Description |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(required)* | Path to GPT-SoVITS repo root |
-| `SPECTRALIS_VOICE_JSON` | `./voices.json` | Path to voice registry JSON file |
+| `AQUA_VOICE_JSON` | `./voices.json` | Path to voice registry JSON file |
+| `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph replay |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at startup |
+| `TTS_OUTPUT_LANGUAGE` | `日文` | Default output language |
+| `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | Default Japanese reference text |
+| `TTS_REF_TEXT_EN` | *(empty)* | Default English reference text |
 | `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
 
 ## Benchmarks
 
 ```bash
-# T2S comparison (official vs official CUDA Graph vs Spectralis)
+# T2S comparison (official vs official+CUDA Graph vs Aqua-TTS)
 python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/s1v3.ckpt
 
 # TTFP benchmark (streaming end-to-end)
-python benchmarks/spectralis_ttfp.py \
+python benchmarks/aqua_ttfp.py \
     --gpt-model GPT_weights_v3/s1v3.ckpt \
     --sovits-model SoVITS_weights_v3/your_model.pth \
     --ref-audio "reference audio/ref_audio.wav" \
@@ -314,15 +320,15 @@ See [benchmarks/README.md](benchmarks/README.md) for full comparison methodology
 MIT — see [LICENSE](LICENSE).
 
 Third-party code:
-- **GPT-SoVITS**: vendored `spectralis/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](NOTICE).
+- **GPT-SoVITS**: vendored `aqua/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](NOTICE).
 - **NVIDIA BigVGAN**: CUDA kernel sources under Apache 2.0 — see [NOTICE](NOTICE).
-- **alias-free-torch**: `spectralis/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](NOTICE).
+- **alias-free-torch**: `aqua/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](NOTICE).
 
 ## Development
 
 ```bash
-git clone https://github.com/SiqiLiOcean/spectralis-tts.git
-cd spectralis-tts
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd aqua-tts
 pip install -e ".[runtime]"
 pip install -r requirements-dev.txt
 
@@ -338,11 +344,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELO
 
 <a id="chinese"></a>
 
-# Spectralis-TTS · 中文
+# Aqua-TTS · 中文
 
 **GPT-SoVITS v3 的 GPU 优化推理运行时 — 静态 KV 缓存 + 分段 CUDA Graph + 预编译 BigVGAN 内核。**
 
 [English version](#english)
+
+> **定位说明** — Aqua-TTS 是面向 GPT-SoVITS **v3** 的独立运行时，不是补丁插件，也不承诺跟进上游更新。本项目涉及的技术——静态 KV 缓存、分段 CUDA Graph、预编译 BigVGAN 内核——已在 [TECHNICAL.md](TECHNICAL.md) 中详细记录，具备可移植性。如需 v4 支持，`aqua/modeling/` 和 `aqua/_vendor/` 是适配的合理起点。
 
 ## 亮点
 
@@ -368,15 +376,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELO
 - **内置预设** — 快速 / 均衡 / 质量 三种生成预设；完整 / 最小 / 延迟 / 关闭 四种 CUDA Graph 预设
 - **角色管理** — 将角色名映射到参考音频和文本提示，支持 JSON 持久化
 - **HTTP 服务器** — 轻量 FastAPI 服务，支持流式 TTS 接口、角色管理和健康检查
-- **pip 安装** — `pip install spectralis-tts` → `from spectralis import TTSInferencer`
+- **pip 安装** — `pip install aqua-tts` → `from aqua import TTSInferencer`
 
 ## 工作原理
 
-Spectralis-TTS 将两个 GPT-SoVITS 文件的修改版本置于 `spectralis/_vendor/` 内，通过 Python 命名空间包（`pkgutil.extend_path`）机制覆盖主仓库版本。当你 `import spectralis` 时，包会自动配置 `sys.path` 使 vendored 文件优先于主 GPT-SoVITS 仓库。设置 `GPT_SOVITS_HOME` 环境变量指向你的 GPT-SoVITS 安装目录即可：
+Aqua-TTS 将两个 GPT-SoVITS 文件的修改版本置于 `aqua/_vendor/` 内，通过 Python 命名空间包（`pkgutil.extend_path`）机制覆盖主仓库版本。当你 `import aqua` 时，包会自动配置 `sys.path` 使 vendored 文件优先于主 GPT-SoVITS 仓库。设置 `GPT_SOVITS_HOME` 环境变量指向你的 GPT-SoVITS 安装目录即可：
 
 ```
-spectralis-tts/
-├── spectralis/                    # 纯 Python 包（pip 可安装）
+aqua-tts/
+├── aqua/                          # 纯 Python 包（pip 可安装）
 │   ├── __init__.py                # sys.path 配置 + 延迟导出
 │   ├── inferencer.py              # TTSInferencer — 主入口
 │   ├── server.py                  # FastAPI HTTP 服务器
@@ -409,7 +417,7 @@ spectralis-tts/
 
 ### 1. 安装 GPT-SoVITS
 
-需要一个可用的 GPT-SoVITS v3 安装。Spectralis-TTS 从其中导入模块。
+需要一个可用的 GPT-SoVITS v3 安装。Aqua-TTS 从其中导入模块。
 
 ```bash
 git clone https://github.com/RVC-Boss/GPT-SoVITS.git
@@ -417,23 +425,23 @@ cd GPT-SoVITS
 pip install -r requirements.txt
 ```
 
-Spectralis-TTS 已通过 GPT-SoVITS v3（2025-04-01 版本）测试。
+Aqua-TTS 已通过 GPT-SoVITS v3（2025-04-01 版本）测试。
 
 ### 2. 安装 Aqua-TTS
 
 ```bash
 # 核心 + 运行时依赖
-pip install "spectralis-tts[runtime]"
+pip install "aqua-tts[runtime]"
 
 # 或含 HTTP 服务器支持（运行时 + FastAPI + Uvicorn）
-pip install "spectralis-tts[runtime,server]"
+pip install "aqua-tts[runtime,server]"
 ```
 
 开发模式：
 
 ```bash
-git clone https://github.com/SiqiLiOcean/spectralis-tts.git
-cd spectralis-tts
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd aqua-tts
 pip install -e ".[runtime,server]"
 ```
 
@@ -476,7 +484,7 @@ import os
 os.environ["GPT_SOVITS_HOME"] = "/path/to/GPT-SoVITS"
 os.environ["ENABLE_CUDA_GRAPH"] = "1"
 
-from spectralis import TTSInferencer
+from aqua import TTSInferencer
 
 tts = TTSInferencer(
     device="cuda",
@@ -523,7 +531,7 @@ for sr, chunk, text in tts.infer_stream(
 | `off` | 禁用 | 无 | 仅静态 KV，无图 |
 
 ```python
-from spectralis import apply_preset, list_presets
+from aqua import apply_preset, list_presets
 
 print(list_presets())  # ["balanced", "fast", "quality"]
 params = apply_preset("fast", overrides={"top_k": 5})
@@ -534,7 +542,7 @@ params = apply_preset("fast", overrides={"top_k": 5})
 启动轻量推理服务：
 
 ```bash
-python -m spectralis.server \
+python -m aqua.server \
     --gpt-model GPT_weights_v3/s1v3.ckpt \
     --sovits-model SoVITS_weights_v3/model.pth \
     --cuda-graph-preset full \
@@ -568,7 +576,7 @@ curl -X POST "http://127.0.0.1:8000/tts/file?text=你好世界&voice=alice" -o o
 管理多个角色/音色，无需每次重复指定路径：
 
 ```python
-from spectralis import Voice, VoiceRegistry
+from aqua import Voice, VoiceRegistry
 
 registry = VoiceRegistry(json_path="./voices.json")
 
@@ -599,9 +607,9 @@ curl -X POST "http://127.0.0.1:8000/tts?text=你好&voice=alice"
 生产环境建议显式指定注册表路径，避免写入进程当前目录：
 
 ```bash
-python -m spectralis.server ... --voice-registry /data/voices.json
+python -m aqua.server ... --voice-registry /data/voices.json
 # 或
-export SPECTRALIS_VOICE_JSON=/data/voices.json
+export AQUA_VOICE_JSON=/data/voices.json
 ```
 
 ## 配置
@@ -609,19 +617,23 @@ export SPECTRALIS_VOICE_JSON=/data/voices.json
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(必填)* | GPT-SoVITS 仓库根目录路径 |
-| `SPECTRALIS_VOICE_JSON` | `./voices.json` | 角色注册表 JSON 文件路径 |
+| `AQUA_VOICE_JSON` | `./voices.json` | 角色注册表 JSON 文件路径 |
+| `AQUA_SESSION_CACHE_MAX` | `8` | 参考音频 session 最大缓存数量 |
 | `ENABLE_CUDA_GRAPH` | `1` | 启用 CUDA Graph 回放 |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | 启动时预捕获所有桶图 |
+| `TTS_OUTPUT_LANGUAGE` | `日文` | 默认输出语言 |
+| `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | 默认日语参考文本 |
+| `TTS_REF_TEXT_EN` | *(空)* | 默认英语参考文本 |
 | `TTS_STREAM_SYNC_TIMING` | `0` | 启用逐步 CFM 计时（增加 GPU 同步开销） |
 
 ## 基准测试
 
 ```bash
-# T2S 对比（官方 vs 官方 CUDA Graph vs Spectralis）
+# T2S 对比（官方 vs 官方+CUDA Graph vs Aqua-TTS）
 python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/s1v3.ckpt
 
 # TTFP 基准（端到端流式）
-python benchmarks/spectralis_ttfp.py \
+python benchmarks/aqua_ttfp.py \
     --gpt-model GPT_weights_v3/s1v3.ckpt \
     --sovits-model SoVITS_weights_v3/your_model.pth \
     --ref-audio "reference audio/ref_audio.wav" \
@@ -638,15 +650,15 @@ python benchmarks/bigvgan_raw_bench.py
 MIT — 详见 [LICENSE](LICENSE)。
 
 第三方代码：
-- **GPT-SoVITS**：vendored `spectralis/_vendor/GPT_SoVITS/AR/models/t2s_model.py` 基于 GPT-SoVITS (MIT) — 详见 [NOTICE](NOTICE)。
+- **GPT-SoVITS**：vendored `aqua/_vendor/GPT_SoVITS/AR/models/t2s_model.py` 基于 GPT-SoVITS (MIT) — 详见 [NOTICE](NOTICE)。
 - **NVIDIA BigVGAN**：CUDA 内核源码基于 Apache 2.0 — 详见 [NOTICE](NOTICE)。
-- **alias-free-torch**：`spectralis/bigvgan/torch/` 基于 Apache 2.0 — 详见 [NOTICE](NOTICE)。
+- **alias-free-torch**：`aqua/bigvgan/torch/` 基于 Apache 2.0 — 详见 [NOTICE](NOTICE)。
 
 ## 开发
 
 ```bash
-git clone https://github.com/SiqiLiOcean/spectralis-tts.git
-cd spectralis-tts
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd aqua-tts
 pip install -e ".[runtime]"
 pip install -r requirements-dev.txt
 
