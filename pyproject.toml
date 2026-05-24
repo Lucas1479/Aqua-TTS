@@ -48,6 +48,9 @@ playback = [
     "aqua-tts[runtime]",
     "PyAudio>=0.2.14",
 ]
+flash-attn = [
+    "flash-attn>=2.5",
+]
 
 [project.urls]
 Homepage = "https://github.com/Lucas1479/Aqua-TTS"

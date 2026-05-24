@@ -107,7 +107,9 @@ class TTSInferencer:
                  bert_path=None,
                  cnhubert_path=None,
                  language="Auto",
-                 cuda_graph_preset="full"):
+                 cuda_graph_preset="full",
+                 use_flash_attn: bool = False,
+                 use_vocoder_graph: bool = False):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -129,8 +131,16 @@ class TTSInferencer:
                 "minimal" (subset), "lazy" (capture on first use), "off" (static KV only)
                 CUDA Graph 捕获策略 — "full" (全桶预捕获), "minimal" (最小桶集合),
                 "lazy" (惰性捕获), "off" (纯 static KV)
+            use_flash_attn: Enable flash_attn_with_kvcache for T2S decoder attention.
+                Requires the flash_attn library (pip install flash-attn).
+                Falls back gracefully to PyTorch SDPA if not installed.
+            use_vocoder_graph: Enable bucketed CUDA Graph for SoVITS/BigVGAN vocoder decode.
+                Pre-captures graphs for common mel-T sizes to reduce kernel launch overhead.
         """
         self._cuda_graph_preset = cuda_graph_preset
+        self._use_flash_attn = use_flash_attn
+        self._use_vocoder_graph = use_vocoder_graph
+        self._vocoder_graph_manager = None
         try:
             # 确定模型路径
             base_dir = _gpt_sovits_home() or _PACKAGE_DIR
@@ -321,6 +331,27 @@ class TTSInferencer:
         if self.model_version == "v3":
             self._load_bigvgan_model()
 
+        # Vocoder CUDA Graph (applied after SoVITS model is fully loaded)
+        if self._use_vocoder_graph and self.is_half:
+            self._apply_vocoder_graph_if_available()
+
+    def _apply_vocoder_graph_if_available(self):
+        """Create VocoderGraphManager and pre-capture CUDA Graphs for vocoder."""
+        try:
+            from aquatts.modeling.vocoder_graph import VocoderGraphManager
+            vgm = VocoderGraphManager(self.vq_model)
+            device = next(self.vq_model.parameters()).device
+            if vgm.precapture(device):
+                vgm.patch()
+                self._vocoder_graph_manager = vgm
+                logger.info("[VocoderGraph] Vocoder CUDA Graph capture complete")
+            else:
+                logger.warning("[VocoderGraph] Vocoder CUDA Graph capture failed, using normal path")
+        except Exception:
+            logger.warning("[VocoderGraph] Vocoder CUDA Graph setup failed, continuing normally")
+            import traceback
+            traceback.print_exc()
+
     def _load_gpt_model(self):
         """Load GPT T2S model and pre-capture CUDA Graphs.
         加载GPT模型"""
@@ -340,6 +371,22 @@ class TTSInferencer:
         self.t2s_model.eval()
 
         self._maybe_precapture_t2s_graph()
+
+        # FlashAttention upgrade (after CUDA Graph patch is in place)
+        if self._use_flash_attn:
+            self._apply_flash_attn_if_available()
+
+    def _apply_flash_attn_if_available(self):
+        """Apply FlashAttention patch to the T2S AR decoder if flash_attn is installed."""
+        try:
+            from aquatts.modeling.t2s_flash_attn import apply_flash_attn_patch
+            decoder = getattr(self.t2s_model, "model", None)
+            if decoder is not None:
+                apply_flash_attn_patch(decoder)
+        except Exception:
+            logger.warning("FlashAttention patch failed, continuing with SDPA fallback")
+            import traceback
+            traceback.print_exc()
 
     def _warmup_bigvgan_shapes(self):
         """Warm BigVGAN + cuDNN for common streaming chunk mel_T sizes.
