@@ -16,8 +16,10 @@ import argparse
 import contextlib
 import logging
 import os
+import queue
 import random
 import sys
+import threading
 import time
 import wave
 from pathlib import Path
@@ -50,7 +52,7 @@ DEFAULT_TOP_K = 5
 DEFAULT_TOP_P = 0.9
 DEFAULT_TEMPERATURE = 0.6
 DEFAULT_SPEED = 1.0
-DEFAULT_SAMPLE_STEPS = 8
+DEFAULT_SAMPLE_STEPS = 4
 DEFAULT_CHUNK_SECONDS = 0.35
 
 
@@ -151,6 +153,20 @@ def _summarize_t2s(stats: list[dict]) -> tuple[int, float, float]:
     return tokens, elapsed, rate
 
 
+def _fade_edges(audio: np.ndarray, sample_rate: int, *, fade_in: bool, fade_out: bool) -> np.ndarray:
+    fade_n = max(1, int(0.010 * sample_rate))
+    if not fade_in and not fade_out:
+        return audio
+    audio = audio.copy()
+    if fade_in:
+        n = min(fade_n, len(audio))
+        audio[:n] *= np.linspace(0.0, 1.0, n, dtype=np.float32)
+    if fade_out:
+        n = min(fade_n, len(audio))
+        audio[-n:] *= np.linspace(1.0, 0.0, n, dtype=np.float32)
+    return audio
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(description="Aqua-TTS end-to-end playback demo")
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""))
@@ -246,16 +262,53 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
         chunk_size_seconds=args.chunk_size_seconds,
         collect_t2s_stats=True,
     )
-    while True:
-        try:
-            sr, chunk, _text = _next_quiet(iterator, not args.verbose)
-        except StopIteration:
-            break
-        sample_rate = sr or sample_rate
-        if chunk is None or len(chunk) == 0:
-            continue
+    audio_queue: queue.Queue = queue.Queue(maxsize=32)
+    producer_errors: list[BaseException] = []
 
-        audio = _float32_mono(chunk)
+    def _produce_audio():
+        try:
+            while True:
+                try:
+                    sr, chunk, _text = _next_quiet(iterator, not args.verbose)
+                except StopIteration:
+                    break
+                sample = sr or 24000
+                if chunk is None or len(chunk) == 0:
+                    continue
+                audio_queue.put((sample, _float32_mono(chunk)))
+        except BaseException as exc:  # propagate after the player drains
+            producer_errors.append(exc)
+        finally:
+            audio_queue.put(None)
+
+    producer = threading.Thread(target=_produce_audio, name=f"aqua-producer-{label}", daemon=True)
+    producer.start()
+
+    while True:
+        item = audio_queue.get()
+        if item is None:
+            break
+        sample_rate, audio = item
+        chunks_to_play = [audio]
+        eof_in_drain = False
+        while True:
+            try:
+                nxt = audio_queue.get_nowait()
+            except queue.Empty:
+                break
+            if nxt is None:
+                eof_in_drain = True
+                break
+            sample_rate, next_audio = nxt
+            chunks_to_play.append(next_audio)
+
+        merged = np.concatenate(chunks_to_play) if len(chunks_to_play) > 1 else chunks_to_play[0]
+        merged = _fade_edges(
+            merged,
+            sample_rate,
+            fade_in=first_audio_ms is None,
+            fade_out=eof_in_drain,
+        )
         if first_audio_ms is None:
             first_audio_ms = (time.perf_counter() - start) * 1000.0
             stream = pa.open(
@@ -268,10 +321,18 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
             )
             print(f"[{label}] first_audio={first_audio_ms:.1f}ms")
 
-        stream.write(audio.tobytes())
-        total_samples += len(audio)
+        stream.write(merged.tobytes())
+        total_samples += len(merged)
         if save_dir is not None:
-            chunks.append(audio.copy())
+            chunks.append(merged.copy())
+        if eof_in_drain:
+            pad = np.zeros(int(0.060 * sample_rate), dtype=np.float32)
+            stream.write(pad.tobytes())
+            break
+
+    producer.join(timeout=1.0)
+    if producer_errors:
+        raise producer_errors[0]
 
     if stream is not None:
         stream.stop_stream()
