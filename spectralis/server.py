@@ -16,8 +16,6 @@ POST /voices/add       — register a new voice / 注册新声音
 DELETE /voices/{name}  — remove a registered voice / 移除已注册的声音
 """
 
-from __future__ import annotations
-
 import io
 import logging
 import os

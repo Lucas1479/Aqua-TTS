@@ -41,6 +41,7 @@ runtime = [
     "peft>=0.7",
 ]
 server = [
+    "spectralis-tts[runtime]",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",
 ]

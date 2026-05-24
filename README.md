@@ -98,18 +98,24 @@ Spectralis-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
 ### 2. Install Spectralis-TTS
 
 ```bash
-pip install spectralis-tts[runtime]
+# Core + runtime dependencies
+pip install "spectralis-tts[runtime]"
+
+# Or with HTTP server support (includes runtime + fastapi + uvicorn)
+pip install "spectralis-tts[runtime,server]"
 ```
 
-Or for development:
+For development:
 
 ```bash
 git clone https://github.com/SiqiLiOcean/spectralis-tts.git
 cd spectralis-tts
-pip install -e ".[runtime]"
+pip install -e ".[runtime,server]"
 ```
 
-The `[runtime]` extra installs soundfile, librosa, and peft — needed for the full `TTSInferencer` pipeline.
+Extras:
+- `[runtime]` — soundfile, librosa, peft (needed by `TTSInferencer`)
+- `[server]` — FastAPI + uvicorn (includes `[runtime]` automatically)
 
 ### 3. Configure GPT-SoVITS path
 
@@ -224,10 +230,12 @@ Endpoints:
 | `DELETE` | `/voices/{name}` | Remove a registered voice |
 
 ```bash
-# Streaming TTS
-curl -X POST "http://127.0.0.1:8000/tts?text=Hello&voice=alice" --output - | play -
+# Streaming TTS — returns raw float32 PCM (24kHz, mono, little-endian)
+# Pipe to a player that supports raw floats, e.g.:
+curl -X POST "http://127.0.0.1:8000/tts?text=Hello&voice=alice" --output - \
+  | play -t raw -r 24k -e floating-point -b 32 -c 1 -
 
-# Download WAV file
+# Download WAV file (properly formatted, playable anywhere)
 curl -X POST "http://127.0.0.1:8000/tts/file?text=Hello&voice=alice" -o output.wav
 ```
 
@@ -262,6 +270,14 @@ On the HTTP server, pass `voice` instead of `ref_audio_path`:
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/tts?text=Hello&voice=alice"
+```
+
+For production deployments, pass an explicit registry path to avoid writing to the process CWD:
+
+```bash
+python -m spectralis.server ... --voice-registry /data/voices.json
+# or
+export SPECTRALIS_VOICE_JSON=/data/voices.json
 ```
 
 ## Configuration
@@ -406,18 +422,24 @@ Spectralis-TTS 已通过 GPT-SoVITS v3（2025-04-01 版本）测试。
 ### 2. 安装 Spectralis-TTS
 
 ```bash
-pip install spectralis-tts[runtime]
+# 核心 + 运行时依赖
+pip install "spectralis-tts[runtime]"
+
+# 或含 HTTP 服务器支持（运行时 + FastAPI + Uvicorn）
+pip install "spectralis-tts[runtime,server]"
 ```
 
-或开发模式：
+开发模式：
 
 ```bash
 git clone https://github.com/SiqiLiOcean/spectralis-tts.git
 cd spectralis-tts
-pip install -e ".[runtime]"
+pip install -e ".[runtime,server]"
 ```
 
-`[runtime]` 扩展会安装 soundfile、librosa 和 peft。
+扩展说明：
+- `[runtime]` — soundfile, librosa, peft（`TTSInferencer` 所需）
+- `[server]` — FastAPI + uvicorn（自动包含 `[runtime]`）
 
 ### 3. 配置 GPT-SoVITS 路径
 
@@ -532,10 +554,12 @@ python -m spectralis.server \
 | `DELETE` | `/voices/{name}` | 移除已注册角色 |
 
 ```bash
-# 流式 TTS 请求
-curl -X POST "http://127.0.0.1:8000/tts?text=你好世界&voice=alice" --output - | play -
+# 流式 TTS — 返回 raw float32 PCM（24kHz, 单声道, little-endian）
+# 用 SoX 播放原始浮点音频流：
+curl -X POST "http://127.0.0.1:8000/tts?text=你好世界&voice=alice" --output - \
+  | play -t raw -r 24k -e floating-point -b 32 -c 1 -
 
-# 下载 WAV 文件
+# 下载 WAV 文件（格式完整，任意播放器可用）
 curl -X POST "http://127.0.0.1:8000/tts/file?text=你好世界&voice=alice" -o output.wav
 ```
 
@@ -570,6 +594,14 @@ for sr, chunk, text in tts.infer_stream(
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/tts?text=你好&voice=alice"
+```
+
+生产环境建议显式指定注册表路径，避免写入进程当前目录：
+
+```bash
+python -m spectralis.server ... --voice-registry /data/voices.json
+# 或
+export SPECTRALIS_VOICE_JSON=/data/voices.json
 ```
 
 ## 配置
