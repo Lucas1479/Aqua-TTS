@@ -46,7 +46,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 
 *TTFP benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu121, float16, warm cache, static KV cache enabled, bucketed CUDA Graph pre-captured. Aqua-TTS numbers are median of 5 runs. Official baseline uses the same GPT checkpoint; TTFP for non-streaming baselines coincides with full utterance completion. See [benchmarks/README.md](benchmarks/README.md) for full methodology and raw repeats.*
 
-<video src="Aqua_tts_e2e_demo.mp4" controls width="720"></video>
+[![E2E Demo Video](assets/aqua.png)](https://github.com/Lucas1479/Aqua-TTS/releases/download/v0.1.0/Aqua_tts_e2e_demo.mp4)
 
 ## Features
 
