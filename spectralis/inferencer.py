@@ -18,6 +18,7 @@ try:
 except ImportError:
     sf = None  # friendly error in TTSInferencer.__init__
 
+# TTS language config (via TTS_OUTPUT_LANGUAGE env var, defaults to Japanese)
 # TTS 语言配置（通过环境变量 TTS_OUTPUT_LANGUAGE 切换，默认日文）
 try:
     from config.settings import TTS_OUTPUT_LANGUAGE as _TTS_OUTPUT_LANGUAGE
@@ -39,6 +40,7 @@ def _default_ref_free_prompt() -> str:
     return _TTS_REF_TEXT_JA or "こんにちは。今日はいい天気ですね。"
 
 
+# Set up logging
 # 设置日志记录
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('tts_inference')
@@ -52,6 +54,7 @@ def _gpt_sovits_home() -> str:
     return os.environ.get('GPT_SOVITS_HOME', '')
 
 
+# Import required modules from GPT-SoVITS
 # 导入必要的模块
 try:
     import librosa
@@ -67,7 +70,8 @@ try:
     from GPT_SoVITS.TTS_infer_pack.TTS import TTS
     from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
 
-    """加载SoVITS模型"""
+    """Load SoVITS model
+加载SoVITS模型"""
     from GPT_SoVITS.module.models import SynthesizerTrn, SynthesizerTrnV3
     from GPT_SoVITS.process_ckpt import load_sovits_new
     from peft import LoraConfig, get_peft_model
@@ -110,17 +114,26 @@ class TTSInferencer:
                  language="Auto",
                  cuda_graph_preset="full"):
         """
+        Initialize the TTS inferencer.
         初始化TTS推理器
 
         Args:
-            device: 推理设备，默认为"cuda"
-            gpt_path: GPT模型路径，如果为None则使用默认路径
-            sovits_path: SoVITS模型路径，如果为None则使用默认路径
-            bert_path: BERT模型路径，如果为None则使用默认路径
-            cnhubert_path: CNHuBERT模型路径，如果为None则使用默认路径
-            language: 默认语言，可选"Auto"、"中文"、"英文"、"日文"等
-            cuda_graph_preset: CUDA Graph 捕获策略 — "full" (全桶预捕获),
-                "minimal" (最小桶集合), "lazy" (惰性捕获), "off" (纯 static KV)
+            device: Inference device, default "cuda"
+                    推理设备，默认为"cuda"
+            gpt_path: Path to GPT T2S checkpoint (.ckpt)
+                      GPT模型路径，如果为None则使用默认路径
+            sovits_path: Path to SoVITS checkpoint (.pth)
+                         SoVITS模型路径，如果为None则使用默认路径
+            bert_path: Path to BERT model directory
+                       BERT模型路径，如果为None则使用默认路径
+            cnhubert_path: Path to CNHuBERT model directory
+                           CNHuBERT模型路径，如果为None则使用默认路径
+            language: Default language — "Auto", "中文", "英文", "日文", etc.
+                      默认语言
+            cuda_graph_preset: CUDA Graph capture strategy — "full" (all buckets pre-captured),
+                "minimal" (subset), "lazy" (capture on first use), "off" (static KV only)
+                CUDA Graph 捕获策略 — "full" (全桶预捕获), "minimal" (最小桶集合),
+                "lazy" (惰性捕获), "off" (纯 static KV)
         """
         self._cuda_graph_preset = cuda_graph_preset
         try:
@@ -193,7 +206,8 @@ class TTSInferencer:
             raise
 
     def _get_effective_max_sec(self, override_value):
-        """计算当前推理应当使用的最大时长限制（秒）"""
+        """Compute the effective max duration (seconds) for current inference.
+        计算当前推理应当使用的最大时长限制（秒）"""
         effective = float(self.max_sec)
         if override_value is not None:
             try:
@@ -205,7 +219,9 @@ class TTSInferencer:
         return effective
 
     def _init_language_dict(self):
-        """初始化语言字典"""
+        """Initialize language dictionary mappings.
+        初始化语言字典"""
+        # Detect model version to select the correct language dictionary
         # 检测模型版本，根据版本确定语言字典
         self.model_version = self._detect_model_version()
 
@@ -236,7 +252,8 @@ class TTSInferencer:
         self.splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
 
     def _detect_model_version(self):
-        """检测模型版本"""
+        """Detect model version from checkpoint path or filename.
+        检测模型版本"""
         # 简单版本检测，可根据文件名或其他特征判断
         if "v3" in self.sovits_path or "v3" in self.gpt_path:
             return "v3"
@@ -246,7 +263,8 @@ class TTSInferencer:
             return "v1"
 
     def _init_bert_model(self):
-        """初始化BERT模型"""
+        """Initialize BERT model for Chinese text encoding.
+        初始化BERT模型"""
         from transformers import AutoModelForMaskedLM, AutoTokenizer
 
         logger.info(f"加载BERT模型: {self.bert_path}")
@@ -259,7 +277,8 @@ class TTSInferencer:
             self.bert_model = self.bert_model.to(self.device)
 
     def _init_ssl_model(self):
-        """初始化SSL模型"""
+        """Initialize CNHuBERT SSL model for semantic feature extraction.
+        初始化SSL模型"""
 
 
         logger.info(f"加载CNHubert模型: {self.cnhubert_path}")
@@ -272,7 +291,8 @@ class TTSInferencer:
             self.ssl_model = self.ssl_model.to(self.device)
 
     def _load_models(self):
-        """加载GPT和SoVITS模型"""
+        """Load GPT, SoVITS, and BigVGAN models.
+        加载GPT和SoVITS模型"""
         # 加载GPT模型
         self._load_gpt_model()
 
@@ -284,7 +304,8 @@ class TTSInferencer:
             self._load_bigvgan_model()
 
     def _load_gpt_model(self):
-        """加载GPT模型"""
+        """Load GPT T2S model and pre-capture CUDA Graphs.
+        加载GPT模型"""
 
         logger.info(f"加载GPT模型: {self.gpt_path}")
         dict_s1 = torch.load(self.gpt_path, map_location="cpu")
@@ -483,7 +504,8 @@ class TTSInferencer:
             self.vq_model.eval()
 
     def _load_bigvgan_model(self):
-        """加载BigVGAN模型（v3模型需要）"""
+        """Load BigVGAN vocoder model (required for v3).
+        加载BigVGAN模型（v3模型需要）"""
         if self.model_version != "v3":
             self.bigvgan_model = None
             return
@@ -573,7 +595,8 @@ class TTSInferencer:
             raise
 
     def _build_session_cache(self, ref_audio_path: str, prompt_text: str, prompt_language_code: str):
-        """构建会话级参考缓存。"""
+        """Build a session-level reference cache (SSL, phones, BERT, mel, prompt features).
+        构建会话级参考缓存。"""
         key = (ref_audio_path, prompt_text or "", prompt_language_code or "", self.model_version, self.is_half)
         if key in self._session_cache:
             return self._session_cache[key]
@@ -658,7 +681,8 @@ class TTSInferencer:
             return {}
 
     def _clone_cached_value(self, value):
-        """避免读取会话缓存后被后续推理路径原地复用/污染。"""
+        """Clone cached tensors to avoid mutation by downstream inference paths.
+        避免读取会话缓存后被后续推理路径原地复用/污染。"""
         if torch.is_tensor(value):
             return value.clone()
         if isinstance(value, list):
@@ -670,7 +694,8 @@ class TTSInferencer:
         return value
 
     def get_bert_feature(self, text, word2ph):
-        """获取BERT特征"""
+        """Extract BERT features for Chinese text at phone level.
+        获取BERT特征"""
         with torch.no_grad():
             inputs = self.tokenizer(text, return_tensors="pt")
             for i in inputs:
@@ -688,7 +713,8 @@ class TTSInferencer:
         return phone_level_feature.T
 
     def get_phones_and_bert(self, text, language, final=False):
-        """获取音素和BERT特征"""
+        """Extract phoneme sequence and BERT features from text.
+        获取音素和BERT特征"""
         if language in {"en", "all_zh", "all_ja", "all_ko", "all_yue"}:
             formattext = text
             while "  " in formattext:
@@ -731,6 +757,7 @@ class TTSInferencer:
                     if tmp["lang"] == "en":
                         langlist.append(tmp["lang"])
                     else:
+                        # Can't distinguish CJK characters — use user-provided language
                         # 因无法区别中日韩文汉字,以用户输入为准
                         langlist.append(language)
                     textlist.append(tmp["text"])
@@ -754,6 +781,7 @@ class TTSInferencer:
             phones = sum(phones_list, [])
             norm_text = ''.join(norm_text_list)
 
+        # Handle very short content — pad and retry
         # 处理过短的内容
         dtype = torch.float16 if self.is_half else torch.float32
         if not final and len(phones) < 6:
@@ -762,14 +790,16 @@ class TTSInferencer:
         return phones, bert.to(dtype), norm_text
 
     def clean_text_inf(self, text, language):
-        """清理文本并转换为音素"""
+        """Clean text and convert to phoneme sequence.
+        清理文本并转换为音素"""
         language = language.replace("all_", "")
         phones, word2ph, norm_text = clean_text(text, language, self.sovits_version)
         phones = cleaned_text_to_sequence(phones, self.sovits_version)
         return phones, word2ph, norm_text
 
     def get_bert_inf(self, phones, word2ph, norm_text, language):
-        """根据语言获取BERT特征"""
+        """Get BERT features based on language.
+        根据语言获取BERT特征"""
         language = language.replace("all_", "")
         if language == "zh":
             bert = self.get_bert_feature(norm_text, word2ph).to(self.device)
@@ -782,7 +812,8 @@ class TTSInferencer:
         return bert
 
     def _audio_sr(self, audio, sr):
-        """音频超分辨率处理"""
+        """Audio super-resolution processing.
+        音频超分辨率处理"""
         try:
 
             sr_model = AP_BWE(self.device, DictToAttrRecursive)
@@ -795,7 +826,8 @@ class TTSInferencer:
             return audio.cpu().detach().numpy(), sr
 
     def get_spepc(self, filename):
-        """获取频谱特征"""
+        """Extract spectrogram from reference audio.
+        获取频谱特征"""
         audio, sampling_rate = librosa.load(filename, sr=int(self.hps.data.sampling_rate))
         audio = torch.FloatTensor(audio)
         maxx = audio.abs().max()
@@ -835,28 +867,32 @@ class TTSInferencer:
               enable_static_kv=True,
               max_sec_override=None):
         """
+        Run TTS inference (non-streaming, returns full audio).
         执行TTS推理
 
         Args:
-            text: 要合成的目标文本
-            ref_audio_path: 参考音频路径
-            prompt_text: 参考文本，如果为None则使用ref_free模式
-            text_language: 目标文本的语言
-            prompt_language: 参考文本的语言
-            how_to_cut: 文本切分方式，可选"不切"、"凑四句一切"、"凑50字一切"、"按中文句号。切"、"按英文句号.切"、"按标点符号切"
-            top_k, top_p, temperature: GPT采样参数
-            speed: 语速控制
-            sample_steps: v3模型的采样步数
-            ref_free: 是否使用无参考模式
-            pause_second: 句间停顿秒数
-            if_freeze: 是否重用上次的缓存(防止随机性)
-            inp_refs: 额外的参考音频列表(用于混合音色)
-            if_sr: 是否使用音频超分辨率(仅v3模型支持)
+            text: Target text to synthesize / 要合成的目标文本
+            ref_audio_path: Path to reference audio / 参考音频路径
+            prompt_text: Reference transcript. Uses ref_free mode if None / 参考文本
+            text_language: Language of the target text / 目标文本的语言
+            prompt_language: Language of the reference text / 参考文本的语言
+            how_to_cut: Text segmentation strategy / 文本切分方式:
+                "不切" (no cut), "凑四句一切", "凑50字一切",
+                "按中文句号。切", "按英文句号.切", "按标点符号切"
+            top_k, top_p, temperature: GPT sampling parameters / GPT采样参数
+            speed: Speed multiplier / 语速控制
+            sample_steps: Sampling steps for v3 models / v3模型的采样步数
+            ref_free: Whether to use reference-free mode / 是否使用无参考模式
+            pause_second: Pause duration between sentences / 句间停顿秒数
+            if_freeze: Whether to reuse previous cache (reduces randomness) / 是否重用上次的缓存
+            inp_refs: Additional reference audio paths for voice mixing / 额外的参考音频列表
+            if_sr: Whether to use audio super-resolution (v3 only) / 是否使用音频超分辨率
 
         Returns:
-            tuple: (采样率, 音频数据)
+            tuple: (sample_rate, audio_data) / (采样率, 音频数据)
         """
         try:
+            # Prepare input
             # 准备输入
             text = text.strip()
             if not text:
@@ -864,10 +900,12 @@ class TTSInferencer:
 
             logger.info(f"开始推理: '{text[:30]}...'")
 
+            # Define v3 CFM denorm function up front to avoid undefined branches
             # 统一定义 v3 CFM 解码所需的反归一化函数，避免某些分支下未定义
             spec_min, spec_max = -12, 2
             denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
 
+            # Convert language code
             # 转换语言代码
             if text_language in self.dict_language:
                 text_language_code = self.dict_language[text_language]
@@ -875,12 +913,14 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
+            # Use ref_free mode if no prompt text is provided
             # 如果没有提供参考文本，则使用无参考模式
             if prompt_text is None or prompt_text.strip() == "":
                 ref_free = True
                 logger.info("未提供参考文本，使用无参考模式")
             else:
                 prompt_text = prompt_text.strip()
+                # Ensure prompt text ends with punctuation
                 # 确保参考文本以标点符号结尾
                 if prompt_text and prompt_text[-1] not in self.splits:
                     prompt_text += "。" if prompt_language != "英文" else "."
@@ -892,16 +932,19 @@ class TTSInferencer:
 
                 logger.info(f"参考文本: '{prompt_text}'")
 
+            # v3 doesn't support ref_free mode
             # v3模型不支持ref_free模式
             if self.model_version == "v3" and ref_free:
                 logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
                 ref_free = False
 
+                # Use default prompt text for the current language
                 # 如果没有参考文本，使用当前语言的默认文本
                 if not prompt_text:
                     prompt_text = _default_ref_free_prompt()
                     prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
 
+            # Segment text according to selected strategy
             # 根据选择的切分方式处理文本
             logger.info(f"文本切分方式: {how_to_cut}")
             if how_to_cut == "凑四句一切":
@@ -915,27 +958,32 @@ class TTSInferencer:
             elif how_to_cut == "按标点符号切":
                 text = cut5(text)
 
+            # Split by newlines
             # 按行切分
             while "\n\n" in text:
                 text = text.replace("\n\n", "\n")
             texts = text.split("\n")
             texts = process_text(texts)
 
+            # Initialize result buffers
             # 初始化结果
             audio_outputs = []
             sr = self.hps.data.sampling_rate if self.model_version != "v3" else 24000
 
+            # Create silence gap between sentences
             # 创建句间停顿的静音
             zero_wav = torch.zeros(
                 int(sr * pause_second),
                 dtype=torch.float16 if self.is_half else torch.float32  # 根据is_half决定类型
             ).to(self.device)
 
+            # Process reference audio (prefer session-level cache)
             # 处理参考音频（会话级缓存优先）
             sess_lang = prompt_language_code if not ref_free else _default_lang_code()
             sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
             prompt = sess.get("prompt")
 
+            # Extract phones and BERT features from reference audio
             # 获取参考音频的音素和BERT特征
             if not ref_free:
                 if "phones1" in sess and "bert1" in sess:
@@ -943,27 +991,33 @@ class TTSInferencer:
                 else:
                     phones1, bert1, norm_text1 = self.get_phones_and_bert(prompt_text, prompt_language_code)
 
+            # Initialize inference cache
             # 初始化缓存
             cache = {}
 
             effective_max_sec = self._get_effective_max_sec(max_sec_override)
+            # Synthesize sentence by sentence
             # 分句合成
             logger.info(f"分成 {len(texts)} 个句子进行合成")
             for i_text, text_item in enumerate(texts):
+                # Skip empty sentences
                 # 跳过空句
                 if len(text_item.strip()) == 0:
                     continue
 
+                # Ensure sentence ends with punctuation
                 # 确保句子以标点符号结尾
                 if text_item and text_item[-1] not in self.splits:
                     text_item += "。" if text_language != "英文" else "."
 
                 logger.info(f"处理第 {i_text + 1} 句: '{text_item}'")
 
+                # Extract phones and BERT from target text
                 # 获取目标文本的音素和BERT特征
                 phones2, bert2, norm_text2 = self.get_phones_and_bert(text_item, text_language_code)
                 logger.info(f"处理后的目标文本: {norm_text2}")
 
+                # Merge phones and BERT features
                 # 合并音素和BERT特征
                 if not ref_free:
                     bert = torch.cat([bert1, bert2], 1)
@@ -975,11 +1029,13 @@ class TTSInferencer:
                 bert = bert.to(self.device).unsqueeze(0)
                 all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
 
+                # Handle cache (reuse if frozen)
                 # 处理缓存
                 if i_text in cache and if_freeze:
                     logger.info("使用缓存的GPT输出")
                     pred_semantic = cache[i_text]
                 else:
+                    # Run GPT inference
                     # GPT推理
                     logger.info("执行GPT推理...")
                     with torch.no_grad():
@@ -998,11 +1054,14 @@ class TTSInferencer:
                         pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                         cache[i_text] = pred_semantic
 
+                # Run SoVITS decoding
                 # SoVITS推理
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
+                    # Decode for v1/v2 models
                     # v1/v2模型解码
+                    # Process multiple reference audios
                     # 处理多个参考音频
                     refers = []
                     if inp_refs:
@@ -1020,6 +1079,7 @@ class TTSInferencer:
                             except Exception as e:
                                 logger.warning(f"加载额外参考音频失败: {e}")
 
+                    # Fall back to main reference audio if no extra refs
                     # 如果没有额外参考音频，使用主参考音频
                     if len(refers) == 0:
                         refer = sess.get("refer_spec")
@@ -1028,6 +1088,7 @@ class TTSInferencer:
                             refer = refer.half() if self.is_half else refer.float()
                         refers = [refer]
 
+                    # Decode
                     # 解码
                     audio = self.vq_model.decode(
                         pred_semantic,
@@ -1036,20 +1097,23 @@ class TTSInferencer:
                         speed=speed
                     )[0][0]
 
+                    # Prevent audio clipping
                     # 防止爆音
                     max_audio = torch.abs(audio).max()
                     if max_audio > 1:
                         audio = audio / max_audio
 
+                    # Add to output list
                     # 添加到输出列表
                     audio_outputs.append(audio)
-                    audio_outputs.append(zero_wav)  # 句间停顿
+                    audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
                 else:
+                    # Decode for v3 model
                     # v3模型解码
                     import torchaudio
 
-                    # 根据is_half决定是否使用half
+                    # Prefer session-cached reference spectrogram
                     # 优先使用会话缓存的参考频谱
                     refer = sess.get("refer_spec")
                     if refer is None:
@@ -1059,12 +1123,14 @@ class TTSInferencer:
                     phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
                     phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
 
+                    # Extract reference audio features (prefer session cache)
                     # 提取参考音频特征（优先使用会话缓存）
                     fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
                     ge = self._clone_cached_value(sess.get("prompt_ge"))
                     if fea_ref is None or ge is None:
                         fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
 
+                    # Load and process reference audio
                     # 加载并处理参考音频
                     ref_audio, ref_sr = torchaudio.load(ref_audio_path)
                     ref_audio = ref_audio.to(self.device)
@@ -1074,13 +1140,15 @@ class TTSInferencer:
                     else:
                         ref_audio = ref_audio.float()
 
-                    if ref_audio.shape[0] == 2:  # 转单声道
+                    if ref_audio.shape[0] == 2:  # Convert to mono / 转单声道
                         ref_audio = ref_audio.mean(0).unsqueeze(0)
 
+                    # Resample to 24 kHz
                     # 重采样到24kHz
                     if ref_sr != 24000:
                         ref_audio = self._resample(ref_audio, ref_sr)
 
+                    # Extract mel features (prefer session cache)
                     # 提取mel特征（优先使用会话缓存）
                     mel2 = sess.get("mel2_norm")
                     if mel2 is None:
@@ -1099,6 +1167,7 @@ class TTSInferencer:
                         mel2 = mel_fn(ref_audio)
                         mel2 = norm_spec(mel2)
 
+                    # Align lengths to T_min
                     # 调整长度
                     T_min = min(mel2.shape[2], fea_ref.shape[2])
                     mel2 = mel2[:, :, :T_min]
@@ -1108,6 +1177,7 @@ class TTSInferencer:
                         fea_ref = fea_ref[:, :, -468:]
                         T_min = 468
 
+                    # Set chunk length
                     # 设置块长度
                     chunk_len = 934 - T_min
                     # 根据is_half决定是否使用half
@@ -1116,9 +1186,12 @@ class TTSInferencer:
                     else:
                         mel2 = mel2.float()
 
+                    # Decode
+                    # Decode target features
                     # 解码目标特征
                     fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
 
+                    # Process in chunks
                     # 分块处理
                     cfm_resss = []
                     idx = 0
@@ -1130,6 +1203,7 @@ class TTSInferencer:
                         idx += chunk_len
                         fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
 
+                        # Run CFM inference
                         # CFM推理
                         cfm_res = self.vq_model.cfm.inference(
                             fea,
@@ -1144,11 +1218,12 @@ class TTSInferencer:
                         fea_ref = fea_todo_chunk[:, :, -T_min:]
                         cfm_resss.append(cfm_res)
 
+                    # Concatenate chunk results
                     # 合并结果
                     cmf_res = torch.cat(cfm_resss, 2)
                     cmf_res = denorm_spec(cmf_res)
 
-                    # BigVGAN生成波形
+                    # BigVGAN generates waveform / BigVGAN生成波形
                     # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
                     # inside the fused CUDA kernel uses the correct device stream,
                     # preventing CUDNN_STATUS_MAPPING_ERROR on non-default GPUs.
@@ -1157,30 +1232,37 @@ class TTSInferencer:
                             wav_gen = self.bigvgan_model(cmf_res)
                             audio = wav_gen[0][0]
 
+                    # Prevent audio clipping
                     # 防止爆音
                     max_audio = torch.abs(audio).max()
                     if max_audio > 1:
                         audio = audio / max_audio
 
+                    # Add to output list
                     # 添加到输出列表
                     audio_outputs.append(audio)
-                    audio_outputs.append(zero_wav)  # 句间停顿
+                    audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
+            # Concatenate all audio segments
             # 合并所有音频片段
             if audio_outputs:
                 final_audio = torch.cat(audio_outputs, 0)
 
+                # Audio super-resolution (v3 models only)
                 # 音频超分(仅v3模型支持)
                 if if_sr and self.model_version == "v3":
                     try:
                         logger.info("执行音频超分...")
+                        # Lazy-init super-resolution model
                         # 初始化超分模型（如果未初始化）
                         if not hasattr(self, 'sr_model') or self.sr_model is None:
                             self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
 
+                        # Run super-resolution
                         # 进行音频超分
                         final_audio, sr = self.sr_model(final_audio.unsqueeze(0), sr)
 
+                        # Prevent clipping again
                         # 再次防止爆音
                         max_audio = np.abs(final_audio).max()
                         if max_audio > 1:
@@ -1192,11 +1274,13 @@ class TTSInferencer:
                 else:
                     final_audio = final_audio.cpu().detach().numpy()
 
+                # Ensure output is float32 (numpy arrays only, not tensors)
                 # 确保音频数据是float32类型（只针对numpy数组，不处理tensor）
                 if isinstance(final_audio, np.ndarray):
                     if 'float16' in str(final_audio.dtype):
                         final_audio = final_audio.astype(np.float32)
 
+                # Return result
                 # 返回结果
                 logger.info(f"推理完成，生成音频长度: {len(final_audio) / sr:.2f}秒")
                 return sr, final_audio
@@ -1231,32 +1315,38 @@ class TTSInferencer:
                      chunk_size_seconds: float = None,
                      max_sec_override: float = None):
         """
+        Streaming TTS inference — yields audio chunks as they are generated.
         流式执行TTS推理，逐步返回音频块
 
+        Unlike infer(), this method is a generator that produces audio chunk-by-chunk
+        for low-latency streaming playback.
         与infer函数相比，该函数是一个生成器，会逐块返回处理后的音频
 
         Args:
-            text: 要合成的目标文本
-            ref_audio_path: 参考音频路径
-            prompt_text: 参考文本，如果为None则使用ref_free模式
-            text_language: 目标文本的语言
-            prompt_language: 参考文本的语言
-            how_to_cut: 文本切分方式
-            preset: 质量预设名 — "fast", "balanced", "quality"。
-                如果设置，会覆盖 top_k/top_p/temperature/speed/sample_steps 的默认值。
-                显式传入的参数仍然优先。
-            top_k, top_p, temperature: GPT采样参数
-            speed: 语速控制
-            sample_steps: v3模型的采样步数
-            ref_free: 是否使用无参考模式
-            pause_second: 句间停顿秒数
-            if_freeze: 是否重用上次的缓存(防止随机性)
-            inp_refs: 额外的参考音频列表(用于混合音色)
-            if_sr: 是否使用音频超分辨率(仅v3模型支持)
-            chunk_size_seconds: 若大于0，则按指定秒数对输出音频进行分块，提升首句流式体验
+            text: Target text to synthesize / 要合成的目标文本
+            ref_audio_path: Path to reference audio / 参考音频路径
+            prompt_text: Reference transcript. Uses ref_free mode if None / 参考文本
+            text_language: Language of the target text / 目标文本的语言
+            prompt_language: Language of the reference text / 参考文本的语言
+            how_to_cut: Text segmentation strategy / 文本切分方式
+            preset: Quality preset — "fast", "balanced", "quality".
+                Overrides top_k/top_p/temperature/speed/sample_steps defaults.
+                Explicit per-argument values take precedence.
+                质量预设名 — "fast", "balanced", "quality"。
+                如果设置，会覆盖对应默认值。显式传入的参数仍然优先。
+            top_k, top_p, temperature: GPT sampling parameters / GPT采样参数
+            speed: Speed multiplier / 语速控制
+            sample_steps: Sampling steps for v3 models / v3模型的采样步数
+            ref_free: Whether to use reference-free mode / 是否使用无参考模式
+            pause_second: Pause duration between sentences / 句间停顿秒数
+            if_freeze: Whether to reuse previous cache (reduces randomness) / 是否重用上次的缓存
+            inp_refs: Additional reference audio paths for voice mixing / 额外的参考音频列表
+            if_sr: Whether to use audio super-resolution (v3 only) / 是否使用音频超分辨率
+            chunk_size_seconds: If set, partition output into fixed-duration chunks / 按秒数分块输出
 
-        Returns:
-            生成器：每次生成 (采样率, 音频数据片段)
+        Yields:
+            Generator of (sample_rate, audio_chunk, text_segment) tuples.
+            生成器：每次生成 (采样率, 音频数据片段, 文本段落)
         """
         # Apply generation preset — sets top_k/top_p/temperature/speed/sample_steps
         if preset is not None:
@@ -1268,6 +1358,7 @@ class TTSInferencer:
             sample_steps = preset_params.get("sample_steps", sample_steps)
 
         try:
+            # Prepare input
             # 准备输入
             text = text.strip()
             if not text:
@@ -1275,10 +1366,12 @@ class TTSInferencer:
 
             logger.info(f"开始流式推理: '{text[:30]}...'")
 
+            # Define v3 CFM denorm function up front to avoid undefined branches
             # 统一定义 v3 CFM 解码所需的反归一化函数，避免某些分支下未定义
             spec_min, spec_max = -12, 2
             denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
 
+            # Convert language code
             # 转换语言代码
             if text_language in self.dict_language:
                 text_language_code = self.dict_language[text_language]
@@ -1286,12 +1379,14 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
+            # Use ref_free mode if no prompt text is provided
             # 如果没有提供参考文本，则使用无参考模式
             if prompt_text is None or prompt_text.strip() == "":
                 ref_free = True
                 logger.info("未提供参考文本，使用无参考模式")
             else:
                 prompt_text = prompt_text.strip()
+                # Ensure prompt text ends with punctuation
                 # 确保参考文本以标点符号结尾
                 if prompt_text and prompt_text[-1] not in self.splits:
                     prompt_text += "。" if prompt_language != "英文" else "."
@@ -1303,16 +1398,19 @@ class TTSInferencer:
 
                 logger.info(f"参考文本: '{prompt_text}'")
 
+            # v3 doesn't support ref_free mode
             # v3模型不支持ref_free模式
             if self.model_version == "v3" and ref_free:
                 logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
                 ref_free = False
 
+                # Use default prompt text for the current language
                 # 如果没有参考文本，使用当前语言的默认文本
                 if not prompt_text:
                     prompt_text = _default_ref_free_prompt()
                     prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
 
+            # Segment text according to selected strategy
             # 根据选择的切分方式处理文本
             logger.info(f"文本切分方式: {how_to_cut}")
             if how_to_cut == "凑四句一切":
@@ -1326,18 +1424,21 @@ class TTSInferencer:
             elif how_to_cut == "按标点符号切":
                 text = cut5(text)
 
+            # Split by newlines
             # 按行切分
             while "\n\n" in text:
                 text = text.replace("\n\n", "\n")
             texts = text.split("\n")
             texts = process_text(texts)
 
+            # Initialize result buffers
             # 初始化结果
             sr = self.hps.data.sampling_rate if self.model_version != "v3" else 24000
 
             # 首先返回采样率
             yield sr, None, ""
 
+            # Create silence gap between sentences
             # 创建句间停顿的静音
             zero_wav = torch.zeros(
                 int(sr * pause_second),
@@ -1365,11 +1466,13 @@ class TTSInferencer:
                     first_chunk = False
                     start = end
 
+            # Process reference audio (prefer session-level cache)
             # 处理参考音频（会话级缓存优先）
             sess_lang = prompt_language_code if not ref_free else _default_lang_code()
             sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
             prompt = sess.get("prompt")
 
+            # Extract phones and BERT features from reference audio
             # 获取参考音频的音素和BERT特征（会话级缓存优先）
             if not ref_free:
                 if "phones1" in sess and "bert1" in sess:
@@ -1377,6 +1480,7 @@ class TTSInferencer:
                 else:
                     phones1, bert1, norm_text1 = self.get_phones_and_bert(prompt_text, prompt_language_code)
 
+            # Initialize inference cache
             # 初始化缓存
             cache = {}
 
@@ -1386,20 +1490,24 @@ class TTSInferencer:
             # 分句合成
             logger.info(f"分成 {len(texts)} 个句子进行流式合成")
             for i_text, text_item in enumerate(texts):
+                # Skip empty sentences
                 # 跳过空句
                 if len(text_item.strip()) == 0:
                     continue
 
+                # Ensure sentence ends with punctuation
                 # 确保句子以标点符号结尾
                 if text_item and text_item[-1] not in self.splits:
                     text_item += "。" if text_language != "英文" else "."
 
                 logger.info(f"处理第 {i_text + 1} 句: '{text_item}'")
 
+                # Extract phones and BERT from target text
                 # 获取目标文本的音素和BERT特征
                 phones2, bert2, norm_text2 = self.get_phones_and_bert(text_item, text_language_code)
                 logger.info(f"处理后的目标文本: {norm_text2}")
 
+                # Merge phones and BERT features
                 # 合并音素和BERT特征
                 if not ref_free:
                     bert = torch.cat([bert1, bert2], 1)
@@ -1411,11 +1519,13 @@ class TTSInferencer:
                 bert = bert.to(self.device).unsqueeze(0)
                 all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
 
+                # Handle cache (reuse if frozen)
                 # 处理缓存
                 if i_text in cache and if_freeze:
                     logger.info("使用缓存的GPT输出")
                     pred_semantic = cache[i_text]
                 else:
+                    # Run GPT inference
                     # GPT推理
                     logger.info("执行GPT推理...")
                     with torch.no_grad():
@@ -1434,11 +1544,14 @@ class TTSInferencer:
                         pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                         cache[i_text] = pred_semantic
 
+                # Run SoVITS decoding
                 # SoVITS推理
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
+                    # Decode for v1/v2 models
                     # v1/v2模型解码
+                    # Process multiple reference audios
                     # 处理多个参考音频
                     refers = []
                     if inp_refs:
@@ -1456,6 +1569,7 @@ class TTSInferencer:
                             except Exception as e:
                                 logger.warning(f"加载额外参考音频失败: {e}")
 
+                    # Fall back to main reference audio if no extra refs
                     # 如果没有额外参考音频，使用主参考音频
                     if len(refers) == 0:
                         refer = sess.get("refer_spec")
@@ -1464,6 +1578,7 @@ class TTSInferencer:
                             refer = refer.half() if self.is_half else refer.float()
                         refers = [refer]
 
+                    # Decode
                     # 解码
                     audio = self.vq_model.decode(
                         pred_semantic,
@@ -1472,39 +1587,43 @@ class TTSInferencer:
                         speed=speed
                     )[0][0]
 
+                    # Prevent audio clipping
                     # 防止爆音
                     max_audio = torch.abs(audio).max()
                     if max_audio > 1:
                         audio = audio / max_audio
 
+                    # Convert to numpy and stream back
                     # 转换为numpy并流式返回
                     audio_chunk = audio.cpu().detach().numpy()
 
+                    # Ensure audio is float32
                     # 确保音频数据是float32类型
                     if hasattr(audio_chunk, 'dtype') and 'float16' in str(audio_chunk.dtype):
                         audio_chunk = audio_chunk.astype(np.float32)
 
+                    # Fade out sentence ending to prevent click artifacts
                     # 句尾淡出，消除突然截断的爆音感
                     audio_chunk = self._apply_fade_out(audio_chunk, sr)
 
+                    # Stream current sentence audio + text (chunked if configured)
                     # 流式返回当前句子的音频和对应的文本（可分块）
                     for _sr, _chunk, _text in _yield_audio_segments(audio_chunk, text_item):
                         yield _sr, _chunk, _text
 
+                    # Yield inter-sentence silence
                     # 返回句间停顿
                     pause_chunk = zero_wav.cpu().detach().numpy()
                     if hasattr(pause_chunk, 'dtype') and 'float16' in str(pause_chunk.dtype):
                         pause_chunk = pause_chunk.astype(np.float32)
-                    yield sr, pause_chunk, ""  # 停顿不需要文本
+                    yield sr, pause_chunk, ""  # No text for pause / 停顿不需要文本
 
                 else:
-                    # v3模型解码
+                    # Decode for v3 model (serialized — CFM/BigVGAN share GPU resources)
+                    # v3模型解码（串行化 — CFM/BigVGAN 共享 GPU 资源）
                     import torchaudio
 
-                    # ????????? graph ?????????? v3 ????
-                    # ????????? GPT????? SoVITS / BigVGAN ?????
                     with self._sovits_decode_lock:
-                        # 根据is_half决定是否使用half
                         refer = sess.get("refer_spec")
                         if refer is None:
                             refer = self.get_spepc(ref_audio_path).to(self.device)
@@ -1513,23 +1632,26 @@ class TTSInferencer:
                         phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
                         phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
 
-                        # 提取参考音频特征（优先使用会话缓存）
+                        # Extract reference audio features (prefer session cache)
+                    # 提取参考音频特征（优先使用会话缓存）
                         fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
                         ge = self._clone_cached_value(sess.get("prompt_ge"))
                         if fea_ref is None or ge is None:
                             fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
 
-                        # 加载并处理参考音频
-                        # 提取mel特征（缓存优先）
+                        # Load and process reference audio
+                    # 加载并处理参考音频
+                        # Extract mel features (prefer cache) / 提取mel特征（缓存优先）
                         mel2 = sess.get("mel2_norm")
-                        # 归一化/反归一化参数与函数（无论是否命中缓存，都需要用于后续 denorm）
+                        # Normalization parameters needed for denorm regardless of cache hit
+                        # 归一化/反归一化参数与函数（无论是否命中缓存都需要）
                         spec_min, spec_max = -12, 2
                         denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
                         if mel2 is None:
                             ref_audio, ref_sr = torchaudio.load(ref_audio_path)
                             ref_audio = ref_audio.to(self.device)
                             ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
-                            if ref_audio.shape[0] == 2:  # 转单声道
+                            if ref_audio.shape[0] == 2:  # Convert to mono / 转单声道
                                 ref_audio = ref_audio.mean(0).unsqueeze(0)
                             if ref_sr != 24000:
                                 ref_audio = self._resample(ref_audio, ref_sr)
@@ -1547,7 +1669,8 @@ class TTSInferencer:
                             mel2 = mel_fn(ref_audio)
                             mel2 = norm_spec(mel2)
 
-                        # 调整长度
+                        # Align lengths to T_min
+                    # 调整长度
                         T_min = min(mel2.shape[2], fea_ref.shape[2])
                         mel2 = mel2[:, :, :T_min]
                         fea_ref = fea_ref[:, :, :T_min]
@@ -1556,7 +1679,8 @@ class TTSInferencer:
                             fea_ref = fea_ref[:, :, -468:]
                             T_min = 468
 
-                        # 设置块长度
+                        # Set chunk length
+                    # 设置块长度
                         default_chunk_len = 934 - T_min
                         chunk_len = default_chunk_len
                         stream_v3_chunks = chunk_samples is not None and chunk_samples > 0
@@ -1569,16 +1693,16 @@ class TTSInferencer:
                                 "[v3-stream] enable true streaming: mel_chunk=%s (default=%s, target_frames=%s)"
                                 % (chunk_len, default_chunk_len, target_chunk_frames)
                             )
-                        # ??is_half??????half
+                        # Cast to half if is_half / 根据is_half决定精度
                         if self.is_half:
                             mel2 = mel2.half()
                         else:
                             mel2 = mel2.float()
 
-                        # ??????
+                        # Decode target features / 解码目标特征
                         fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
 
-                        # ????
+                        # Process in chunks / 分块处理
                         cfm_resss = []
                         _t_cfm_total = 0.0
                         idx = 0
@@ -1593,7 +1717,7 @@ class TTSInferencer:
                             idx = chunk_end
                             fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
 
-                            # CFM??
+                            # Run CFM inference / CFM推理
                             _t0 = time.perf_counter()
                             cfm_res = self.vq_model.cfm.inference(
                                 fea,
@@ -1679,7 +1803,7 @@ class TTSInferencer:
                                 _cfm_ms, _bigvgan_ms, cmf_res.shape[2],
                             ))
 
-                            # ????
+                            # Prevent clipping / 防止爆音
                             max_audio = torch.abs(audio).max()
                             if max_audio > 1:
                                 audio = audio / max_audio
@@ -1691,14 +1815,14 @@ class TTSInferencer:
                                 is_last_chunk=True,
                             )
 
-                            # ??????????????????????
+                            # Stream current sentence audio + text / 流式返回当前句子音频和文本
                             for _sr, _chunk, _text in _yield_audio_segments(audio_chunk, text_item):
                                 yield _sr, _chunk, _text
 
                         pause_chunk = zero_wav.cpu().detach().numpy()
                         if hasattr(pause_chunk, 'dtype') and 'float16' in str(pause_chunk.dtype):
                             pause_chunk = pause_chunk.astype(np.float32)
-                        yield sr, pause_chunk, ""  # 停顿不需要文本
+                        yield sr, pause_chunk, ""  # No text for pause / 停顿不需要文本
 
         except Exception as e:
             logger.error(f"流式推理失败: {str(e)}")

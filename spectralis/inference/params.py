@@ -1,13 +1,13 @@
-"""TTS inference parameter presets based on text length and position."""
+"""TTS inference parameter presets based on text length and position. / 基于文本长度和位置的 TTS 推理参数预设。"""
 
 import os
 
 
 def get_sovits_params(text: str, is_first_sentence: bool = False):
-    """Return inference parameters tuned for the given text length.
+    """Return inference parameters tuned for the given text length. / 返回根据给定文本长度调整的推理参数。
 
     CUDA Graph is controlled by ENABLE_CUDA_GRAPH env var; static KV Cache is
-    always enabled.
+    always enabled. / CUDA Graph 由 ENABLE_CUDA_GRAPH 环境变量控制；静态 KV Cache 始终启用。
     """
     length = len(text.strip())
     cuda_graph_env = os.environ.get("ENABLE_CUDA_GRAPH", "0") == "1"

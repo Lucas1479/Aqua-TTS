@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Spectralis-TTS: GPU-optimized runtime for GPT-SoVITS v3."""
+"""Spectralis-TTS: GPU-optimized runtime for GPT-SoVITS v3. / Spectralis-TTS：针对 GPT-SoVITS v3 的 GPU 优化运行时。"""
 
 import os
 import sys
 
 __version__ = "1.0.0"
 
-# ── Internal path configuration ──────────────────────────────────────────
+# ── Internal path configuration (内部路径配置) ──────────────────────────────────────────
 # Ensure vendored GPT_SoVITS overrides take precedence over the main repo.
 # The _vendor dir contains our static-KV + CUDA Graph t2s_model.py and the
 # BigVGAN CUDA kernel loader — these must be on sys.path BEFORE the main
 # GPT-SoVITS repo for the namespace package (pkgutil.extend_path) to work.
+# 确保 vendored 的 GPT_SoVITS 覆盖优先于主仓库。_vendor 目录包含我们的静态 KV + CUDA Graph
+# t2s_model.py 和 BigVGAN CUDA 内核加载器 — 这些必须在主 GPT-SoVITS 仓库之前加入 sys.path，
+# 以确保命名空间包 (pkgutil.extend_path) 正常工作。
 
 # Main GPT-SoVITS repo — required for config/, tools/, and the rest of
 # GPT_SoVITS/ modules that we don't vendor.
+# 主 GPT-SoVITS 仓库 — config/、tools/ 以及其余未 vendored 的 GPT_SoVITS/ 模块所需。
 _GPT_SOVITS_HOME = os.environ.get("GPT_SOVITS_HOME", "")
 if _GPT_SOVITS_HOME:
     _gpt_sovits_pkg = os.path.join(_GPT_SOVITS_HOME, "GPT_SoVITS")
@@ -21,6 +25,7 @@ if _GPT_SOVITS_HOME:
         if os.path.isdir(_p) and _p not in sys.path:
             sys.path.insert(0, _p)
     # tools.i18n uses os.path.relpath which fails cross-drive on Windows
+    # tools.i18n 使用 os.path.relpath，在 Windows 跨驱动器时会失败
     try:
         os.chdir(_GPT_SOVITS_HOME)
     except OSError:
@@ -29,18 +34,25 @@ if _GPT_SOVITS_HOME:
 # Vendored overrides MUST be last (insert(0) → ends up at position 0).
 # Order is: _vendor < GPT_SoVITS/ < repo-root, so the vendored t2s_model.py
 # and BigVGAN CUDA loader take precedence at import time.
+# Vendored 覆盖必须最后添加 (insert(0) → 最终在位置 0)。顺序为：_vendor < GPT_SoVITS/ < repo-root，
+# 因此 vendored 的 t2s_model.py 和 BigVGAN CUDA 加载器在导入时具有优先权。
 _VENDOR_DIR = os.path.join(os.path.dirname(__file__), "_vendor")
 if _VENDOR_DIR not in sys.path:
     sys.path.insert(0, _VENDOR_DIR)
 
-# ── Public API ───────────────────────────────────────────────────────────
+# ── Public API (公共 API) ───────────────────────────────────────────────────────────
 # TTSInferencer is imported lazily — import spectralis does not trigger
 # the full GPT-SoVITS import chain. Use `from spectralis import TTSInferencer`
 # or `from spectralis.inferencer import TTSInferencer` to load it.
+# TTSInferencer 采用延迟导入 — import spectralis 不会触发完整的 GPT-SoVITS 导入链。
+# 使用 `from spectralis import TTSInferencer` 或 `from spectralis.inferencer import TTSInferencer` 来加载它。
 
 __all__ = [
     "__version__",
     "TTSInferencer",
+    "VoiceRegistry",
+    "Voice",
+    "registry_from_env",
     "apply_preset",
     "list_presets",
     "apply_cuda_graph_preset",
@@ -50,6 +62,9 @@ __all__ = [
 
 _LAZY_ATTRS = {
     "TTSInferencer": ("spectralis.inferencer", "TTSInferencer"),
+    "VoiceRegistry": ("spectralis.voice_registry", "VoiceRegistry"),
+    "Voice": ("spectralis.voice_registry", "Voice"),
+    "registry_from_env": ("spectralis.voice_registry", "registry_from_env"),
     "apply_preset": ("spectralis.inference.presets", "apply_preset"),
     "list_presets": ("spectralis.inference.presets", "list_presets"),
     "apply_cuda_graph_preset": ("spectralis.inference.presets", "apply_cuda_graph_preset"),
