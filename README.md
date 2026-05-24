@@ -20,7 +20,7 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. The result is **5.5× faster** T2S decoding and **2–7× lower** time-to-first-packet.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces TTFP from 1.0–3.6 s to **~0.46–0.50 s** on the tested utterances — see [Highlights](#highlights) for the full comparison.
 
 > **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aqua/modeling/` and `aqua/_vendor/` are the right starting points for adaptation.
 
@@ -35,7 +35,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 | KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_` buffer** |
 | CUDA Graph | None | Single lazy graph | **13 pre-captured graphs, 6 buckets** |
 | BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
-| GPU memory safety | OOM on long texts | OOM on long texts | **Bounded static buffers** |
+| KV-cache allocation | Unbounded growth | Unbounded growth | **Bounded per bucket config** |
 
 *Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported). See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
 
@@ -44,11 +44,21 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 - **Static KV cache** — pre-allocated scatter buffers eliminate per-step `torch.cat` overhead
 - **Bucketed CUDA Graph** — 13 pre-captured graphs across 6 bucket sizes, no warmup jitter
 - **Pre-compiled BigVGAN** — NVIDIA CUDA kernel auto-loaded from pre-built `.pyd`, with torch fallback
-- **Streaming API** — generator-based `infer_stream()` with bounded GPU memory
+- **Streaming API** — generator-based `infer_stream()` with early first-audio yield
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
-- **pip-installable** — `pip install aqua-tts` → `from aqua import TTSInferencer`
+- **Source install** — `pip install -e ".[runtime]"` → `from aqua import TTSInferencer`
+
+## Supported Languages
+
+Aqua-TTS inherits GPT-SoVITS v3's language support. Pass the code to `text_language` / `prompt_language` — reference audio and target text can use different languages.
+
+| Language | Code |
+|---|---|
+| Japanese | `日文` |
+| Chinese | `中文` |
+| English | `英文` |
 
 ## How it works
 
@@ -85,6 +95,20 @@ aqua-tts/
 
 See **[TECHNICAL.md](TECHNICAL.md)** for deep technical documentation.
 
+## Requirements
+
+| | Entry | Recommended |
+|---|---|---|
+| GPU | RTX 3060 6 GB | RTX 4060 / 4070 8 GB+ |
+| CUDA | 11.8+ | 12.x |
+| RAM | 8 GB | 16 GB+ |
+| Python | 3.10 | 3.11 / 3.12 |
+| OS | Windows 10+ | Windows 11 |
+
+Linux should work with a standard CUDA stack but has not been tested. macOS is not supported — Aqua-TTS requires CUDA.
+
+> On 6 GB cards, use `cuda_graph_preset="lazy"` or `"off"` to reduce VRAM pressure from pre-captured graphs.
+
 ## Installation
 
 ### 1. Install GPT-SoVITS
@@ -102,20 +126,17 @@ Aqua-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
 ### 2. Install Aqua-TTS
 
 ```bash
-# Core + runtime dependencies
-pip install "aqua-tts[runtime]"
-
-# Or with HTTP server support (includes runtime + fastapi + uvicorn)
-pip install "aqua-tts[runtime,server]"
-```
-
-For development:
-
-```bash
 git clone https://github.com/Lucas1479/Aqua-TTS.git
-cd aqua-tts
+cd Aqua-TTS
+
+# Core + runtime dependencies
+pip install -e ".[runtime]"
+
+# Or with HTTP server support
 pip install -e ".[runtime,server]"
 ```
+
+> PyPI package is planned but not yet published.
 
 Extras:
 - `[runtime]` — soundfile, librosa, peft (needed by `TTSInferencer`)
