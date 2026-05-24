@@ -14,4 +14,4 @@
 - TTFP and T2S throughput benchmarks with ablation flags
 - Example scripts for basic and streaming inference
 
-[1.0.0]: https://github.com/SiqiLiOcean/Aqua-TTS/releases/tag/v1.0.0
+[1.0.0]: https://github.com/Lucas1479/Aqua-TTS/releases/tag/v1.0.0

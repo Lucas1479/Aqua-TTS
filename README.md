@@ -123,7 +123,18 @@ pip install -r requirements.txt
 
 Aqua-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
 
-### 2. Install Aqua-TTS
+### 2. Install PyTorch
+
+Install PyTorch matching your CUDA version **before** installing Aqua-TTS — it is not included in the package dependencies so you can pick the right CUDA wheel:
+
+```bash
+# Example for CUDA 12.1 — see https://pytorch.org/get-started/locally/ for other versions
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+Aqua-TTS has been tested with PyTorch 2.1.2+cu121 on an RTX 4070 Ti SUPER.
+
+### 3. Install Aqua-TTS
 
 ```bash
 git clone https://github.com/Lucas1479/Aqua-TTS.git
@@ -142,7 +153,7 @@ Extras:
 - `[runtime]` — soundfile, librosa, peft (needed by `TTSInferencer`)
 - `[server]` — FastAPI + uvicorn (includes `[runtime]` automatically)
 
-### 3. Configure GPT-SoVITS path
+### 4. Configure GPT-SoVITS path
 
 Set the `GPT_SOVITS_HOME` environment variable to your GPT-SoVITS repo root:
 
@@ -154,15 +165,24 @@ $env:GPT_SOVITS_HOME = "C:\path\to\GPT-SoVITS"
 export GPT_SOVITS_HOME=/path/to/GPT-SoVITS
 ```
 
-### 4. Download pretrained models
+### 5. Download pretrained models
 
-Aqua-TTS needs BigVGAN v2 pretrained weights from [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x). Place them inside your GPT-SoVITS repo:
+Aqua-TTS needs BigVGAN v2 pretrained weights from [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x). Download them directly into your GPT-SoVITS repo with `huggingface_hub`:
 
+```bash
+pip install huggingface_hub
+python -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='nvidia/bigvgan_v2_24khz_100band_256x',
+    local_dir='GPT_SoVITS/pretrained_models/models--nvidia--bigvgan_v2_24khz_100band_256x',
+)
+"
 ```
-GPT_SoVITS/pretrained_models/models--nvidia--bigvgan_v2_24khz_100band_256x/
-```
 
-### 5. Prepare model weights
+The `models--nvidia--bigvgan_v2_24khz_100band_256x` directory name is the HuggingFace Hub cache format — use it exactly as shown.
+
+### 6. Prepare model weights
 
 - **GPT weights (T2S)**: A `Text2SemanticLightningModule` checkpoint (e.g., `s1v3.ckpt` or self-trained `xxx-e15.ckpt`).
 - **SoVITS weights (vocoder)**: A `SynthesizerTrn` checkpoint with optional LoRA (e.g., `xxx_e2_s174_l32.pth`).
@@ -317,7 +337,7 @@ export AQUA_VOICE_JSON=/data/voices.json
 | `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph replay |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at startup |
-| `TTS_OUTPUT_LANGUAGE` | `日文` | Default output language |
+| `TTS_OUTPUT_LANGUAGE` | `日文` | Default output language. Change to `中文` or `英文` if not using Japanese |
 | `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | Default Japanese reference text |
 | `TTS_REF_TEXT_EN` | *(empty)* | Default English reference text |
 | `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
@@ -326,12 +346,13 @@ export AQUA_VOICE_JSON=/data/voices.json
 
 ```bash
 # T2S comparison (official vs official+CUDA Graph vs Aqua-TTS)
-python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/s1v3.ckpt
+# Replace with your own GPT checkpoint (s1v3.ckpt or a self-trained .ckpt)
+python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
 
 # TTFP benchmark (streaming end-to-end)
 python benchmarks/aqua_ttfp.py \
-    --gpt-model GPT_weights_v3/s1v3.ckpt \
-    --sovits-model SoVITS_weights_v3/your_model.pth \
+    --gpt-model GPT_weights_v3/xxx-e15.ckpt \
+    --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
     --ref-audio "reference audio/ref_audio.wav" \
     --ref-text "transcript of reference audio"
 
@@ -358,7 +379,7 @@ Third-party code:
 
 ```bash
 git clone https://github.com/Lucas1479/Aqua-TTS.git
-cd aqua-tts
+cd Aqua-TTS
 pip install -e ".[runtime]"
 pip install -r requirements-dev.txt
 

@@ -123,7 +123,18 @@ pip install -r requirements.txt
 
 Aqua-TTS 已通过 GPT-SoVITS v3（2025-04-01 版本）测试。
 
-### 2. 安装 Aqua-TTS
+### 2. 安装 PyTorch
+
+在安装 Aqua-TTS **之前**，先按你的 CUDA 版本单独安装 PyTorch——该依赖不包含在包内，以允许用户选择对应的 CUDA wheel：
+
+```bash
+# 示例：CUDA 12.1 版本 — 其他版本见 https://pytorch.org/get-started/locally/
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+Aqua-TTS 已在 RTX 4070 Ti SUPER 上使用 PyTorch 2.1.2+cu121 测试通过。
+
+### 3. 安装 Aqua-TTS
 
 ```bash
 git clone https://github.com/Lucas1479/Aqua-TTS.git
@@ -142,7 +153,7 @@ pip install -e ".[runtime,server]"
 - `[runtime]` — soundfile, librosa, peft（`TTSInferencer` 所需）
 - `[server]` — FastAPI + uvicorn（自动包含 `[runtime]`）
 
-### 3. 配置 GPT-SoVITS 路径
+### 4. 配置 GPT-SoVITS 路径
 
 设置 `GPT_SOVITS_HOME` 环境变量指向你的 GPT-SoVITS 仓库根目录：
 
@@ -154,15 +165,24 @@ $env:GPT_SOVITS_HOME = "C:\path\to\GPT-SoVITS"
 export GPT_SOVITS_HOME=/path/to/GPT-SoVITS
 ```
 
-### 4. 下载预训练模型
+### 5. 下载预训练模型
 
-需要从 [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x) 下载 BigVGAN v2 预训练权重，放入 GPT-SoVITS 仓库：
+需要从 [Hugging Face](https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x) 下载 BigVGAN v2 预训练权重，直接下载到 GPT-SoVITS 仓库目录内：
 
+```bash
+pip install huggingface_hub
+python -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='nvidia/bigvgan_v2_24khz_100band_256x',
+    local_dir='GPT_SoVITS/pretrained_models/models--nvidia--bigvgan_v2_24khz_100band_256x',
+)
+"
 ```
-GPT_SoVITS/pretrained_models/models--nvidia--bigvgan_v2_24khz_100band_256x/
-```
 
-### 5. 准备模型权重
+`models--nvidia--bigvgan_v2_24khz_100band_256x` 是 HuggingFace Hub 的本地缓存目录格式，请严格按照上面的路径放置。
+
+### 6. 准备模型权重
 
 - **GPT 权重 (T2S)**：`Text2SemanticLightningModule` 检查点（如 `s1v3.ckpt` 或自训练的 `xxx-e15.ckpt`）
 - **SoVITS 权重（声码器）**：`SynthesizerTrn` 检查点，可选 LoRA（如 `xxx_e2_s174_l32.pth`）
@@ -313,7 +333,7 @@ export AQUA_VOICE_JSON=/data/voices.json
 | `AQUA_SESSION_CACHE_MAX` | `8` | 参考音频 session 最大缓存数量 |
 | `ENABLE_CUDA_GRAPH` | `1` | 启用 CUDA Graph 回放 |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | 启动时预捕获所有桶图 |
-| `TTS_OUTPUT_LANGUAGE` | `日文` | 默认输出语言 |
+| `TTS_OUTPUT_LANGUAGE` | `日文` | 默认输出语言。非日语用户请改为 `中文` 或 `英文` |
 | `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | 默认日语参考文本 |
 | `TTS_REF_TEXT_EN` | *(空)* | 默认英语参考文本 |
 | `TTS_STREAM_SYNC_TIMING` | `0` | 启用逐步 CFM 计时（增加 GPU 同步开销） |
@@ -354,7 +374,7 @@ MIT — 详见 [LICENSE](LICENSE)。
 
 ```bash
 git clone https://github.com/Lucas1479/Aqua-TTS.git
-cd aqua-tts
+cd Aqua-TTS
 pip install -e ".[runtime]"
 pip install -r requirements-dev.txt
 
