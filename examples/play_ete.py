@@ -46,6 +46,12 @@ KURISU_DEMO_TEXTS = [
     ),
 ]
 WARMUP_TEXT = "これはテストです。"
+DEFAULT_TOP_K = 5
+DEFAULT_TOP_P = 0.9
+DEFAULT_TEMPERATURE = 0.6
+DEFAULT_SPEED = 1.0
+DEFAULT_SAMPLE_STEPS = 8
+DEFAULT_CHUNK_SECONDS = 0.35
 
 
 @contextlib.contextmanager
@@ -156,7 +162,14 @@ def _parse_args():
                         help="Custom text to play. Repeat for multiple utterances.")
     parser.add_argument("--text-lang", default="日文")
     parser.add_argument("--ref-lang", default="日文")
-    parser.add_argument("--chunk-size-seconds", type=float, default=0.25)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P)
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--speed", type=float, default=DEFAULT_SPEED)
+    parser.add_argument("--sample-steps", type=int, default=DEFAULT_SAMPLE_STEPS,
+                        help="CFM sampling steps. Higher is steadier but slower.")
+    parser.add_argument("--chunk-size-seconds", type=float, default=DEFAULT_CHUNK_SECONDS,
+                        help="Streaming playback chunk size. Smaller starts sooner; larger can sound steadier.")
     parser.add_argument("--pause", type=float, default=0.45,
                         help="Seconds to wait between demo utterances.")
     parser.add_argument("--output-device-index", type=int, default=None)
@@ -184,11 +197,11 @@ def _warmup(tts, args, ref_audio: str, quiet: bool = True) -> None:
         text_language=args.text_lang,
         prompt_language=args.ref_lang,
         how_to_cut="按标点符号切",
-        top_k=5,
-        top_p=1,
-        temperature=0.6,
-        speed=1.1,
-        sample_steps=4,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        temperature=args.temperature,
+        speed=args.speed,
+        sample_steps=args.sample_steps,
         enable_cuda_graph=not args.no_cuda_graph,
         enable_static_kv=True,
         chunk_size_seconds=args.chunk_size_seconds,
@@ -223,11 +236,11 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
         text_language=args.text_lang,
         prompt_language=args.ref_lang,
         how_to_cut="按标点符号切",
-        top_k=5,
-        top_p=1,
-        temperature=0.6,
-        speed=1.1,
-        sample_steps=4,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        temperature=args.temperature,
+        speed=args.speed,
+        sample_steps=args.sample_steps,
         enable_cuda_graph=not args.no_cuda_graph,
         enable_static_kv=True,
         chunk_size_seconds=args.chunk_size_seconds,

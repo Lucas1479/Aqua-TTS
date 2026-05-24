@@ -20,6 +20,12 @@ EXAMPLES_DIR = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT), str(EXAMPLES_DIR)]
 
 from play_ete import (  # noqa: E402
+    DEFAULT_CHUNK_SECONDS,
+    DEFAULT_SAMPLE_STEPS,
+    DEFAULT_SPEED,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_K,
+    DEFAULT_TOP_P,
     KURISU_REF_TEXT,
     _configure_logs,
     _default_path,
@@ -41,7 +47,14 @@ def _parse_args():
     parser.add_argument("--ref-text", default=os.environ.get("TTS_REF_TEXT_JA", KURISU_REF_TEXT))
     parser.add_argument("--text-lang", default="日文")
     parser.add_argument("--ref-lang", default="日文")
-    parser.add_argument("--chunk-size-seconds", type=float, default=0.25)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P)
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--speed", type=float, default=DEFAULT_SPEED)
+    parser.add_argument("--sample-steps", type=int, default=DEFAULT_SAMPLE_STEPS,
+                        help="CFM sampling steps. Higher is steadier but slower.")
+    parser.add_argument("--chunk-size-seconds", type=float, default=DEFAULT_CHUNK_SECONDS,
+                        help="Streaming playback chunk size. Smaller starts sooner; larger can sound steadier.")
     parser.add_argument("--output-device-index", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--no-warmup", action="store_true")
