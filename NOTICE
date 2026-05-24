@@ -17,3 +17,17 @@ Licensed under the Apache License, Version 2.0.
 http://www.apache.org/licenses/LICENSE-2.0
 
 Modifications: Added at::cuda::CUDAGuard for multi-device safety.
+
+---
+
+## alias-free-torch (BigVGAN anti-alias activation)
+
+Files: spectralis/bigvgan/torch/__init__.py
+       spectralis/bigvgan/torch/act.py
+       spectralis/bigvgan/torch/filter.py
+       spectralis/bigvgan/torch/resample.py
+
+Adapted from https://github.com/junjun3518/alias-free-torch
+under the Apache License, Version 2.0.
+
+http://www.apache.org/licenses/LICENSE-2.0

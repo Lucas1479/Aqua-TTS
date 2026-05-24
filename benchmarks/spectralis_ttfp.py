@@ -85,7 +85,7 @@ def main():
         first_chunk_ms = None
         chunk_count = 0
 
-        for sr, chunk in inferencer.infer_stream(
+        for sr, chunk, _text in inferencer.infer_stream(
             text=text,
             ref_audio_path=args.ref_audio,
             prompt_text=args.ref_text,

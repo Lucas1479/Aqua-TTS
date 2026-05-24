@@ -22,6 +22,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Pretrained model junction (local only — points to main repo)
+GPT_SoVITS/pretrained_models/
+
 # Virtual environments
 .venv/
 venv/

@@ -27,11 +27,17 @@ Spectralis-TTS is a drop-in optimization layer for [GPT-SoVITS](https://github.c
 ```
 spectralis/
 ├── modeling/
-│   └── t2s_streaming.py    Static KV cache blocks + CUDA Graph capture
+│   ├── t2s_streaming.py    Static KV cache blocks + CUDA Graph capture
+│   └── __init__.py
 ├── bigvgan/
-│   └── cuda/
-│       ├── load.py         Pre-compiled kernel loader (per-GPU cache)
-│       ├── *.cpp, *.cu, *.h  NVIDIA BigVGAN CUDA kernel sources
+│   ├── cuda/
+│   │   ├── load.py         Pre-compiled kernel loader (per-GPU cache)
+│   │   ├── activation1d.py Fused anti-alias activation (CUDA + fallback)
+│   │   └── *.cpp, *.cu, *.h  NVIDIA BigVGAN CUDA kernel sources
+│   └── torch/
+│       ├── resample.py     UpSample1d / DownSample1d (pure PyTorch)
+│       ├── filter.py       Low-pass filter (Kaiser window)
+│       └── act.py          Activation1d (non-fused fallback)
 └── inference/
     ├── streaming.py        Audio post-processing + BigVGAN loader
     └── params.py           TTS parameter presets
@@ -127,3 +133,15 @@ MIT — see [LICENSE](LICENSE).
 The BigVGAN CUDA kernel (`spectralis/bigvgan/cuda/*.cpp, *.cu, *.h`) is from NVIDIA BigVGAN, licensed under Apache 2.0 — see [NOTICE](NOTICE).
 
 This project builds on [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS), also MIT licensed.
+
+## Development
+
+```bash
+git clone https://github.com/SiqiLiOcean/spectralis-tts.git
+cd spectralis-tts
+pip install -e ".[server]"
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELOG.md](CHANGELOG.md) for release history.

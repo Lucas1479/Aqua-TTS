@@ -346,11 +346,14 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
 
         # Capture
         capture_start = time.perf_counter()
-        _graph_extra = (
-            {"capture_error_mode": "relaxed"}
-            if "capture_error_mode" in _inspect.signature(torch.cuda.CUDAGraph.__init__).parameters
-            else {}
-        )
+        try:
+            _has_capture_error_mode = (
+                "capture_error_mode"
+                in _inspect.signature(torch.cuda.CUDAGraph.__init__).parameters
+            )
+        except (ValueError, TypeError):
+            _has_capture_error_mode = False  # PyTorch < 2.5
+        _graph_extra = {"capture_error_mode": "relaxed"} if _has_capture_error_mode else {}
         with torch.cuda.device(device):
             cuda_graph = torch.cuda.CUDAGraph()
             with torch.cuda.graph(cuda_graph, **_graph_extra):

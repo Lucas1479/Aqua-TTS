@@ -89,35 +89,56 @@ NVIDIA's official BigVGAN uses `torch.utils.cpp_extension.load()` which compiles
 
 ```
 bigvgan/cuda/
-├── build_sm89_cuda128/    # RTX 40-series, CUDA 12.8
+├── build_sm89_16gb_nvidia_geforce_rtx_4070_ti_super/   # Per-GPU cache
 │   └── anti_alias_activation_cuda.pyd
-├── build_sm86_cuda118/    # RTX 30-series, CUDA 11.8
+├── build_sm86_cuda118/                                   # RTX 30-series
 │   └── anti_alias_activation_cuda.pyd
-└── anti_alias_activation.cpp, .cu, .h  # Source files
+├── anti_alias_activation.cpp, .cu, .h  # Source files
+└── load.py                            # MSVC auto-discovery + loader
+
+bigvgan/torch/
+├── resample.py    # UpSample1d / DownSample1d (Kaiser-windowed)
+├── filter.py      # LowPassFilter1d (sinc + Kaiser window)
+└── act.py         # Activation1d (non-fused PyTorch fallback)
 ```
 
+### Third-party components
+
+- **NVIDIA BigVGAN**: CUDA kernel sources (`*.cpp, *.cu, *.h`) under Apache 2.0 — see [NOTICE](NOTICE).
+- **alias-free-torch**: `torch/resample.py`, `torch/filter.py`, `torch/act.py` adapted from [alias-free-torch](https://github.com/junjun3518/alias-free-torch) under Apache 2.0 — see [NOTICE](NOTICE).
+
 ## Performance Analysis
+
+Measured on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121.
 
 ### T2S Decoding Speed
 
 The AR decoder is memory-bound on attention — each step reads the full KV cache. The static cache with CUDA Graph eliminates:
 
-- `torch.cat` memory allocation overhead (~15%)
-- Python interpreter dispatch overhead (~20%)
-- CUDA kernel launch overhead (~15%)
-- Shape-inference overhead (~10%)
+- `torch.cat` memory allocation overhead
+- Python interpreter dispatch overhead
+- CUDA kernel launch overhead
+- Shape-inference overhead
 
-Combined savings: ~3.5-5x throughput improvement.
+Measured throughput: **462 iterations/second** (median), with CUDA Graph replay at **99.6%** hit rate on bucket 768.
 
 ### TTFP (Time-To-First-Packet)
 
-The BigVGAN CUDA kernel eliminates:
+Measured with streaming audio output (2 chunks per utterance):
 
-- PyTorch JIT compilation of the upsampling + activation + downsampling chain (~800ms)
+| text length | chars | TTFP (median) | total (median) |
+|------------|-------|--------------|---------------|
+| short      | 3     | ~520 ms      | ~520 ms       |
+| medium     | 19    | ~670 ms      | ~670 ms       |
+| long       | 64    | ~1,300 ms    | ~1,300 ms     |
+
+Model load time: ~10 s (includes BigVGAN CUDA kernel load from pre-compiled cache, plus CUDA Graph pre-capture of 11 bucket/initial_len pairs at ~0.25 s each).
+
+The BigVGAN CUDA pre-compiled kernel eliminates:
+
+- PyTorch JIT compilation of the upsampling + activation + downsampling chain (~800ms cold)
 - Python-side filter kernel launches (~200ms)
 - CPU-GPU synchronization points in the alias-free activation path (~300ms)
-
-Combined savings: ~400-600ms on first packet.
 
 ## Environment Variables
 

@@ -19,7 +19,7 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = ""
 
 
 def _get_tts_device_index() -> int:
-    """从 TTS_DEVICE 环境变量解析设备序号，默认 0。"""
+    """Parse device index from TTS_DEVICE env var, defaulting to 0."""
     tts_device = os.environ.get("TTS_DEVICE", "cuda:0")
     try:
         return int(tts_device.split(":")[-1])
@@ -211,14 +211,14 @@ def load():
         "-allow-unsupported-compiler",
     ]
 
-    # 优先加载已编译的缓存 .pyd，跳过编译流程（无需 cl.exe/ninja）
-    # 缓存目录按设备隔离（build_device0 / build_device1 ...），切换 GPU 自动重编译
+    # Try cached pre-compiled .pyd first to skip compilation (no cl.exe/ninja needed).
+    # Cache directory is per-device isolated; switching GPU triggers a rebuild.
     pyd_path = buildpath / "anti_alias_activation_cuda.pyd"
     if pyd_path.exists():
         spec = importlib.util.spec_from_file_location("anti_alias_activation_cuda", pyd_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        print(f"[BigVGAN] 从缓存加载 CUDA kernel: {pyd_path}")
+        print(f"[BigVGAN] Loaded cached CUDA kernel: {pyd_path}")
         return module
 
     _ensure_msvc_on_path()

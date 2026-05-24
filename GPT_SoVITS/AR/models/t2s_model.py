@@ -1,10 +1,13 @@
 # modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/t2s_model.py
 # reference: https://github.com/lifeiteng/vall-e
+import logging
 import math
 import threading
 from typing import List, Optional, Tuple
 import torch
 from tqdm import tqdm
+
+_logger = logging.getLogger("spectralis.t2s")
 
 from AR.models.utils import make_pad_mask, make_pad_mask_left
 from AR.models.utils import (
@@ -488,7 +491,7 @@ class Text2SemanticDecoder(nn.Module):
         self.cuda_graph_enabled = self.use_static_kv_cache and (cuda_graph_env == '1')
         
         if not self.cuda_graph_enabled and self.use_static_kv_cache:
-            print(f"⚠️ CUDA Graph 已禁用（ENABLE_CUDA_GRAPH={cuda_graph_env}），使用静态KV Cache但允许并发")
+            _logger.info(f"⚠️ CUDA Graph 已禁用（ENABLE_CUDA_GRAPH={cuda_graph_env}），使用静态KV Cache但允许并发")
         
         # 🔒 CUDA Graph 并发锁
         # CUDA Graph 不支持多线程并发 replay，需要加锁保护
@@ -663,7 +666,7 @@ class Text2SemanticDecoder(nn.Module):
         import time
         
         graph_key = (bucket_size, initial_len)
-        print(f"🔥 开始为桶 {bucket_size} / initial_len {initial_len} 预热和捕获 CUDA Graph...")
+        _logger.info(f"🔥 开始为桶 {bucket_size} / initial_len {initial_len} 预热和捕获 CUDA Graph...")
         warmup_start = time.perf_counter()
         
         try:
@@ -673,7 +676,7 @@ class Text2SemanticDecoder(nn.Module):
             
             # 检测模型的实际 dtype
             model_dtype = next(self.ar_predict_layer.parameters()).dtype
-            print(f"   📌 检测到模型 dtype: {model_dtype}")
+            _logger.info(f"   📌 检测到模型 dtype: {model_dtype}")
             
             # 🚀 关键修复：使用固定缓冲区的 KV cache（不会 torch.cat）
             k_cache = [torch.zeros(batch_size, bucket_size, hidden_dim, dtype=model_dtype, device=device) 
@@ -702,7 +705,7 @@ class Text2SemanticDecoder(nn.Module):
             
             warmup_time = time.perf_counter() - warmup_start
             self.cuda_graph_stats["warmup_time"][graph_key] = warmup_time
-            print(f"✅ 桶 {bucket_size}/init_len {initial_len} 预热完成: {warmup_time:.4f}s")
+            _logger.info(f"✅ 桶 {bucket_size}/init_len {initial_len} 预热完成: {warmup_time:.4f}s")
             
             # 捕获阶段
             capture_start = time.perf_counter()
@@ -754,11 +757,11 @@ class Text2SemanticDecoder(nn.Module):
             # 初始化统计
             self.cuda_graph_stats["bucket_hits"][graph_key] = 0
             
-            print(f"📸 桶 {bucket_size}/init_len {initial_len} CUDA Graph 捕获成功: {capture_time:.4f}s")
+            _logger.info(f"📸 桶 {bucket_size}/init_len {initial_len} CUDA Graph 捕获成功: {capture_time:.4f}s")
             return True
             
         except Exception as e:
-            print(f"❌ 桶 {bucket_size}/init_len {initial_len} CUDA Graph 捕获失败: {e}")
+            _logger.info(f"❌ 桶 {bucket_size}/init_len {initial_len} CUDA Graph 捕获失败: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -782,7 +785,7 @@ class Text2SemanticDecoder(nn.Module):
 
         for bucket in target_buckets:
             if bucket not in self.kv_cache_buckets:
-                print(f"⚠️ 目标桶 {bucket} 不在配置列表中，跳过")
+                _logger.info(f"⚠️ 目标桶 {bucket} 不在配置列表中，跳过")
                 results[bucket] = False
                 continue
 
@@ -820,12 +823,12 @@ class Text2SemanticDecoder(nn.Module):
                 lock = self._get_bucket_lock(graph_key)
                 with lock:
                     if graph_key in self.bucket_graphs:
-                        print(f"ℹ️ key={graph_key} 已存在，直接复用")
+                        _logger.info(f"ℹ️ key={graph_key} 已存在，直接复用")
                         continue
                     success = self._warmup_and_capture_bucket(bucket, initial_len, device)
                     if not success:
                         bucket_ok = False
-                        print(f"⚠️ key={graph_key} 预捕获失败")
+                        _logger.info(f"⚠️ key={graph_key} 预捕获失败")
             results[bucket] = bucket_ok
         return results
 
@@ -1045,7 +1048,7 @@ class Text2SemanticDecoder(nn.Module):
                 if prompts.shape[1] == y.shape[1]:
                     y = torch.concat([y, torch.zeros_like(samples)], dim=1)
                     print("bad zero prediction")
-                print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
+                _logger.info(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
                 break
             # 本次生成的 semantic_ids 和之前的 y 构成新的 y
             # print(samples.shape)#[1,1]#第一个1是bs
@@ -1238,7 +1241,7 @@ class Text2SemanticDecoder(nn.Module):
                 if y.shape[1]==0:
                     y = torch.concat([y, torch.zeros_like(samples)], dim=1)
                     print("bad zero prediction")
-                print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
+                _logger.info(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
                 break
 
             ####################### update next step ###################################
@@ -1376,10 +1379,10 @@ class Text2SemanticDecoder(nn.Module):
 
         if static_mode_active:
             transformer = static_transformer
-            print(f"🚀 使用静态KV Cache模式（支持CUDA Graph优化）")
+            _logger.info(f"🚀 使用静态KV Cache模式（支持CUDA Graph优化）")
         else:
             transformer = dynamic_transformer
-            print(f"📌 使用动态KV Cache模式（原始torch.cat行为）")
+            _logger.info(f"📌 使用动态KV Cache模式（原始torch.cat行为）")
         
         for idx in tqdm(range(1500)):
             if xy_attn_mask is not None:
@@ -1428,7 +1431,7 @@ class Text2SemanticDecoder(nn.Module):
                             dtype=torch.long, device=device
                         )
                         
-                        print(f"✅ 初始化固定缓冲区: 桶大小={current_bucket}, 当前长度={kv_cache_len}")
+                        _logger.info(f"✅ 初始化固定缓冲区: 桶大小={current_bucket}, 当前长度={kv_cache_len}")
                         
                         # graph_initial_len 向上对齐到 _GRAPH_INITIAL_LEN_STRIDE 的倍数。
                         # 好处：kv_cache_len=337/345/351 均映射到 352，共享同一张 graph，
@@ -1440,7 +1443,7 @@ class Text2SemanticDecoder(nn.Module):
                         if graph_run_enabled:
                             if kv_cache_len >= current_bucket - 1:
                                 # prompt 已经占满 bucket，没有写入空间
-                                print(f"⚠️ prompt长度({kv_cache_len}) >= bucket({current_bucket})，本句退回静态模式")
+                                _logger.info(f"⚠️ prompt长度({kv_cache_len}) >= bucket({current_bucket})，本句退回静态模式")
                                 graph_run_enabled = False
                             else:
                                 # 向上对齐到 stride 倍数，减少不同 graph key 数量
@@ -1448,7 +1451,7 @@ class Text2SemanticDecoder(nn.Module):
                                             // _GRAPH_INITIAL_LEN_STRIDE * _GRAPH_INITIAL_LEN_STRIDE)
                                 if _aligned >= current_bucket:
                                     # 对齐后超出 bucket，退回静态模式
-                                    print(f"⚠️ 对齐后 initial_len({_aligned}) >= bucket({current_bucket})，本句退回静态模式")
+                                    _logger.info(f"⚠️ 对齐后 initial_len({_aligned}) >= bucket({current_bucket})，本句退回静态模式")
                                     graph_run_enabled = False
                                 else:
                                     graph_initial_len = _aligned
@@ -1461,10 +1464,10 @@ class Text2SemanticDecoder(nn.Module):
                                                 success = self._warmup_and_capture_bucket(current_bucket, graph_initial_len, x.device)
                                                 if success:
                                                     bucket_captured = True
-                                                    print(f"📸 CUDA Graph 已捕获 key={graph_key}")
+                                                    _logger.info(f"📸 CUDA Graph 已捕获 key={graph_key}")
                                             else:
                                                 bucket_captured = True
-                                                print(f"📸 CUDA Graph 已被另一线程捕获，直接使用 key={graph_key}")
+                                                _logger.info(f"📸 CUDA Graph 已被另一线程捕获，直接使用 key={graph_key}")
                                     else:
                                         # 本 key 已在之前的句子中捕获，直接复用
                                         bucket_captured = True
@@ -1483,7 +1486,7 @@ class Text2SemanticDecoder(nn.Module):
                                         # 第一步写入位置 = graph_initial_len（对齐后的 prompt 末尾）
                                         static_in['pos_idx'].fill_(graph_initial_len)
                     else:
-                        print(f"⚠️ KV cache 长度 {kv_cache_len} 超出所有桶，使用正常模式")
+                        _logger.info(f"⚠️ KV cache 长度 {kv_cache_len} 超出所有桶，使用正常模式")
                         static_mode_active = False
                         transformer = dynamic_transformer
                         graph_run_enabled = False
@@ -1498,7 +1501,7 @@ class Text2SemanticDecoder(nn.Module):
                     # 只在第一次触发时打印，避免日志过多
                     if not hasattr(self, '_sliding_window_triggered'):
                         self._sliding_window_triggered = True
-                        print(f"⚠️ 缓冲区即将满（{current_lens[0]}/{current_bucket}），启动滑动窗口模式（保留最新 {keep_len} tokens）")
+                        _logger.info(f"⚠️ 缓冲区即将满（{current_lens[0]}/{current_bucket}），启动滑动窗口模式（保留最新 {keep_len} tokens）")
                     
                     # 移动 KV cache，丢弃最旧的 token
                     for i in range(len(k_cache)):
@@ -1537,12 +1540,12 @@ class Text2SemanticDecoder(nn.Module):
                             
                             if not hasattr(self, '_cuda_graph_replay_started'):
                                 self._cuda_graph_replay_started = True
-                                print(f"♻️ 开始使用 CUDA Graph 加速（key={graph_key}，历史积累模式）")
+                                _logger.info(f"♻️ 开始使用 CUDA Graph 加速（key={graph_key}，历史积累模式）")
                             
                             # 安全阀：写入位置超出 bucket 时自动 fallback
                             if graph_initial_len + graph_step_count >= current_bucket:
                                 graph_run_enabled = False
-                                print(f"⚠️ graph写入位置到达bucket边界，降级到static path")
+                                _logger.info(f"⚠️ graph写入位置到达bucket边界，降级到static path")
                                 # 把 graph buffer 的最新 KV 同步回主循环 k_cache，
                                 # 否则 static path 会用 prompt-only 的 stale k_cache，
                                 # graph 阶段积累的历史全部丢失，导致 attention 不一致。
@@ -1562,7 +1565,7 @@ class Text2SemanticDecoder(nn.Module):
                             replay_failed = True
                             graph_run_enabled = False
                             bucket_captured = False
-                            print(f"⚠️ CUDA Graph 重放失败，降级为静态模式：{repr(e)}")
+                            _logger.info(f"⚠️ CUDA Graph 重放失败，降级为静态模式：{repr(e)}")
                     if replay_failed:
                         # fallback：从 static buffer 恢复 k_cache，接续 static path
                         static_inputs = self.bucket_static_inputs[graph_key]
@@ -1625,22 +1628,22 @@ class Text2SemanticDecoder(nn.Module):
                 if y.shape[1] == 0:
                     y = torch.concat([y, torch.zeros_like(samples)], dim=1)
                     print("bad zero prediction")
-                print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
+                _logger.info(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
                 
                 # 打印 CUDA Graph 分桶性能统计
                 if graph_run_enabled and bucket_captured and current_bucket is not None:
                     self.cuda_graph_stats["total_steps"] = idx + 1
                     graph_ratio = self.cuda_graph_stats["graph_replay_steps"] / self.cuda_graph_stats["total_steps"] * 100
-                    print(f"📊 CUDA Graph 分桶统计:")
-                    print(f"   - 总步数: {self.cuda_graph_stats['total_steps']}")
-                    print(f"   - 图复用: {self.cuda_graph_stats['graph_replay_steps']} ({graph_ratio:.1f}%)")
-                    print(f"   - 使用桶: {current_bucket}")
-                    print(f"   - 桶命中: {self.cuda_graph_stats['bucket_hits'].get(current_bucket, 0)}")
-                    print(f"   - 桶未命中: {self.cuda_graph_stats['bucket_misses']}")
+                    _logger.info(f"📊 CUDA Graph 分桶统计:")
+                    _logger.info(f"   - 总步数: {self.cuda_graph_stats['total_steps']}")
+                    _logger.info(f"   - 图复用: {self.cuda_graph_stats['graph_replay_steps']} ({graph_ratio:.1f}%)")
+                    _logger.info(f"   - 使用桶: {current_bucket}")
+                    _logger.info(f"   - 桶命中: {self.cuda_graph_stats['bucket_hits'].get(current_bucket, 0)}")
+                    _logger.info(f"   - 桶未命中: {self.cuda_graph_stats['bucket_misses']}")
                     if current_bucket in self.cuda_graph_stats['warmup_time']:
-                        print(f"   - 预热时间: {self.cuda_graph_stats['warmup_time'][current_bucket]:.3f}s")
+                        _logger.info(f"   - 预热时间: {self.cuda_graph_stats['warmup_time'][current_bucket]:.3f}s")
                     if current_bucket in self.cuda_graph_stats['capture_time']:
-                        print(f"   - 捕获时间: {self.cuda_graph_stats['capture_time'][current_bucket]:.3f}s")
+                        _logger.info(f"   - 捕获时间: {self.cuda_graph_stats['capture_time'][current_bucket]:.3f}s")
                 break
 
             ####################### update next step ###################################

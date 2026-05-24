@@ -8,18 +8,15 @@ import re
 import shutil
 import subprocess
 
-import torch
-from torch.utils import cpp_extension
-
 """
-Setting this param to a list has a problem of generating different compilation commands (with diferent order of architectures) and leading to recompilation of fused kernels. 
-Set it to empty stringo avoid recompilation and assign arch flags explicity in extra_cuda_cflags below
+Setting this param to a list has a problem of generating different compilation commands (with diferent order of architectures) and leading to recompilation of fused kernels.
+Set it to empty string to avoid recompilation and assign arch flags explicitly in extra_cuda_cflags below
 """
 os.environ["TORCH_CUDA_ARCH_LIST"] = ""
 
 
 def _get_tts_device_index() -> int:
-    """从 TTS_DEVICE 环境变量解析设备序号，默认 0。"""
+    """Parse device index from TTS_DEVICE env var, defaulting to 0."""
     tts_device = os.environ.get("TTS_DEVICE", "cuda:0")
     try:
         return int(tts_device.split(":")[-1])
@@ -33,6 +30,8 @@ def _sanitize_cache_token(value: str) -> str:
 
 
 def _get_gpu_cache_suffix(device_idx: int) -> str:
+    import torch
+
     override = os.environ.get("BIGVGAN_CACHE_ID", "").strip()
     if override:
         return _sanitize_cache_token(override)
@@ -157,6 +156,9 @@ def _ensure_msvc_on_path() -> None:
 
 
 def load():
+    import torch
+    from torch.utils import cpp_extension
+
     # Check if cuda 11 is installed for compute capability 8.0
     cc_flag = []
     _, bare_metal_major, _ = _get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
@@ -211,14 +213,14 @@ def load():
         "-allow-unsupported-compiler",
     ]
 
-    # 优先加载已编译的缓存 .pyd，跳过编译流程（无需 cl.exe/ninja）
-    # 缓存目录按设备隔离（build_device0 / build_device1 ...），切换 GPU 自动重编译
+    # Try cached pre-compiled .pyd first to skip compilation (no cl.exe/ninja needed).
+    # Cache directory is per-device isolated; switching GPU triggers a rebuild.
     pyd_path = buildpath / "anti_alias_activation_cuda.pyd"
     if pyd_path.exists():
         spec = importlib.util.spec_from_file_location("anti_alias_activation_cuda", pyd_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        print(f"[BigVGAN] 从缓存加载 CUDA kernel: {pyd_path}")
+        print(f"[BigVGAN] Loaded cached CUDA kernel: {pyd_path}")
         return module
 
     _ensure_msvc_on_path()
