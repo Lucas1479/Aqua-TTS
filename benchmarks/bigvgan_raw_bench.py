@@ -10,7 +10,10 @@ Uses the same BigVGAN loading logic as aqua.inferencer._load_bigvgan_model().
 """
 from __future__ import annotations
 
-import os, statistics, sys, time
+import os
+import statistics
+import sys
+import time
 
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -21,10 +24,13 @@ if not MAIN_REPO:
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 
-sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, MAIN_GPT_SOVITS)
-sys.path.insert(0, MAIN_REPO)
+sys.path[:0] = [
+    os.path.join(ROOT, "aquatts", "_vendor", "GPT_SoVITS"),
+    os.path.join(ROOT, "aquatts", "_vendor"),
+    ROOT,
+    MAIN_GPT_SOVITS,
+    MAIN_REPO,
+]
 os.chdir(MAIN_REPO)
 
 import torch
@@ -52,7 +58,7 @@ def load_bigvgan():
 
     cuda_pyd = (
         pathlib.Path(ROOT)
-        / "Aqua/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
+        / "aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
         / f"build_{cache_suffix}"
         / "anti_alias_activation_cuda.pyd"
     )

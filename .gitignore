@@ -29,3 +29,10 @@ GPT_SoVITS/pretrained_models/
 .venv/
 venv/
 env/
+
+# Local test artifacts
+.tmp/
+.pytest_cache/
+pytest-cache-files-*/
+*.log
+smoke_*.wav

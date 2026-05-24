@@ -1,8 +1,9 @@
 ﻿# -*- coding: utf-8 -*-
-"""Aqua TTFP (Time-To-First-Packet) benchmark.
+"""Aqua TTFP (Time-To-First-Playback) benchmark.
 
-Measures the optimized inference path with static KV cache, CUDA Graph,
-and pre-compiled BigVGAN CUDA kernel.
+Measures the optimized streaming inference path with static KV cache,
+CUDA Graph, and pre-compiled BigVGAN CUDA kernel. By default, timing stops
+at the first non-empty audio chunk that can be played.
 
 Usage:
     python benchmarks/AQUA_ttfp.py \
@@ -13,7 +14,11 @@ Usage:
 """
 from __future__ import annotations
 
-import argparse, os, statistics, sys, time
+import argparse
+import os
+import statistics
+import sys
+import time
 
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -47,6 +52,11 @@ def main():
     parser.add_argument("--no-cuda-graph", action="store_true")
     parser.add_argument("--no-static-kv", action="store_true")
     parser.add_argument("--no-bigvgan-kernel", action="store_true")
+    parser.add_argument("--how-to-cut", default="按标点符号切")
+    parser.add_argument("--chunk-size-seconds", type=float, default=0.25,
+                        help="Enable true streaming chunks; set <=0 to disable.")
+    parser.add_argument("--measure-total", action="store_true",
+                        help="Continue after first playable chunk to measure full generation time.")
     args = parser.parse_args()
 
     # Configure optimizations via env vars before importing TTSInferencer
@@ -57,7 +67,7 @@ def main():
 
     os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] = "1" if not args.no_cuda_graph else "0"
 
-    from aqua import TTSInferencer
+    from aquatts import TTSInferencer
 
     print(f"\n{'='*80}")
     print(f"  Aqua TTFP Benchmark")
@@ -67,6 +77,12 @@ def main():
     if not args.no_static_kv: flags.append("Static KV")
     if not args.no_bigvgan_kernel: flags.append("BigVGAN Kernel")
     print(f"  Optimizations: {', '.join(flags) if flags else 'ALL OFF'}")
+    print(f"  Segmentation: {args.how_to_cut}")
+    if args.chunk_size_seconds and args.chunk_size_seconds > 0:
+        print(f"  Stream chunk: {args.chunk_size_seconds:.2f}s")
+    else:
+        print("  Stream chunk: disabled")
+    print(f"  Timing mode: {'first playback + full total' if args.measure_total else 'first playback only'}")
     print(f"  GPT: {args.gpt_model}")
     print(f"  SoVITS: {args.sovits_model}")
 
@@ -93,11 +109,12 @@ def main():
             prompt_text=args.ref_text,
             text_language=args.text_lang,
             prompt_language=args.ref_lang,
-            how_to_cut="不切",
+            how_to_cut=args.how_to_cut,
             top_k=5, top_p=1, temperature=0.6,
             speed=1.1, sample_steps=4,
             enable_cuda_graph=not args.no_cuda_graph,
             enable_static_kv=not args.no_static_kv,
+            chunk_size_seconds=args.chunk_size_seconds if args.chunk_size_seconds > 0 else None,
         ):
             if chunk is None or len(chunk) == 0:
                 continue
@@ -105,6 +122,8 @@ def main():
             if first_chunk_ms is None:
                 first_chunk_ms = elapsed_ms
             chunk_count += 1
+            if not args.measure_total:
+                break
 
         total_ms = (time.perf_counter() - t0) * 1000.0
         return {
@@ -119,7 +138,8 @@ def main():
     print("[bench] Warmup done\n")
 
     print(f"--- Aqua TTFP ---")
-    hdr = f"{'case':<8} {'chars':>5}  {'first_chunk':>12}  {'total':>10}  {'chunks':>6}  text"
+    elapsed_label = "total" if args.measure_total else "elapsed"
+    hdr = f"{'case':<8} {'chars':>5}  {'first_audio':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
     print(hdr)
     print("-" * 80)
 
@@ -133,7 +153,7 @@ def main():
                   f"{r['first_chunk_ms']:>9.1f}ms  {r['total_ms']:>8.1f}ms  "
                   f"{r['chunk_count']:>6}  {text[:40]}  [rep {rep + 1}]")
         print(f"  -> median ttfp={statistics.median(ttfp_vals):.1f}ms  "
-              f"median total={statistics.median(total_vals):.1f}ms")
+              f"median {elapsed_label}={statistics.median(total_vals):.1f}ms")
 
     print("-" * 60)
     gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A"

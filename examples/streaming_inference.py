@@ -13,7 +13,10 @@ Usage:
 """
 from __future__ import annotations
 
-import argparse, os, sys, time
+import argparse
+import os
+import sys
+import time
 
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -43,7 +46,7 @@ def main():
         os.environ["ENABLE_CUDA_GRAPH"] = "0"
 
     import pyaudio
-    from aqua import TTSInferencer
+    from aquatts import TTSInferencer
 
     print("Loading TTS pipeline...")
     tts = TTSInferencer(

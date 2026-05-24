@@ -16,12 +16,22 @@ class TestVendorPathSetup:
     def test_vendor_precedes_main(self):
         """_vendor/ should be before any GPT_SoVITS main repo path on sys.path."""
         _vendor = os.path.join(os.path.dirname(aquatts.__file__), "_vendor")
+        _vendor_gpt_sovits = os.path.join(_vendor, "GPT_SoVITS")
         vendor_idx = sys.path.index(_vendor)
+        vendor_gpt_sovits_idx = sys.path.index(_vendor_gpt_sovits)
         for p in sys.path:
-            if "GPT_SoVITS" in p and p != _vendor and "pretrained_models" not in p:
+            if (
+                "GPT_SoVITS" in p
+                and not p.startswith(_vendor)
+                and "pretrained_models" not in p
+            ):
                 main_idx = sys.path.index(p)
                 assert vendor_idx < main_idx, (
                     f"_vendor/ (idx {vendor_idx}) must precede {p} (idx {main_idx})"
+                )
+                assert vendor_gpt_sovits_idx < main_idx, (
+                    f"_vendor/GPT_SoVITS (idx {vendor_gpt_sovits_idx}) must precede "
+                    f"{p} (idx {main_idx})"
                 )
 
     def test_t2s_model_from_vendor(self):
@@ -32,6 +42,11 @@ class TestVendorPathSetup:
         assert hasattr(m.Text2SemanticDecoder, "infer_panel_naive"), (
             "vendored t2s_model missing infer_panel_naive"
         )
+
+    def test_top_level_ar_model_from_vendor(self):
+        """GPT-SoVITS imports AR.models.t2s_model as a top-level module."""
+        import AR.models.t2s_model as m
+        assert "_vendor" in m.__file__, f"Wrong top-level AR t2s_model source: {m.__file__}"
 
     def test_gpt_sovits_home_optional_for_submodules(self):
         """Submodules (params, streaming) import without GPT_SOVITS_HOME."""

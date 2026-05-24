@@ -61,9 +61,9 @@ python benchmarks/bigvgan_raw_bench.py
 
 ## Methodology
 
-### TTFP (Time-To-First-Packet)
+### TTFP (Time-To-First-Playback)
 
-TTFP measures **text-ready to first-audio-chunk latency** — the wall-clock time from calling `infer_stream(text=...)` to the first non-empty `(sr, chunk, text)` yield. This is the latency a user experiences before hearing the first sound.
+TTFP measures **text-ready to first-playable-audio latency** — the wall-clock time from calling `infer_stream(text=...)` to the first non-empty `(sr, chunk, text)` yield that can be sent to playback. This is the latency a user experiences before hearing the first sound.
 
 **Measurement protocol:**
 
@@ -71,8 +71,8 @@ TTFP measures **text-ready to first-audio-chunk latency** — the wall-clock tim
 2. **Repeats**: 5 per benchmark text, **median** reported (not mean — resistant to outlier cold starts).
 3. **Timing**: `time.perf_counter()` around `infer_stream()` loop. `torch.cuda.synchronize()` is NOT called inside the timing window — TTFP measures wall-clock latency as experienced by the user.
 4. **No `empty_cache`**: `torch.cuda.empty_cache()` is never called in the hot path (was found to add ~500ms of GPU page-fault latency).
-5. **Streaming mode**: `how_to_cut="不切"` (no cut), `speed=1.1`, `sample_steps=4`, `top_k=5`, `top_p=1`, `temperature=0.6`.
-6. **First chunk only**: The measurement stops at the first chunk (TTFP is not total duration).
+5. **Streaming mode**: `how_to_cut="按标点符号切"`, `chunk_size_seconds=0.25`, `speed=1.1`, `sample_steps=4`, `top_k=5`, `top_p=1`, `temperature=0.6`.
+6. **First playable chunk only**: The default measurement stops at the first non-empty audio chunk (TTFP is not total duration). Use `--measure-total` when full generation latency is needed.
 
 ### T2S Throughput
 
@@ -106,8 +106,8 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 | VRAM | 16 GB GDDR6X |
 | Driver | 555.99 |
 | OS | Windows 11 Pro (build 26200) |
-| Python | 3.10.16 |
-| PyTorch | 2.1.2+cu121 |
+| Python | 3.12 |
+| PyTorch | 2.5.1+cu121 |
 | CUDA | 12.1 |
 
 ### Model Weights
@@ -131,14 +131,14 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 | Metric | Official (no Graph) | Official (CUDA Graph) | Aqua |
 |--------|---------------------|-----------------------|------------|
 | T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
-| TTFP Short | 1061ms | 1016ms | **456ms** |
-| TTFP Medium | 1599ms | 1476ms | **484ms** |
-| TTFP Long | 3598ms | 2852ms | **499ms** |
+| TTFP Short | 1061ms | 1016ms | **262ms** |
+| TTFP Medium | 1599ms | 1476ms | **318ms** |
+| TTFP Long | 3598ms | 2852ms | **409ms** |
 | KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_`** |
-| CUDA Graph | None | Single graph, lazy capture | **13 graphs, pre-captured** |
+| CUDA Graph | None | Single graph, lazy capture | **17 graphs, pre-captured** |
 | BigVGAN | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
 | GPU memory safety | OOM (long texts) | OOM (long texts) | **Bounded static buffers** |
 | `empty_cache` | No | Every 100 steps | **Never in hot path** |
 | V3 streaming | Batch only | Batch only | **True streaming** |
 
-*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/aqua_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported).*
+*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/aqua_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.5.1+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is first playable audio chunk latency with `chunk_size_seconds=0.25`, measured on 3 test texts with 5 repeats each (median reported).*

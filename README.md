@@ -20,7 +20,7 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces TTFP from 1.0–3.6 s to **~0.46–0.50 s** on the tested utterances — see [Highlights](#highlights) for the full comparison.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces TTFP from 1.0–3.6 s to **~0.26–0.41 s** on the tested utterances — see [Highlights](#highlights) for the full comparison.
 
 > **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
 
@@ -29,15 +29,15 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 | | GPT-SoVITS (official) | + CUDA Graph | Aqua-TTS |
 |---|---|---|---|
 | T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
-| TTFP (short, 3 chars) | 1061ms | 1016ms | **456ms** |
-| TTFP (medium, 19 chars) | 1599ms | 1476ms | **484ms** |
-| TTFP (long, 64 chars) | 3598ms | 2852ms | **499ms** |
+| TTFP (short, 3 chars) | 1061ms | 1016ms | **262ms** |
+| TTFP (medium, 19 chars) | 1599ms | 1476ms | **318ms** |
+| TTFP (long, 64 chars) | 3598ms | 2852ms | **409ms** |
 | KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_` buffer** |
-| CUDA Graph | None | Single lazy graph | **13 pre-captured graphs, 6 buckets** |
+| CUDA Graph | None | Single lazy graph | **17 pre-captured graphs, 6 buckets** |
 | BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
 | KV-cache allocation | Unbounded growth | Unbounded growth | **Bounded per bucket config** |
 
-*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported). See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
+*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP is first playable audio chunk latency with `chunk_size_seconds=0.25`, measured on 3 test texts with 5 repeats each (median reported). See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
 
 ## Features
 
@@ -132,7 +132,7 @@ Install PyTorch matching your CUDA version **before** installing Aqua-TTS — it
 pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Aqua-TTS has been tested with PyTorch 2.1.2+cu121 on an RTX 4070 Ti SUPER.
+Aqua-TTS has been tested with PyTorch 2.5.1+cu121 on an RTX 4070 Ti SUPER.
 
 ### 3. Install Aqua-TTS
 

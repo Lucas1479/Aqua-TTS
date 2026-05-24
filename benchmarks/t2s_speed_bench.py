@@ -9,7 +9,11 @@ Usage:
 """
 from __future__ import annotations
 
-import argparse, os, statistics, sys, time
+import argparse
+import os
+import statistics
+import sys
+import time
 
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -19,10 +23,13 @@ MAIN_REPO = os.environ.get("GPT_SOVITS_HOME")
 if not MAIN_REPO:
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
-sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, MAIN_REPO)
-sys.path.insert(0, MAIN_GPT_SOVITS)
+sys.path[:0] = [
+    os.path.join(ROOT, "aquatts", "_vendor", "GPT_SoVITS"),
+    os.path.join(ROOT, "aquatts", "_vendor"),
+    ROOT,
+    MAIN_GPT_SOVITS,
+    MAIN_REPO,
+]
 os.chdir(MAIN_REPO)
 
 import torch
@@ -56,7 +63,7 @@ def main():
     model.load_state_dict(dict_s1["weight"])
     model = model.half().cuda().eval()
 
-    from aqua.modeling import apply_cuda_graph_patch
+    from aquatts.modeling import apply_cuda_graph_patch
     apply_cuda_graph_patch(model.model)
 
     if not args.bench_official:

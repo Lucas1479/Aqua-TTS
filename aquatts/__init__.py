@@ -37,8 +37,10 @@ if _GPT_SOVITS_HOME:
 # Vendored 覆盖必须最后添加 (insert(0) → 最终在位置 0)。顺序为：_vendor < GPT_SoVITS/ < repo-root，
 # 因此 vendored 的 t2s_model.py 和 BigVGAN CUDA 加载器在导入时具有优先权。
 _VENDOR_DIR = os.path.join(os.path.dirname(__file__), "_vendor")
-if _VENDOR_DIR not in sys.path:
-    sys.path.insert(0, _VENDOR_DIR)
+_VENDOR_GPT_SOVITS_DIR = os.path.join(_VENDOR_DIR, "GPT_SoVITS")
+for _p in (_VENDOR_DIR, _VENDOR_GPT_SOVITS_DIR):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # ── Public API (公共 API) ───────────────────────────────────────────────────────────
 # TTSInferencer is imported lazily — import aqua does not trigger
