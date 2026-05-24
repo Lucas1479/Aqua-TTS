@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Tests for HTTP server endpoints using FastAPI TestClient with a fake inferencer."""
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from spectralis.server import _create_app
-from spectralis.voice_registry import Voice, VoiceRegistry
+from aqua.server import _create_app
+from aqua.voice_registry import Voice, VoiceRegistry
 
 
 class FakeInferencer:

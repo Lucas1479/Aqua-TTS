@@ -1,4 +1,4 @@
-from spectralis.inference.params import get_sovits_params
+﻿from aqua.inference.params import get_sovits_params
 
 
 class TestGetSovitsParams:

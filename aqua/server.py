@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
-"""Lightweight HTTP API for Spectralis-TTS streaming inference. / Spectralis-TTS 流式推理的轻量级 HTTP API。
+﻿# -*- coding: utf-8 -*-
+"""Lightweight HTTP API for Aqua-TTS streaming inference. / Aqua-TTS 流式推理的轻量级 HTTP API。
 
 Usage / 用法::
 
-    python -m spectralis.server --host 127.0.0.1 --port 8000
+    python -m aqua.server --host 127.0.0.1 --port 8000
 
 Endpoints / 端点
 ---------
@@ -24,9 +24,9 @@ from typing import Optional
 
 import numpy as np
 
-from spectralis.voice_registry import Voice, VoiceRegistry, registry_from_env
+from aqua.voice_registry import Voice, VoiceRegistry, registry_from_env
 
-logger = logging.getLogger("spectralis.server")
+logger = logging.getLogger("aqua.server")
 
 
 # ── Internal helpers (内部辅助函数) ──────────────────────────────────────────────────────
@@ -50,10 +50,10 @@ def _create_app(inferencer, voice_registry=None):
     Args / 参数:
         inferencer: A configured TTSInferencer. / 已配置的 TTSInferencer 实例。
         voice_registry: Optional VoiceRegistry. If None, uses
-            ``registry_from_env()`` which reads SPECTRALIS_VOICE_JSON
+            ``registry_from_env()`` which reads AQUA_VOICE_JSON
             or falls back to ``./voices.json``.
             / 可选的 VoiceRegistry。如果为 None，则使用 ``registry_from_env()``，
-            该函数读取 SPECTRALIS_VOICE_JSON 环境变量，否则回退到 ``./voices.json``。
+            该函数读取 AQUA_VOICE_JSON 环境变量，否则回退到 ``./voices.json``。
     """
     from fastapi import FastAPI, HTTPException, Query
     from fastapi.responses import Response, StreamingResponse
@@ -80,7 +80,7 @@ def _create_app(inferencer, voice_registry=None):
         return ref_audio_path, prompt_text, prompt_language
 
     app = FastAPI(
-        title="Spectralis-TTS",
+        title="Aqua-TTS",
         version="1.0.0",
         description="GPU-optimized GPT-SoVITS streaming TTS",
     )
@@ -105,7 +105,7 @@ def _create_app(inferencer, voice_registry=None):
 
     @app.get("/presets")
     async def list_presets():
-        from spectralis.inference.presets import (
+        from aqua.inference.presets import (
             GENERATION_PRESETS,
             CUDA_GRAPH_PRESETS,
         )
@@ -159,8 +159,8 @@ def _create_app(inferencer, voice_registry=None):
         / 流式 TTS — 在生成音频/wav 块的同时实时返回。
 
         Yields PCM audio chunks as multipart stream. Low TTFP (time-to-first-packet)
-        due to Spectralis CUDA Graph + static KV cache optimizations.
-        / 以多部分流的形式生成 PCM 音频块。利用 Spectralis CUDA Graph + 静态 KV 缓存优化，
+        due to Aqua CUDA Graph + static KV cache optimizations.
+        / 以多部分流的形式生成 PCM 音频块。利用 Aqua CUDA Graph + 静态 KV 缓存优化，
         实现低首包延迟 (TTFP)。
         """
         if not text.strip():
@@ -269,7 +269,7 @@ def start_server(
     log_level: str = "info",
     voice_registry=None,
 ):
-    """Start the Spectralis-TTS HTTP server (blocking). / 启动 Spectralis-TTS HTTP 服务器（阻塞模式）。
+    """Start the Aqua-TTS HTTP server (blocking). / 启动 Aqua-TTS HTTP 服务器（阻塞模式）。
 
     Args / 参数:
         inferencer: A pre-configured TTSInferencer instance. / 已预先配置的 TTSInferencer 实例。
@@ -282,7 +282,7 @@ def start_server(
     import uvicorn
 
     app = _create_app(inferencer, voice_registry=voice_registry)
-    print(f"Spectralis-TTS server starting on http://{host}:{port}")
+    print(f"Aqua-TTS server starting on http://{host}:{port}")
     print(f"  Health:  http://{host}:{port}/health")
     print(f"  Presets: http://{host}:{port}/presets")
     print(f"  Voices:  http://{host}:{port}/voices")
@@ -293,11 +293,11 @@ def start_server(
 # ── CLI (命令行接口) ────────────────────────────────────────────────────────────────────
 
 def _main():
-    """Entry point: python -m spectralis.server / 入口点：python -m spectralis.server"""
+    """Entry point: python -m aqua.server / 入口点：python -m aqua.server"""
     import argparse
     import os
 
-    parser = argparse.ArgumentParser(description="Spectralis-TTS HTTP Server")
+    parser = argparse.ArgumentParser(description="Aqua-TTS HTTP Server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--gpt-model", required=True, help="Path to GPT T2S checkpoint (.ckpt)")
@@ -312,9 +312,9 @@ def _main():
 
     os.environ.setdefault("ENABLE_CUDA_GRAPH", "1")
 
-    # Import triggers sys.path setup in spectralis/__init__.py
-    # 此导入触发 spectralis/__init__.py 中的 sys.path 设置
-    from spectralis import TTSInferencer, VoiceRegistry
+    # Import triggers sys.path setup in Aqua/__init__.py
+    # 此导入触发 Aqua/__init__.py 中的 sys.path 设置
+    from aqua import TTSInferencer, VoiceRegistry
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

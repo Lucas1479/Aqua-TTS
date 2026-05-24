@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
-"""Spectralis TTFP (Time-To-First-Packet) benchmark.
+﻿# -*- coding: utf-8 -*-
+"""Aqua TTFP (Time-To-First-Packet) benchmark.
 
 Measures the optimized inference path with static KV cache, CUDA Graph,
 and pre-compiled BigVGAN CUDA kernel.
 
 Usage:
-    python benchmarks/spectralis_ttfp.py \
+    python benchmarks/AQUA_ttfp.py \
         --gpt-model GPT_weights_v3/xxx-e15.ckpt \
         --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
         --ref-audio "reference audio/ref_audio.wav" \
@@ -37,7 +37,7 @@ REPEATS = 5
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Spectralis TTFP benchmark")
+    parser = argparse.ArgumentParser(description="Aqua TTFP benchmark")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
     parser.add_argument("--ref-audio", required=True)
@@ -57,10 +57,10 @@ def main():
 
     os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] = "1" if not args.no_cuda_graph else "0"
 
-    from spectralis import TTSInferencer
+    from aqua import TTSInferencer
 
     print(f"\n{'='*80}")
-    print(f"  Spectralis TTFP Benchmark")
+    print(f"  Aqua TTFP Benchmark")
     print(f"{'='*80}")
     flags = []
     if not args.no_cuda_graph: flags.append("CUDA Graph")
@@ -118,7 +118,7 @@ def main():
         _measure(wt)
     print("[bench] Warmup done\n")
 
-    print(f"--- Spectralis TTFP ---")
+    print(f"--- Aqua TTFP ---")
     hdr = f"{'case':<8} {'chars':>5}  {'first_chunk':>12}  {'total':>10}  {'chunks':>6}  text"
     print(hdr)
     print("-" * 80)

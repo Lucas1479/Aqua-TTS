@@ -1,4 +1,4 @@
-"""Wrapper: run a benchmark script using the full GPT-SoVITS from the main repo.
+﻿"""Wrapper: run a benchmark script using the full GPT-SoVITS from the main repo.
 
 Usage:
     python benchmarks/_run_with_main_gptsovits.py benchmarks/t2s_speed_bench.py [args...]
@@ -10,25 +10,25 @@ MAIN_REPO = os.environ.get("GPT_SOVITS_HOME")
 if not MAIN_REPO:
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
-SPECTRALIS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VENDORED_GPT_SOVITS = os.path.join(SPECTRALIS_ROOT, "spectralis", "_vendor")
+AQUA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VENDORED_GPT_SOVITS = os.path.join(AQUA_ROOT, "Aqua", "_vendor")
 
 # Path order:
-#   [0] SPECTRALIS_ROOT  — spectralis package
+#   [0] AQUA_ROOT  — Aqua package
 #   [1] MAIN_GPT_SOVITS  — bare AR / BigVGAN absolute imports resolve here
 #   [2] MAIN_REPO        — GPT_SoVITS, config, tools packages
-# Vendored overrides in spectralis/_vendor/ are managed by spectralis/__init__.py.
+# Vendored overrides in Aqua/_vendor/ are managed by Aqua/__init__.py.
 sys.path.insert(0, MAIN_GPT_SOVITS)
 sys.path.insert(0, MAIN_REPO)
-sys.path.insert(0, SPECTRALIS_ROOT)
+sys.path.insert(0, AQUA_ROOT)
 
 
 class _GuardedPath(list):
     """A sys.path that keeps vendored overrides ahead of main-repo originals.
 
     Path order:
-      [0] SPECTRALIS_ROOT      — spectralis package, benchmarks
-      [1] VENDORED_GPT_SOVITS  — spectralis/_vendor (t2s_model.py + BigVGAN CUDA)
+      [0] AQUA_ROOT      — Aqua package, benchmarks
+      [1] VENDORED_GPT_SOVITS  — Aqua/_vendor (t2s_model.py + BigVGAN CUDA)
       [2] MAIN_GPT_SOVITS      — bare "AR.modules.*" fallback (not in vendored)
       [3] MAIN_REPO            — GPT_SoVITS.xxx, config, tools packages
 
@@ -37,7 +37,7 @@ class _GuardedPath(list):
     (pkgutil.extend_path) merge with main GPT-SoVITS at import time.
     """
 
-    _CANONICAL = (SPECTRALIS_ROOT, VENDORED_GPT_SOVITS, MAIN_GPT_SOVITS, MAIN_REPO)
+    _CANONICAL = (AQUA_ROOT, VENDORED_GPT_SOVITS, MAIN_GPT_SOVITS, MAIN_REPO)
 
     def _fixup(self) -> None:
         # Remove duplicates of entries we manage
@@ -56,7 +56,7 @@ class _GuardedPath(list):
                 self.remove(p)
             except ValueError:
                 pass
-        super().insert(0, SPECTRALIS_ROOT)
+        super().insert(0, AQUA_ROOT)
         super().insert(1, VENDORED_GPT_SOVITS)
         super().insert(2, MAIN_GPT_SOVITS)
         super().insert(3, MAIN_REPO)

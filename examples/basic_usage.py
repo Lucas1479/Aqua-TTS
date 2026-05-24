@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-"""Basic usage example for Spectralis-TTS.
+﻿# -*- coding: utf-8 -*-
+"""Basic usage example for Aqua-TTS.
 
 Shows how to load models and generate speech with optimizations enabled.
 
@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Spectralis-TTS basic usage")
+    parser = argparse.ArgumentParser(description="Aqua-TTS basic usage")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
     parser.add_argument("--ref-audio", required=True)
@@ -45,7 +45,7 @@ def main():
 
     import numpy as np
     import soundfile as sf
-    from spectralis import TTSInferencer
+    from aqua import TTSInferencer
 
     print("Loading TTS pipeline...")
     tts = TTSInferencer(

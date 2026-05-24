@@ -1,15 +1,15 @@
-# Spectralis-TTS — Technical Deep Dive
+﻿# Aqua-TTS — Technical Deep Dive
 
 ## Architecture
 
-Spectralis-TTS is an optimization layer between GPT-SoVITS's AR Text-to-Semantic decoder and its BigVGAN vocoder. It does not replace any model weights — it replaces the *execution strategy*.
+Aqua-TTS is an optimization layer between GPT-SoVITS's AR Text-to-Semantic decoder and its BigVGAN vocoder. It does not replace any model weights — it replaces the *execution strategy*.
 
 ### Pipeline
 
 ```
 Text → BERT → T2S AR Decoder → Speech Tokens → SoVITS CFM → Mel Spec → BigVGAN → Audio
                     ↑                                                           ↑
-            [Spectralis patch]                                  [Spectralis CUDA kernel]
+            [Aqua patch]                                  [Aqua CUDA kernel]
          Static KV + CUDA Graph                               Pre-compiled .pyd cache
 ```
 
@@ -114,7 +114,7 @@ NVIDIA's official BigVGAN uses `torch.utils.cpp_extension.load()` which compiles
 
 ### Solution
 
-`spectralis.bigvgan.cuda.load` provides:
+`aqua.bigvgan.cuda.load` provides:
 
 1. **MSVC auto-discovery** — scans for Visual Studio via `vswhere.exe` on Windows.
 2. **Per-GPU cache** — compiled `.pyd` files are cached under `build_smXX_cudaXX/` directories, keyed by compute capability and CUDA version.
@@ -161,15 +161,15 @@ Measured throughput: **440-470 iterations/second** (median) — a **5.5x speedup
 |---------|-----------|----------|------------|
 | Official (no Graph) | ~80-90 it/s | `torch.cat` | None |
 | Official (CUDA Graph) | ~230 it/s | Static `scatter_` | Single graph, lazy |
-| Spectralis | **~440-470 it/s** | Static `scatter_` | 13 graphs, pre-captured |
+| Aqua | **~440-470 it/s** | Static `scatter_` | 13 graphs, pre-captured |
 
 *All measured with the same 24-layer GPT checkpoint on RTX 4070 Ti SUPER via `benchmarks/t2s_comparison_bench.py`.*
 
-Key reasons Spectralis outperforms the official CUDA Graph implementation:
+Key reasons Aqua outperforms the official CUDA Graph implementation:
 - **No `empty_cache` in hot path** — official calls `torch.cuda.empty_cache()` every 100 decode steps and at end-of-sequence, flushing the CUDA allocator cache
 - **Pre-captured graphs** — 13 graphs captured at load time vs official's single lazy-captured graph
 - **Bucketed sizing** — bucket selection based on initial_len provides near-optimal graph reuse
-- **No NestedTensor overhead** — Spectralis uses regular tensors throughout, avoiding the prototype API overhead of `torch.nested`
+- **No NestedTensor overhead** — Aqua uses regular tensors throughout, avoiding the prototype API overhead of `torch.nested`
 
 ### BigVGAN Kernel (Raw)
 

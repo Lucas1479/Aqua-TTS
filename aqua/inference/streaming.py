@@ -1,7 +1,7 @@
-"""Audio post-processing utilities and BigVGAN model loader. / 音频后处理工具和 BigVGAN 模型加载器。
+﻿"""Audio post-processing utilities and BigVGAN model loader. / 音频后处理工具和 BigVGAN 模型加载器。
 
 Lazy imports avoid requiring torch/numpy at package import time, so the
-spectralis package can be structurally inspected without a GPU. / 延迟导入可避免在导入包时要求 torch/numpy，因此可以在没有 GPU 的情况下对 spectralis 包进行结构检查。
+Aqua package can be structurally inspected without a GPU. / 延迟导入可避免在导入包时要求 torch/numpy，因此可以在没有 GPU 的情况下对 Aqua 包进行结构检查。
 """
 
 

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import os
 import sys
 import time
@@ -18,16 +18,11 @@ try:
 except ImportError:
     sf = None  # friendly error in TTSInferencer.__init__
 
-# TTS language config (via TTS_OUTPUT_LANGUAGE env var, defaults to Japanese)
-# TTS 语言配置（通过环境变量 TTS_OUTPUT_LANGUAGE 切换，默认日文）
-try:
-    from config.settings import TTS_OUTPUT_LANGUAGE as _TTS_OUTPUT_LANGUAGE
-    from config.settings import TTS_REF_TEXT_JA as _TTS_REF_TEXT_JA
-    from config.settings import TTS_REF_TEXT_EN as _TTS_REF_TEXT_EN
-except ImportError:
-    _TTS_OUTPUT_LANGUAGE = "日文"
-    _TTS_REF_TEXT_JA = "こんにちは。今日はいい天気ですね。"
-    _TTS_REF_TEXT_EN = ""
+# TTS language config — set via environment variables.
+# TTS 语言配置 — 通过环境变量控制。
+_TTS_OUTPUT_LANGUAGE = os.environ.get("TTS_OUTPUT_LANGUAGE", "日文")
+_TTS_REF_TEXT_JA = os.environ.get("TTS_REF_TEXT_JA", "こんにちは。今日はいい天気ですね。")
+_TTS_REF_TEXT_EN = os.environ.get("TTS_REF_TEXT_EN", "")
 
 def _default_lang_code() -> str:
     """返回当前语言对应的 GPT-SoVITS 内部语言代码（用于 fallback）。"""
@@ -46,7 +41,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger('tts_inference')
 
 # Package directory for vendored-file references.
-# sys.path is configured by spectralis/__init__.py before this module loads.
+# sys.path is configured by Aqua/__init__.py before this module loads.
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _gpt_sovits_home() -> str:
@@ -87,7 +82,7 @@ try:
 
     from GPT_SoVITS.text import chinese
 
-    from spectralis.inference.presets import (
+    from aqua.inference.presets import (
         apply_cuda_graph_preset as _apply_cg_preset,
         apply_preset as _apply_preset,
     )
@@ -95,9 +90,9 @@ try:
 except ImportError as e:
     _missing = str(e)
     if "librosa" in _missing:
-        logger.error("librosa is required. Install with: pip install spectralis-tts[runtime]")
+        logger.error("librosa is required. Install with: pip install Aqua-TTS[runtime]")
     elif "peft" in _missing:
-        logger.error("peft is required. Install with: pip install spectralis-tts[runtime]")
+        logger.error("peft is required. Install with: pip install Aqua-TTS[runtime]")
     elif "GPT_SoVITS" in _missing:
         logger.error(
             "GPT-SoVITS not found. Set GPT_SOVITS_HOME to your GPT-SoVITS repo root."
@@ -198,7 +193,9 @@ class TTSInferencer:
             logger.info(f"⭐️ TTS推理器初始化完成")
 
             # 会话级缓存：按(ref_audio_path, prompt_text, prompt_language_code, model_version, is_half)键控
+            # 最多保留 AQUA_SESSION_CACHE_MAX 个音色条目，超出时 FIFO 淘汰最旧的。
             self._session_cache = {}
+            self._session_cache_max = int(os.environ.get("AQUA_SESSION_CACHE_MAX", "8"))
             self._sovits_decode_lock = threading.Lock()
             # 仅在需要做性能剖析时开启；默认关闭以避免流式首句每块都强制同步 GPU。
             self._stream_sync_timing_enabled = os.environ.get("TTS_STREAM_SYNC_TIMING", "0") == "1"
@@ -456,7 +453,7 @@ class TTSInferencer:
         if "pretrained" not in self.sovits_path:
             try:
                 del self.vq_model.enc_q
-            except:
+            except AttributeError:
                 pass
 
         # 转换模型类型并加载到设备
@@ -467,14 +464,14 @@ class TTSInferencer:
 
         self.vq_model.eval()
 
-        # 检查是否是LoRA模型
-        # 根据后缀或文件大小判断
-        self.if_lora_v3 = False
-        if self.model_version == "v3" and ".pth" in self.sovits_path.lower():
-            file_size = os.path.getsize(self.sovits_path) / (1024 * 1024)  # MB
-            if file_size < 100:  # 假设小于100MB的是LoRA权重
-                self.if_lora_v3 = True
-                logger.info(f"检测到LoRA模型: {self.sovits_path}")
+        # 检查是否是LoRA模型 — 通过 checkpoint key 名称判断，比文件大小可靠。
+        # LoRA checkpoint 含 "lora_rank" 顶层键，或 weight keys 中含 "lora_" 前缀。
+        self.if_lora_v3 = self.model_version == "v3" and (
+            "lora_rank" in dict_s2
+            or any("lora_" in k for k in dict_s2.get("weight", {}))
+        )
+        if self.if_lora_v3:
+            logger.info(f"检测到LoRA模型 (by checkpoint keys): {self.sovits_path}")
 
         # 加载权重
         if not self.if_lora_v3:
@@ -676,6 +673,9 @@ class TTSInferencer:
                 cache_item["prompt_fea_ref"] = prompt_fea_ref
                 cache_item["prompt_ge"] = prompt_ge
 
+            if len(self._session_cache) >= self._session_cache_max:
+                oldest = next(iter(self._session_cache))
+                del self._session_cache[oldest]
             self._session_cache[key] = cache_item
             return cache_item
         except Exception:
@@ -1350,6 +1350,14 @@ class TTSInferencer:
         Yields:
             Generator of (sample_rate, audio_chunk, text_segment) tuples.
             生成器：每次生成 (采样率, 音频数据片段, 文本段落)
+
+            The **first tuple is always (sr, None, "")** — a header yield that signals
+            the sample rate before any audio is ready. Callers must skip it:
+                for sr, chunk, text in tts.infer_stream(...):
+                    if chunk is not None:
+                        ...  # process audio
+            第一个 tuple 固定为 (sr, None, "")，用于在首帧音频就绪前传递采样率。
+            调用方需跳过 chunk 为 None 的条目。
         """
         # Apply generation preset — sets top_k/top_p/temperature/speed/sample_steps
         if preset is not None:

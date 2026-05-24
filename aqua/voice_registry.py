@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Voice registry — name, reference audio, prompt text, and language.
 / 声音注册表 — 名称、参考音频、提示文本和语言。
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple
 
-logger = logging.getLogger("spectralis.voice_registry")
+logger = logging.getLogger("aqua.voice_registry")
 
 
 @dataclass(frozen=True)
@@ -106,15 +106,15 @@ class VoiceRegistry:
 # ── built-in convenience (内置便捷函数) ──────────────────────────────────────────────────
 
 def registry_from_env() -> VoiceRegistry:
-    """Create a VoiceRegistry with path from SPECTRALIS_VOICE_JSON env var.
-    / 从 SPECTRALIS_VOICE_JSON 环境变量获取路径并创建 VoiceRegistry。
+    """Create a VoiceRegistry with path from AQUA_VOICE_JSON env var.
+    / 从 AQUA_VOICE_JSON 环境变量获取路径并创建 VoiceRegistry。
 
     Falls back to ``./voices.json`` relative to the process CWD if the env
     var is not set.  The file is NOT created until the first ``add()`` call.
     / 如果未设置环境变量，则回退到相对于进程当前工作目录的 ``./voices.json``。
     文件在第一次调用 ``add()`` 之前不会被创建。
     """
-    path = os.environ.get("SPECTRALIS_VOICE_JSON")
+    path = os.environ.get("AQUA_VOICE_JSON")
     if not path:
         path = os.path.join(os.getcwd(), "voices.json")
     return VoiceRegistry(json_path=str(Path(path)))

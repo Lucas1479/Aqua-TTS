@@ -1,7 +1,7 @@
-import numpy as np
+﻿import numpy as np
 import pytest
 
-from spectralis.inference.streaming import apply_fade_in, apply_fade_out, finalize_stream_chunk
+from aqua.inference.streaming import apply_fade_in, apply_fade_out, finalize_stream_chunk
 
 
 class TestFadeIn:

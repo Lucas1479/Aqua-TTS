@@ -1,7 +1,7 @@
-import os
+﻿import os
 import pytest
 
-from spectralis.bigvgan.cuda.load import _sanitize_cache_token
+from aqua.bigvgan.cuda.load import _sanitize_cache_token
 
 
 class TestSanitizeCacheToken:
@@ -25,7 +25,7 @@ class TestSanitizeCacheToken:
 class TestGetGpuCacheSuffix:
     def test_env_override(self):
         torch = pytest.importorskip("torch")
-        from spectralis.bigvgan.cuda.load import _get_gpu_cache_suffix
+        from aqua.bigvgan.cuda.load import _get_gpu_cache_suffix
 
         os.environ["BIGVGAN_CACHE_ID"] = "my_custom_cache"
         result = _get_gpu_cache_suffix(0)

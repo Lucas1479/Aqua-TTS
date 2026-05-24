@@ -1,4 +1,4 @@
-# Spectralis-TTS — development & test dependencies
+﻿# Aqua-TTS — development & test dependencies
 
 pytest>=7.0
 pytest-cov>=4.0

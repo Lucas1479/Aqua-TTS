@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Tests for generation and CUDA Graph presets."""
 
 import pytest
-from spectralis.inference.presets import (
+from aqua.inference.presets import (
     GENERATION_PRESETS,
     CUDA_GRAPH_PRESETS,
     apply_preset,

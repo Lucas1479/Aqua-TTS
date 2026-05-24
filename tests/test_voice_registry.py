@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Tests for VoiceRegistry and Voice dataclass."""
 
 import json
@@ -6,7 +6,7 @@ import os
 import tempfile
 
 import pytest
-from spectralis.voice_registry import Voice, VoiceRegistry, registry_from_env
+from aqua.voice_registry import Voice, VoiceRegistry, registry_from_env
 
 
 class TestVoice:
@@ -150,7 +150,7 @@ class TestRegistryFromEnv:
         try:
             reg = VoiceRegistry(json_path=path)
             reg.add(Voice(name="env_voice", ref_audio_path="/e.wav"))
-            monkeypatch.setenv("SPECTRALIS_VOICE_JSON", path)
+            monkeypatch.setenv("AQUA_VOICE_JSON", path)
 
             reg2 = registry_from_env()
             v = reg2.get("env_voice")
@@ -160,6 +160,6 @@ class TestRegistryFromEnv:
             os.unlink(path)
 
     def test_no_env_falls_back_to_cwd(self, monkeypatch):
-        monkeypatch.delenv("SPECTRALIS_VOICE_JSON", raising=False)
+        monkeypatch.delenv("AQUA_VOICE_JSON", raising=False)
         reg = registry_from_env()
         assert len(reg) == 0

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """T2S (Text-to-Semantic) speed benchmark.
 
 Measures AR decoder throughput in iterations/second with optional CUDA Graph.
@@ -19,7 +19,7 @@ MAIN_REPO = os.environ.get("GPT_SOVITS_HOME")
 if not MAIN_REPO:
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
-sys.path.insert(0, os.path.join(ROOT, "spectralis", "_vendor"))
+sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, MAIN_REPO)
 sys.path.insert(0, MAIN_GPT_SOVITS)
@@ -56,7 +56,7 @@ def main():
     model.load_state_dict(dict_s1["weight"])
     model = model.half().cuda().eval()
 
-    from spectralis.modeling import apply_cuda_graph_patch
+    from aqua.modeling import apply_cuda_graph_patch
     apply_cuda_graph_patch(model.model)
 
     if not args.bench_official:

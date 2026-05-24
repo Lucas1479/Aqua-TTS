@@ -1,4 +1,4 @@
-"""
+﻿"""
 Static KV Cache and CUDA Graph acceleration for GPT-SoVITS T2S AR decoder.
 
 Key optimizations:
@@ -765,7 +765,7 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
 
     This is the main entry point. Call it once after loading the T2S model::
 
-        from spectralis.modeling import apply_cuda_graph_patch
+        from aqua.modeling import apply_cuda_graph_patch
         apply_cuda_graph_patch(t2s_model.model)
 
     Args:
@@ -862,9 +862,9 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
 
     # --- Pre-capture all buckets if CUDA Graph is enabled ---
     if decoder.cuda_graph_enabled:
-        print(f"Spectralis: static KV cache + CUDA Graph patch applied. "
+        print(f"Aqua: static KV cache + CUDA Graph patch applied. "
               f"Buckets: {buckets}")
     else:
-        print(f"Spectralis: static KV cache patch applied (CUDA Graph disabled).")
+        print(f"Aqua: static KV cache patch applied (CUDA Graph disabled).")
 
     return decoder

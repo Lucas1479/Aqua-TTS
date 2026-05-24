@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Streaming inference example — play audio as it's generated.
 
 Shows real-time streaming playback using PyAudio.
@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Spectralis-TTS streaming inference")
+    parser = argparse.ArgumentParser(description="Aqua-TTS streaming inference")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
     parser.add_argument("--ref-audio", required=True)
@@ -43,7 +43,7 @@ def main():
         os.environ["ENABLE_CUDA_GRAPH"] = "0"
 
     import pyaudio
-    from spectralis import TTSInferencer
+    from aqua import TTSInferencer
 
     print("Loading TTS pipeline...")
     tts = TTSInferencer(

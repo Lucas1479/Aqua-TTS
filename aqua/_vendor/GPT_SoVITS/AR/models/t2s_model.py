@@ -1,4 +1,4 @@
-# modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/t2s_model.py
+﻿# modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/t2s_model.py
 # reference: https://github.com/lifeiteng/vall-e
 import logging
 import math
@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 import torch
 from tqdm import tqdm
 
-_logger = logging.getLogger("spectralis.t2s")
+_logger = logging.getLogger("aqua.t2s")
 
 from AR.models.utils import make_pad_mask, make_pad_mask_left
 from AR.models.utils import (

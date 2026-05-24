@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-"""T2S throughput comparison: Official vs Official CUDA Graph vs Spectralis.
+﻿# -*- coding: utf-8 -*-
+"""T2S throughput comparison: Official vs Official CUDA Graph vs aqua.
 
 Each variant runs in its own subprocess to avoid import conflicts.
 
@@ -171,8 +171,8 @@ print(f"RESULT: median={{med:.0f}}", flush=True)
     return _run_script(script, timeout)
 
 
-def _run_spectralis(gpt_model: str, timeout: int = 300) -> dict:
-    """Benchmark Spectralis-vendored model (static KV + pre-captured CUDA Graph)."""
+def _run_Aqua(gpt_model: str, timeout: int = 300) -> dict:
+    """Benchmark Aqua-vendored model (static KV + pre-captured CUDA Graph)."""
     script = textwrap.dedent(f"""\
 import os, statistics, sys, time
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -184,7 +184,7 @@ ROOT = {ROOT!r}
 MAIN_REPO = {MAIN_REPO!r}
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 # Vendored overrides must come BEFORE main GPT_SoVITS for t2s_model.py override
-sys.path.insert(0, os.path.join(ROOT, "spectralis", "_vendor"))
+sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, MAIN_REPO)
 sys.path.insert(0, MAIN_GPT_SOVITS)
@@ -208,14 +208,14 @@ _tqdm.tqdm = _NoopTqdm
 import torch
 from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
 
-print("[spectralis] Loading...", flush=True)
+print("[Aqua] Loading...", flush=True)
 d = torch.load({gpt_model!r}, map_location="cpu")
 cfg = d["config"]
 m = Text2SemanticLightningModule(cfg, "****", is_train=False)
 m.load_state_dict(d["weight"])
 m = m.half().cuda().eval()
 
-from spectralis.modeling import apply_cuda_graph_patch
+from aqua.modeling import apply_cuda_graph_patch
 apply_cuda_graph_patch(m.model)
 m.model.precapture_cuda_graph()
 
@@ -224,11 +224,11 @@ xl = torch.tensor([20]).long().cuda()
 p = torch.randint(0, cfg["model"]["vocab_size"], (1, 3)).long().cuda()
 b = torch.randn(1, 1024, 20).half().cuda()
 
-print("[spectralis] Warmup...", flush=True)
+print("[Aqua] Warmup...", flush=True)
 for _ in range(3):
     m.model.infer_panel_naive(x, xl, p, b, top_k=5, top_p=1, temperature=0.6)
 
-print(f"[spectralis] {REPEATS} trials...", flush=True)
+print(f"[Aqua] {REPEATS} trials...", flush=True)
 rates = []
 for trial in range({REPEATS}):
     torch.cuda.synchronize()
@@ -283,7 +283,7 @@ def main():
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--skip-official", action="store_true")
     parser.add_argument("--skip-official-cudagraph", action="store_true")
-    parser.add_argument("--skip-spectralis", action="store_true")
+    parser.add_argument("--skip-Aqua", action="store_true")
     args = parser.parse_args()
 
     if not os.path.exists(args.gpt_model):
@@ -306,9 +306,9 @@ def main():
         print(f"\n--- Official CUDA Graph (static KV, lazy capture) ---")
         results["Official (CUDA Graph)"] = _run_official_cudagraph(args.gpt_model)
 
-    if not args.skip_spectralis:
-        print(f"\n--- Spectralis (static KV, pre-captured CUDA Graph) ---")
-        results["Spectralis"] = _run_spectralis(args.gpt_model)
+    if not args.skip_Aqua:
+        print(f"\n--- Aqua (static KV, pre-captured CUDA Graph) ---")
+        results["Aqua"] = _run_Aqua(args.gpt_model)
 
     print(f"\n{'='*70}")
     print(f"  Summary")

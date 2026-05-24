@@ -1,4 +1,4 @@
-# Spectralis-TTS — minimal runtime dependencies
+﻿# Aqua-TTS — minimal runtime dependencies
 # Install PyTorch separately for your CUDA version: https://pytorch.org/get-started/locally/
 
 torch>=2.0

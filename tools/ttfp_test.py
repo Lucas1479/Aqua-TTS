@@ -1,4 +1,4 @@
-"""Benchmark first-sentence TTS latency across early-cut and BigVGAN kernel modes.
+﻿"""Benchmark first-sentence TTS latency across early-cut and BigVGAN kernel modes.
 
 This script focuses on the current non-chunked first-sentence path:
 - `chunk_size_seconds=None`
@@ -192,7 +192,7 @@ def _run_worker_mode(kernel_mode: str, cut_chars: int, repeats: int) -> None:
     os.environ.setdefault("PYTHONUTF8", "1")
 
     from config.settings import TTS_GPT_MODEL_PATH, TTS_SOVITS_MODEL_PATH
-    from spectralis import TTSInferencer
+    from aqua import TTSInferencer
 
     print(
         f"[worker] loading models | kernel={kernel_mode} | "

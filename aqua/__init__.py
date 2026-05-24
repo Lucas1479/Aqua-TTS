@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-"""Spectralis-TTS: GPU-optimized runtime for GPT-SoVITS v3. / Spectralis-TTS：针对 GPT-SoVITS v3 的 GPU 优化运行时。"""
+﻿# -*- coding: utf-8 -*-
+"""Aqua-TTS: GPU-optimized runtime for GPT-SoVITS v3. / Aqua-TTS：针对 GPT-SoVITS v3 的 GPU 优化运行时。"""
 
 import os
 import sys
@@ -41,11 +41,11 @@ if _VENDOR_DIR not in sys.path:
     sys.path.insert(0, _VENDOR_DIR)
 
 # ── Public API (公共 API) ───────────────────────────────────────────────────────────
-# TTSInferencer is imported lazily — import spectralis does not trigger
-# the full GPT-SoVITS import chain. Use `from spectralis import TTSInferencer`
-# or `from spectralis.inferencer import TTSInferencer` to load it.
-# TTSInferencer 采用延迟导入 — import spectralis 不会触发完整的 GPT-SoVITS 导入链。
-# 使用 `from spectralis import TTSInferencer` 或 `from spectralis.inferencer import TTSInferencer` 来加载它。
+# TTSInferencer is imported lazily — import aqua does not trigger
+# the full GPT-SoVITS import chain. Use `from aqua import TTSInferencer`
+# or `from aqua.inferencer import TTSInferencer` to load it.
+# TTSInferencer 采用延迟导入 — import aqua 不会触发完整的 GPT-SoVITS 导入链。
+# 使用 `from aqua import TTSInferencer` 或 `from aqua.inferencer import TTSInferencer` 来加载它。
 
 __all__ = [
     "__version__",
@@ -61,15 +61,15 @@ __all__ = [
 ]
 
 _LAZY_ATTRS = {
-    "TTSInferencer": ("spectralis.inferencer", "TTSInferencer"),
-    "VoiceRegistry": ("spectralis.voice_registry", "VoiceRegistry"),
-    "Voice": ("spectralis.voice_registry", "Voice"),
-    "registry_from_env": ("spectralis.voice_registry", "registry_from_env"),
-    "apply_preset": ("spectralis.inference.presets", "apply_preset"),
-    "list_presets": ("spectralis.inference.presets", "list_presets"),
-    "apply_cuda_graph_preset": ("spectralis.inference.presets", "apply_cuda_graph_preset"),
-    "list_cuda_graph_presets": ("spectralis.inference.presets", "list_cuda_graph_presets"),
-    "start_server": ("spectralis.server", "start_server"),
+    "TTSInferencer": ("aqua.inferencer", "TTSInferencer"),
+    "VoiceRegistry": ("aqua.voice_registry", "VoiceRegistry"),
+    "Voice": ("aqua.voice_registry", "Voice"),
+    "registry_from_env": ("aqua.voice_registry", "registry_from_env"),
+    "apply_preset": ("aqua.inference.presets", "apply_preset"),
+    "list_presets": ("aqua.inference.presets", "list_presets"),
+    "apply_cuda_graph_preset": ("aqua.inference.presets", "apply_cuda_graph_preset"),
+    "list_cuda_graph_presets": ("aqua.inference.presets", "list_cuda_graph_presets"),
+    "start_server": ("aqua.server", "start_server"),
 }
 
 

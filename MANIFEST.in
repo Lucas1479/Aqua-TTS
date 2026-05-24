@@ -1,11 +1,11 @@
-include LICENSE
+﻿include LICENSE
 include NOTICE
 include README.md
 include TECHNICAL.md
 
-recursive-include spectralis/_vendor *.cpp *.cu *.h
-recursive-include spectralis/bigvgan/cuda *.cpp *.cu *.h
-recursive-include spectralis/bigvgan/torch *.py
+recursive-include Aqua/_vendor *.cpp *.cu *.h
+recursive-include Aqua/bigvgan/cuda *.cpp *.cu *.h
+recursive-include Aqua/bigvgan/torch *.py
 
 prune benchmarks
 prune tools

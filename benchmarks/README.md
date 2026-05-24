@@ -1,6 +1,6 @@
-# Spectralis Benchmark Suite
+﻿# Aqua Benchmark Suite
 
-Fair comparison of Spectralis vs official GPT-SoVITS inference performance.
+Fair comparison of Aqua vs official GPT-SoVITS inference performance.
 
 ## Prerequisites
 
@@ -23,28 +23,28 @@ pip install -r requirements.txt
 ### T2S throughput comparison
 
 ```bash
-# Run all three variants (official, official CUDA Graph, Spectralis)
+# Run all three variants (official, official CUDA Graph, Aqua)
 python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
 ```
 
-### Spectralis — All optimizations
+### Aqua — All optimizations
 
 ```bash
-python benchmarks/spectralis_ttfp.py \
+python benchmarks/AQUA_ttfp.py \
     --gpt-model GPT_weights_v3/xxx-e15.ckpt \
     --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
     --ref-audio "reference audio/ref_audio.wav" \
     --ref-text "reference transcript"
 ```
 
-### Spectralis — Ablation (disable optimizations)
+### Aqua — Ablation (disable optimizations)
 
 ```bash
 # No CUDA Graph, no BigVGAN kernel
-python benchmarks/spectralis_ttfp.py ... --no-cuda-graph --no-bigvgan-kernel
+python benchmarks/AQUA_ttfp.py ... --no-cuda-graph --no-bigvgan-kernel
 
 # All off (equivalent to official path)
-python benchmarks/spectralis_ttfp.py ... --no-cuda-graph --no-static-kv --no-bigvgan-kernel
+python benchmarks/AQUA_ttfp.py ... --no-cuda-graph --no-static-kv --no-bigvgan-kernel
 ```
 
 ### T2S throughput (single variant)
@@ -83,7 +83,7 @@ T2S throughput measures the **raw AR decoder speed** in tokens per second. The b
 1. **Warmup**: 3 calls to `infer_panel_naive()` before timing.
 2. **Repeats**: 5, **median** reported.
 3. **Timing**: `torch.cuda.synchronize()` before AND after `infer_panel_naive()` — measures GPU execution only.
-4. **Comparison**: All three variants (official `torch.cat` KV, official CUDA Graph, Spectralis) tested in isolated subprocesses to avoid `sys.modules` contamination. Same GPT checkpoint, same input shapes.
+4. **Comparison**: All three variants (official `torch.cat` KV, official CUDA Graph, Aqua) tested in isolated subprocesses to avoid `sys.modules` contamination. Same GPT checkpoint, same input shapes.
 5. **Official CUDA Graph note**: The official `t2s_model_cudagraph.py` calls `torch.cuda.empty_cache()` every 100 steps and at end-of-sequence, which impacts its measured throughput.
 
 ### BigVGAN Raw
@@ -128,7 +128,7 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 
 ## Results (RTX 4070 Ti SUPER, float16)
 
-| Metric | Official (no Graph) | Official (CUDA Graph) | Spectralis |
+| Metric | Official (no Graph) | Official (CUDA Graph) | Aqua |
 |--------|---------------------|-----------------------|------------|
 | T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
 | TTFP Short | 1061ms | 1016ms | **456ms** |
@@ -141,4 +141,4 @@ Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper
 | `empty_cache` | No | Every 100 steps | **Never in hot path** |
 | V3 streaming | Batch only | Batch only | **True streaming** |
 
-*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/spectralis_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported).*
+*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/AQUA_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported).*

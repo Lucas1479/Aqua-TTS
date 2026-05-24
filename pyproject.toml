@@ -1,9 +1,9 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spectralis-tts"
+name = "aqua-tts"
 version = "1.0.0"
 description = "GPU-optimized inference wrapper for GPT-SoVITS with static KV cache and CUDA Graph acceleration"
 readme = "README.md"
@@ -41,19 +41,19 @@ runtime = [
     "peft>=0.7",
 ]
 server = [
-    "spectralis-tts[runtime]",
+    "aqua-tts[runtime]",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",
 ]
 
 [project.urls]
-Homepage = "https://github.com/SiqiLiOcean/spectralis-tts"
-Repository = "https://github.com/SiqiLiOcean/spectralis-tts"
+Homepage = "https://github.com/Lucas1479/Aqua-TTS"
+Repository = "https://github.com/Lucas1479/Aqua-TTS"
 
 [tool.setuptools.packages.find]
-include = ["spectralis*"]
+include = ["aqua*"]
 
 [tool.setuptools.package-data]
-"spectralis._vendor" = ["**/*"]
-"spectralis.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
-"spectralis.bigvgan.torch" = ["*.py"]
+"aqua._vendor" = ["**/*"]
+"aqua.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
+"aqua.bigvgan.torch" = ["*.py"]

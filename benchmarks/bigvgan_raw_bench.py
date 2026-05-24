@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Standalone BigVGAN kernel timing — no wrapper, no empty_cache, proper warmup.
 
 Loads BigVGAN directly (bypasses TTSInferencer) to avoid warmup path pollution.
@@ -6,7 +6,7 @@ Loads BigVGAN directly (bypasses TTSInferencer) to avoid warmup path pollution.
 Usage:
     python benchmarks/bigvgan_raw_bench.py
 
-Uses the same BigVGAN loading logic as spectralis.inferencer._load_bigvgan_model().
+Uses the same BigVGAN loading logic as aqua.inferencer._load_bigvgan_model().
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ if not MAIN_REPO:
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 
-sys.path.insert(0, os.path.join(ROOT, "spectralis", "_vendor"))
+sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, MAIN_GPT_SOVITS)
 sys.path.insert(0, MAIN_REPO)
@@ -35,7 +35,7 @@ MEASURE = 20
 
 
 def load_bigvgan():
-    """Load BigVGAN model exactly as spectralis.inferencer._load_bigvgan_model() does."""
+    """Load BigVGAN model exactly as aqua.inferencer._load_bigvgan_model() does."""
     import pathlib
 
     bigvgan_path = os.path.join(
@@ -52,7 +52,7 @@ def load_bigvgan():
 
     cuda_pyd = (
         pathlib.Path(ROOT)
-        / "spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
+        / "Aqua/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
         / f"build_{cache_suffix}"
         / "anti_alias_activation_cuda.pyd"
     )
