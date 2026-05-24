@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check spectralis/ tests/
+      - run: ruff check aqua/ tests/
 
   test:
     runs-on: ubuntu-latest
@@ -29,4 +29,4 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[server]"
       - run: pip install pytest pytest-cov
-      - run: python -m pytest tests/ -v --cov=spectralis --cov-report=term
+      - run: python -m pytest tests/ -v --cov=aqua --cov-report=term
