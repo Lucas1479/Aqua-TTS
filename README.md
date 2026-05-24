@@ -22,18 +22,18 @@ Spectralis-TTS is a **GPU-optimized runtime service layer** for [GPT-SoVITS](htt
 
 ## Highlights
 
-| | GPT-SoVITS (official) | Spectralis-TTS |
-|---|---|---|
-| T2S throughput | ~80-90 it/s | **440-470 it/s** |
-| TTFP (short, 3 chars) | 1061ms | **456ms** |
-| TTFP (medium, 19 chars) | 1599ms | **484ms** |
-| TTFP (long, 64 chars) | 3598ms | **499ms** |
-| KV cache | Dynamic `torch.cat` | **Static `scatter_` buffer** |
-| CUDA Graph | Single lazy graph | **13 pre-captured graphs, 6 buckets** |
-| BigVGAN vocoder | PyTorch JIT | **Pre-compiled CUDA kernel** |
-| GPU memory safety | OOM on long texts | **Bounded static buffers** |
+| | GPT-SoVITS (official) | + CUDA Graph | Spectralis-TTS |
+|---|---|---|---|
+| T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
+| TTFP (short, 3 chars) | 1061ms | 1016ms | **456ms** |
+| TTFP (medium, 19 chars) | 1599ms | 1476ms | **484ms** |
+| TTFP (long, 64 chars) | 3598ms | 2852ms | **499ms** |
+| KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_` buffer** |
+| CUDA Graph | None | Single lazy graph | **13 pre-captured graphs, 6 buckets** |
+| BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
+| GPU memory safety | OOM on long texts | OOM on long texts | **Bounded static buffers** |
 
-*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights. See [benchmarks/README.md](benchmarks/README.md) for full comparison methodology.*
+*Measured on NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), float16, same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported). See [benchmarks/README.md](benchmarks/README.md) for full methodology and ablation results.*
 
 ## Features
 
@@ -346,18 +346,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELO
 
 ## 亮点
 
-| | GPT-SoVITS（官方） | Spectralis-TTS |
-|---|---|---|
-| T2S 吞吐量 | ~80-90 it/s | **440-470 it/s** |
-| TTFP（短，3 字符） | 1061ms | **456ms** |
-| TTFP（中，19 字符） | 1599ms | **484ms** |
-| TTFP（长，64 字符） | 3598ms | **499ms** |
-| KV 缓存 | 动态 `torch.cat` | **静态 `scatter_` 缓冲区** |
-| CUDA Graph | 单个延迟图 | **13 个预捕获图，6 个分段** |
-| BigVGAN 声码器 | PyTorch JIT | **预编译 CUDA 内核** |
-| GPU 内存安全 | 长文本时 OOM | **有界静态缓冲区** |
+| | GPT-SoVITS（官方） | + CUDA Graph | Spectralis-TTS |
+|---|---|---|---|
+| T2S 吞吐量 | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
+| TTFP（短，3 字符） | 1061ms | 1016ms | **456ms** |
+| TTFP（中，19 字符） | 1599ms | 1476ms | **484ms** |
+| TTFP（长，64 字符） | 3598ms | 2852ms | **499ms** |
+| KV 缓存 | 动态 `torch.cat` | 静态 `scatter_` | **静态 `scatter_` 缓冲区** |
+| CUDA Graph | 无 | 单个延迟图 | **13 个预捕获图，6 个分段** |
+| BigVGAN 声码器 | PyTorch JIT | PyTorch JIT | **预编译 CUDA 内核** |
+| GPU 内存安全 | 长文本时 OOM | 长文本时 OOM | **有界静态缓冲区** |
 
-*在 NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、float16、相同模型权重下测量。完整对比方法论见 [benchmarks/README.md](benchmarks/README.md)。*
+*在 NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、float16、相同模型权重（xxx-e15.ckpt + xxx_e2_s174_l32.pth）下测量。T2S 以 500 token 为目标测量；TTFP 在 3 个测试文本上各 5 次重复取中位数。完整方法和消融结果见 [benchmarks/README.md](benchmarks/README.md)。*
 
 ## 特性
 
