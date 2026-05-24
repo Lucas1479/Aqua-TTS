@@ -4,7 +4,7 @@
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Real-Time Inference Runtime on GPU</h1>
 
-<p>Built for real-time voice conversation with your LoRA characters</p>
+<p>Built for low-latency voice conversation with your LoRA characters</p>
 
 <p>
   <a href="README.zh.md">中文</a> | English
