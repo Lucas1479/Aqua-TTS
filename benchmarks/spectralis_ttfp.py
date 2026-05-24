@@ -8,7 +8,7 @@ Usage:
     python benchmarks/spectralis_ttfp.py \
         --gpt-model GPT_weights_v3/xxx-e15.ckpt \
         --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
-        --ref-audio "reference audio/kurisu_reference2.wav" \
+        --ref-audio "reference audio/ref_audio.wav" \
         --ref-text "your reference transcript"
 """
 from __future__ import annotations
@@ -20,7 +20,10 @@ os.environ.setdefault("PYTHONUTF8", "1")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "GPT_SoVITS"))
+
+_MAIN_REPO_FALLBACK = r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401"
+if not os.environ.get("GPT_SOVITS_HOME"):
+    os.environ["GPT_SOVITS_HOME"] = _MAIN_REPO_FALLBACK
 
 import torch
 
@@ -55,7 +58,7 @@ def main():
 
     os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] = "1" if not args.no_cuda_graph else "0"
 
-    from local_tts_infer import TTSInferencer
+    from spectralis import TTSInferencer
 
     print(f"\n{'='*80}")
     print(f"  Spectralis TTFP Benchmark")
@@ -124,7 +127,6 @@ def main():
     for label, text in BENCH_TEXTS:
         ttfp_vals, total_vals = [], []
         for rep in range(REPEATS):
-            torch.cuda.empty_cache()
             r = _measure(text)
             ttfp_vals.append(r["first_chunk_ms"])
             total_vals.append(r["total_ms"])

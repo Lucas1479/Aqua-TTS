@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import time
@@ -19,7 +20,7 @@ try:
     from config.settings import TTS_REF_TEXT_EN as _TTS_REF_TEXT_EN
 except ImportError:
     _TTS_OUTPUT_LANGUAGE = "日文"
-    _TTS_REF_TEXT_JA = "そうやって全部私に頼るのね……まったく"
+    _TTS_REF_TEXT_JA = "こんにちは。今日はいい天気ですね。"
     _TTS_REF_TEXT_EN = ""
 
 def _default_lang_code() -> str:
@@ -30,17 +31,20 @@ def _default_ref_free_prompt() -> str:
     """v3 ref_free 兜底 prompt 文本。"""
     if _TTS_OUTPUT_LANGUAGE == "英文":
         return _TTS_REF_TEXT_EN or "I see, let me think about that."
-    return _TTS_REF_TEXT_JA or "そうやって全部私に頼るのね……まったく"
+    return _TTS_REF_TEXT_JA or "こんにちは。今日はいい天気ですね。"
 
 
 # 设置日志记录
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('tts_inference')
 
-# 获取当前项目根目录
-root_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, root_dir)
-sys.path.insert(0, os.path.join(root_dir, "GPT_SoVITS"))
+# Package directory for vendored-file references.
+# sys.path is configured by spectralis/__init__.py before this module loads.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _gpt_sovits_home() -> str:
+    """Return the main GPT-SoVITS repo root, or '' if not configured."""
+    return os.environ.get('GPT_SOVITS_HOME', '')
 
 
 # 导入必要的模块
@@ -98,7 +102,7 @@ class TTSInferencer:
         """
         try:
             # 确定模型路径
-            base_dir = root_dir
+            base_dir = _gpt_sovits_home() or _PACKAGE_DIR
             self.device = device
             device_name = str(device).lower()
             self.is_half = torch.cuda.is_available() and device_name.startswith("cuda")
@@ -275,6 +279,32 @@ class TTSInferencer:
 
         self._maybe_precapture_t2s_graph()
 
+    def _warmup_bigvgan_shapes(self):
+        """Warm BigVGAN + cuDNN for common streaming chunk mel_T sizes.
+
+        Without this, the first real inference pays cuDNN autotune cost
+        (~30-60ms per new shape).  A few warmup forward passes at common
+        chunk sizes (mel_T ≈ 40, 70, 128) settle the autotune cache so that
+        the first real stream chunk hits a warm kernel.
+        """
+        if self.bigvgan_model is None or str(self.device) == "cpu":
+            return
+        try:
+            model = self.bigvgan_model
+            dtype = next(model.parameters()).dtype
+            device = next(model.parameters()).device
+            num_mels = model.h.num_mels
+            warmup_sizes = [40, 70, 128]
+            logger.info(f"[warmup] BigVGAN shape warmup: mel_T={warmup_sizes}")
+            for mel_t in warmup_sizes:
+                mel = torch.randn(1, num_mels, mel_t, device=device, dtype=dtype)
+                for _ in range(5):
+                    _ = model(mel)
+                torch.cuda.synchronize()
+            logger.info("[warmup] BigVGAN shape warmup complete")
+        except Exception:
+            pass  # warmup is best-effort; never block startup
+
     def _maybe_precapture_t2s_graph(self):
         """根据环境变量可选地预捕获 T2S 阶段的 CUDA Graph"""
         try:
@@ -302,6 +332,8 @@ class TTSInferencer:
                     except ValueError:
                         logger.warning(f"⚠️ 跳过非法桶配置: {token}")
             available_buckets = list(getattr(decoder, "kv_cache_buckets", []) or [])
+            logger.info(f"[precapture] decoder.kv_cache_buckets={available_buckets} "
+                        f"use_static_kv={getattr(decoder, 'use_static_kv_cache', 'N/A')}")
             if not available_buckets:
                 # 没有定义桶就直接返回
                 return
@@ -317,15 +349,20 @@ class TTSInferencer:
             else:
                 buckets = [b for b in buckets if b in available_buckets]
 
+            logger.info(f"[precapture] env_buckets={bucket_env!r} parsed_buckets={buckets} "
+                        f"preferred={preferred_buckets} available={available_buckets}")
+
             merged_buckets = []
             for bucket in preferred_buckets + buckets:
                 if bucket not in merged_buckets:
                     merged_buckets.append(bucket)
             buckets = merged_buckets
 
-            logger.info(f"🚀 触发 CUDA Graph 预捕获，目标桶: {buckets}")
+            logger.info(f"[precapture] starting — target_buckets={buckets}")
             results = decoder.precapture_cuda_graph(buckets)
-            logger.info(f"📸 预捕获结果: {results}")
+            total_graphs = len(decoder.bucket_graphs)
+            logger.info(f"[precapture] done — buckets_ok={results} total_graphs={total_graphs} "
+                        f"keys={sorted(decoder.bucket_graphs.keys())}")
         except Exception as exc:
             logger.warning(f"⚠️ CUDA Graph 预捕获失败: {exc}")
 
@@ -427,7 +464,7 @@ class TTSInferencer:
         try:
 
 
-            bigvgan_path = os.path.join(root_dir, "GPT_SoVITS", "pretrained_models",
+            bigvgan_path = os.path.join(_gpt_sovits_home(), "GPT_SoVITS", "pretrained_models",
                                         "models--nvidia--bigvgan_v2_24khz_100band_256x")
             logger.info(f"加载BigVGAN模型: {bigvgan_path}")
 
@@ -453,8 +490,8 @@ class TTSInferencer:
             else:
                 _cache_suffix = f"device{_tts_device_idx}"
             _cuda_pyd = (
-                _pathlib.Path(__file__).parent
-                / "GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
+                _pathlib.Path(_PACKAGE_DIR)
+                / "_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
                 / f"build_{_cache_suffix}"
                 / "anti_alias_activation_cuda.pyd"
             )
@@ -501,6 +538,8 @@ class TTSInferencer:
                 self.bigvgan_model = self.bigvgan_model.half().to(self.device)
             else:
                 self.bigvgan_model = self.bigvgan_model.to(self.device)
+
+            self._warmup_bigvgan_shapes()
         except Exception as e:
             logger.error(f"加载BigVGAN模型失败: {str(e)}")
             logger.error(traceback.format_exc())
@@ -1580,11 +1619,13 @@ class TTSInferencer:
                                 cfm_resss.append(cfm_res)
 
                         if not stream_v3_chunks:
-                            # ????
                             cmf_res = torch.cat(cfm_resss, 2)
                             cmf_res = denorm_spec(cmf_res)
 
-                            # BigVGAN????
+                            # Drain prior async CFM work before timing BigVGAN,
+                            # otherwise the synchronize below would count CFM+BigVGAN together.
+                            if str(self.device) != "cpu":
+                                torch.cuda.synchronize()
                             _t1 = time.perf_counter()
                             with torch.cuda.device(self._tts_device_idx):
                                 with torch.inference_mode():
@@ -1592,10 +1633,10 @@ class TTSInferencer:
                                     audio = wav_gen[0][0]
                             if str(self.device) != "cpu":
                                 torch.cuda.synchronize()
+                            _bigvgan_ms = (time.perf_counter() - _t1) * 1000.0
+                            _cfm_ms = _t_cfm_total * 1000.0 if self._stream_sync_timing_enabled else 0.0
                             print("[sovits-timing] cfm=%.1fms  bigvgan=%.1fms  mel_T=%s" % (
-                                _t_cfm_total * 1000.0,
-                                (time.perf_counter() - _t1) * 1000.0,
-                                cmf_res.shape[2],
+                                _cfm_ms, _bigvgan_ms, cmf_res.shape[2],
                             ))
 
                             # ????

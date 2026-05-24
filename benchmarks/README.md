@@ -20,13 +20,20 @@ pip install -r requirements.txt
 
 ## Benchmarks
 
+### T2S throughput comparison
+
+```bash
+# Run all three variants (official, official CUDA Graph, Spectralis)
+python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
+```
+
 ### Spectralis — All optimizations
 
 ```bash
 python benchmarks/spectralis_ttfp.py \
     --gpt-model GPT_weights_v3/xxx-e15.ckpt \
     --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
-    --ref-audio "reference audio/kurisu_reference2.wav" \
+    --ref-audio "reference audio/ref_audio.wav" \
     --ref-text "reference transcript"
 ```
 
@@ -40,44 +47,98 @@ python benchmarks/spectralis_ttfp.py ... --no-cuda-graph --no-bigvgan-kernel
 python benchmarks/spectralis_ttfp.py ... --no-cuda-graph --no-static-kv --no-bigvgan-kernel
 ```
 
-### T2S throughput
+### T2S throughput (single variant)
 
 ```bash
 python benchmarks/t2s_speed_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
 ```
 
-## Fair Comparison Principles
+### BigVGAN raw kernel timing
 
-1. **Same weights**: Use identical GPT + SoVITS weights for official and Spectralis
-2. **Same GPU**: All tests on same device
-3. **Same texts**: Three benchmark texts (short/medium/long)
-4. **Multiple runs**: 5 repeats, median reported
-5. **Warmup**: 2 warmup runs before timing
+```bash
+python benchmarks/bigvgan_raw_bench.py
+```
+
+## Methodology
+
+### TTFP (Time-To-First-Packet)
+
+TTFP measures **text-ready to first-audio-chunk latency** — the wall-clock time from calling `infer_stream(text=...)` to the first non-empty `(sr, chunk, text)` yield. This is the latency a user experiences before hearing the first sound.
+
+**Measurement protocol:**
+
+1. **Warmup**: 2 texts (`"これはテストです。"`, `"何の実験だか気になるけど、まあいいわ。"`) run before any measurement. This primes CUDA Graph buckets, cuDNN autotuning, and GPU allocator state.
+2. **Repeats**: 5 per benchmark text, **median** reported (not mean — resistant to outlier cold starts).
+3. **Timing**: `time.perf_counter()` around `infer_stream()` loop. `torch.cuda.synchronize()` is NOT called inside the timing window — TTFP measures wall-clock latency as experienced by the user.
+4. **No `empty_cache`**: `torch.cuda.empty_cache()` is never called in the hot path (was found to add ~500ms of GPU page-fault latency).
+5. **Streaming mode**: `how_to_cut="不切"` (no cut), `speed=1.1`, `sample_steps=4`, `top_k=5`, `top_p=1`, `temperature=0.6`.
+6. **First chunk only**: The measurement stops at the first chunk (TTFP is not total duration).
+
+### T2S Throughput
+
+T2S throughput measures the **raw AR decoder speed** in tokens per second. The benchmark calls `infer_panel_naive()` with random input tensors and measures wall-clock time per decode step.
+
+**Measurement protocol:**
+
+1. **Warmup**: 3 calls to `infer_panel_naive()` before timing.
+2. **Repeats**: 5, **median** reported.
+3. **Timing**: `torch.cuda.synchronize()` before AND after `infer_panel_naive()` — measures GPU execution only.
+4. **Comparison**: All three variants (official `torch.cat` KV, official CUDA Graph, Spectralis) tested in isolated subprocesses to avoid `sys.modules` contamination. Same GPT checkpoint, same input shapes.
+5. **Official CUDA Graph note**: The official `t2s_model_cudagraph.py` calls `torch.cuda.empty_cache()` every 100 steps and at end-of-sequence, which impacts its measured throughput.
+
+### BigVGAN Raw
+
+Measures the **pure BigVGAN forward pass** time — no CFM, no streaming wrapper, no `empty_cache`.
+
+**Measurement protocol:**
+
+1. **Warmup**: 10 forward passes per mel-T size.
+2. **Repeats**: 20, **median** reported.
+3. **Timing**: `torch.cuda.synchronize()` before AND after each forward pass.
+4. **Sizes**: mel_T ∈ {70, 128, 298, 598} — covers typical first-chunk to full-utterance mel sizes.
+5. **Precision**: FP16 (`model.half().to("cuda")`).
+
+### Hardware
+
+| Component | Detail |
+|-----------|--------|
+| GPU | NVIDIA GeForce RTX 4070 Ti SUPER |
+| VRAM | 16 GB GDDR6X |
+| Driver | 555.99 |
+| OS | Windows 11 Pro (build 26200) |
+| Python | 3.10.16 |
+| PyTorch | 2.1.2+cu121 |
+| CUDA | 12.1 |
+
+### Model Weights
+
+| File | Description |
+|------|-------------|
+| `xxx-e15.ckpt` | GPT T2S model (24 layers, 512 hidden dim, 16 heads) |
+| `xxx_e2_s174_l32.pth` | SoVITS vocoder with LoRA adapter (32-rank) |
+| `ref_audio.wav` | 3-10 second 24 kHz WAV reference audio with known transcript |
 
 ## Test Texts
 
-| Case | Length | Text |
-|------|--------|------|
-| short | 3 chars | 実験？ |
-| medium | 19 chars | 何の実験だか気になるけど、まあいいわ。 |
-| long | 64 chars | Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。 |
-
-## Metrics
-
-- **TTFP (Time-To-First-Packet)**: Latency from text input to first audio chunk (ms)
-- **Total**: Full inference wall time (ms)
-- **T2S Speed**: Text-to-Semantic decoding throughput (it/s)
+| Case | Chars | Text |
+|------|-------|------|
+| short | 3 | 実験？ |
+| medium | 19 | 何の実験だか気になるけど、まあいいわ。 |
+| long | 64 | Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。 |
 
 ## Results (RTX 4070 Ti SUPER, float16)
 
 | Metric | Official (no Graph) | Official (CUDA Graph) | Spectralis |
 |--------|---------------------|-----------------------|------------|
-| T2S throughput | ~90-120 it/s | ~244 it/s | **370-440 it/s** |
-| TTFP Short | 1061ms | 1016ms | **424ms** |
-| TTFP Medium | 1599ms | 1476ms | **501ms** |
-| TTFP Long | 3598ms | 2852ms | **648ms** |
-| Memory safety | OOM (long texts) | OOM (long texts) | Static KV |
-| BigVGAN | PyTorch JIT | PyTorch JIT | CUDA Kernel |
-| V3 streaming | return_fragment | return_fragment | True streaming |
+| T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
+| TTFP Short | 1061ms | 1016ms | **456ms** |
+| TTFP Medium | 1599ms | 1476ms | **484ms** |
+| TTFP Long | 3598ms | 2852ms | **499ms** |
+| KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_`** |
+| CUDA Graph | None | Single graph, lazy capture | **13 graphs, pre-captured** |
+| BigVGAN | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
+| GPU memory safety | OOM (long texts) | OOM (long texts) | **Bounded static buffers** |
+| `empty_cache` | No | Every 100 steps | **Never in hot path** |
+| V3 streaming | Batch only | Batch only | **True streaming** |
 
-*Measured with same weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth).*
+*T2S measured with `benchmarks/t2s_comparison_bench.py`. TTFP measured with `benchmarks/spectralis_ttfp.py` on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121. All tests use the same model weights (xxx-e15.ckpt + xxx_e2_s174_l32.pth). T2S measured at 500-token target; TTFP measured on 3 test texts with 5 repeats each (median reported).*

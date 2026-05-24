@@ -41,10 +41,9 @@ try:
 except Exception:
     pass
 
-REF_AUDIO = os.path.join(ROOT, "reference audio", "kurisu_reference.wav")
+REF_AUDIO = os.path.join(ROOT, "reference audio", "ref_audio.wav")
 REF_TEXT = (
-    "そういえば,正式に自己紹介していませんでしたね……"
-    "牧瀬紅莉栖です.改めてまして,よろしく。"
+    "こんにちは。今日はいい天気ですね。"
 )
 TEXT_LANGUAGE = "日文"
 PROMPT_LANGUAGE = "日文"
@@ -193,7 +192,7 @@ def _run_worker_mode(kernel_mode: str, cut_chars: int, repeats: int) -> None:
     os.environ.setdefault("PYTHONUTF8", "1")
 
     from config.settings import TTS_GPT_MODEL_PATH, TTS_SOVITS_MODEL_PATH
-    from local_tts_infer import TTSInferencer
+    from spectralis import TTSInferencer
 
     print(
         f"[worker] loading models | kernel={kernel_mode} | "

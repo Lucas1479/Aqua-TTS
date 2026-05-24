@@ -7,7 +7,7 @@ Usage:
     python examples/basic_usage.py \
         --gpt-model GPT_weights_v3/xxx-e15.ckpt \
         --sovits-model SoVITS_weights_v3/xxx_e2_s174_l32.pth \
-        --ref-audio "reference audio/kurisu_reference2.wav" \
+        --ref-audio "reference audio/ref_audio.wav" \
         --ref-text "reference transcript" \
         --text "こんにちは、世界！"
 """
@@ -21,7 +21,6 @@ os.environ.setdefault("ENABLE_CUDA_GRAPH", "1")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "GPT_SoVITS"))
 
 
 def main():
@@ -35,14 +34,18 @@ def main():
     parser.add_argument("--text-lang", default="日文")
     parser.add_argument("--ref-lang", default="日文")
     parser.add_argument("--no-cuda-graph", action="store_true")
+    parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""),
+                        help="Path to main GPT-SoVITS repo")
     args = parser.parse_args()
 
+    if args.gpt_sovits_home:
+        os.environ["GPT_SOVITS_HOME"] = args.gpt_sovits_home
     if args.no_cuda_graph:
         os.environ["ENABLE_CUDA_GRAPH"] = "0"
 
     import numpy as np
     import soundfile as sf
-    from local_tts_infer import TTSInferencer
+    from spectralis import TTSInferencer
 
     print("Loading TTS pipeline...")
     tts = TTSInferencer(
@@ -55,7 +58,7 @@ def main():
     audio_parts = []
     sample_rate = 24000
 
-    for sr, chunk in tts.infer_stream(
+    for sr, chunk, text in tts.infer_stream(
         text=args.text,
         ref_audio_path=args.ref_audio,
         prompt_text=args.ref_text,

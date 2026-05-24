@@ -48,5 +48,6 @@ Repository = "https://github.com/SiqiLiOcean/spectralis-tts"
 include = ["spectralis*"]
 
 [tool.setuptools.package-data]
+"spectralis._vendor" = ["**/*"]
 "spectralis.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
 "spectralis.bigvgan.torch" = ["*.py"]

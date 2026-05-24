@@ -9,7 +9,7 @@ import sys
 MAIN_REPO = r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401"
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 SPECTRALIS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VENDORED_GPT_SOVITS = os.path.join(SPECTRALIS_ROOT, "GPT_SoVITS")
+VENDORED_GPT_SOVITS = os.path.join(SPECTRALIS_ROOT, "spectralis", "_vendor")
 
 # Path order:
 #   [0] SPECTRALIS_ROOT  — local_tts_infer (spectralis), spectralis package

@@ -61,6 +61,17 @@ A CUDA Graph captures a specific tensor shape. Different prompt lengths produce 
 | 768 | Multi-sentence merge (~420-672 tokens) |
 | 1024 | Long compound turns |
 
+### Pre-capture Strategy
+
+At model load time, all viable `(bucket, initial_len)` pairs are enumerated and captured eagerly. The initial_len range per bucket is computed as:
+
+```python
+lo = max(stride * 6, prev_bucket - gap)   # stride*6 = 192, covers initial_len=224
+hi = bucket - gap
+```
+
+This produces **13 graphs** across the 6 buckets, covering all initial_len values reachable from typical prompt lengths. The lower bound of `stride*6` (192) was chosen to include `initial_len=224`, which arises from short single-sentence prompts — avoiding expensive on-the-fly capture during the first inference.
+
 ### Thread Safety
 
 Each `(bucket, initial_len)` pair gets its own `threading.Lock`. Multi-threaded servers (e.g., FastAPI with multiple workers) can safely replay different graphs concurrently. Only threads hitting the same bucket+initial_len key serialize.
@@ -69,6 +80,30 @@ Each `(bucket, initial_len)` pair gets its own `threading.Lock`. Multi-threaded 
 
 ```
 CUDA Graph replay → (if fails) → static KV path → (if fails) → dynamic torch.cat
+```
+
+## Structured Logging
+
+All performance-critical decisions are logged with structured prefixes for grep-friendly debugging:
+
+| Prefix | What it logs |
+|--------|-------------|
+| `[precapture]` | Target buckets, per-bucket results, total graph count, graph keys |
+| `[graph]` | Per-step bucket selection, graph key, replay/fallback decisions |
+| `[graph] EOS stats` | End-of-sequence summary: bucket, graph_key, total_steps, replay_pct, bucket_misses, fallback reason |
+| `[sovits-timing]` | CFM duration, BigVGAN duration (CFM timing gated by `TTS_STREAM_SYNC_TIMING`) |
+| `[tts-stream]` | Per-chunk streaming info: text, token count, elapsed, speed factor, audio len |
+
+The `[graph]` log at each decode step follows this format:
+
+```
+[graph] bucket=X key=Y decision=Z reason=W initial_len=N aligned_len=M total_len=O
+```
+
+At end-of-sequence, a single summary line aggregates all stats:
+
+```
+[graph] EOS stats: bucket=512 graph_key=(512,288) total_steps=187 replay_steps=186 replay_pct=99.5% bucket_misses=0 fallback=none
 ```
 
 ## BigVGAN Pre-compiled CUDA Kernel
@@ -120,25 +155,61 @@ The AR decoder is memory-bound on attention — each step reads the full KV cach
 - CUDA kernel launch overhead
 - Shape-inference overhead
 
-Measured throughput: **462 iterations/second** (median), with CUDA Graph replay at **99.6%** hit rate on bucket 768.
+Measured throughput: **440-470 iterations/second** (median) — a **5.5x speedup** over the official `torch.cat` KV cache baseline (~80-90 it/s) and **2x faster** than the official CUDA Graph implementation (~230 it/s). CUDA Graph replay hit rate is typically **98-99.5%** across bucket sizes.
+
+| Variant | T2S Speed | KV Cache | CUDA Graph |
+|---------|-----------|----------|------------|
+| Official (no Graph) | ~80-90 it/s | `torch.cat` | None |
+| Official (CUDA Graph) | ~230 it/s | Static `scatter_` | Single graph, lazy |
+| Spectralis | **~440-470 it/s** | Static `scatter_` | 13 graphs, pre-captured |
+
+*All measured with the same 24-layer GPT checkpoint on RTX 4070 Ti SUPER via `benchmarks/t2s_comparison_bench.py`.*
+
+Key reasons Spectralis outperforms the official CUDA Graph implementation:
+- **No `empty_cache` in hot path** — official calls `torch.cuda.empty_cache()` every 100 decode steps and at end-of-sequence, flushing the CUDA allocator cache
+- **Pre-captured graphs** — 13 graphs captured at load time vs official's single lazy-captured graph
+- **Bucketed sizing** — bucket selection based on initial_len provides near-optimal graph reuse
+- **No NestedTensor overhead** — Spectralis uses regular tensors throughout, avoiding the prototype API overhead of `torch.nested`
+
+### BigVGAN Kernel (Raw)
+
+Standalone forward-pass timing with `torch.cuda.synchronize()` before and after each measurement, 10 warmup + 20 measured per mel_T size (FP16):
+
+| mel_T | median | min | max |
+|-------|--------|-----|-----|
+| 70 | 27ms | 26ms | 30ms |
+| 128 | 31ms | 30ms | 34ms |
+| 298 | 51ms | 50ms | 55ms |
+| 598 | 82ms | 80ms | 87ms |
+
+These are the pure BigVGAN kernel costs after the CFM generates the mel spectrogram — they do not include CFM time or any auxiliary work.
 
 ### TTFP (Time-To-First-Packet)
 
-Measured with streaming audio output (2 chunks per utterance):
+Measured with streaming audio output (2 chunks per utterance). All timings exclude `torch.cuda.empty_cache()` which was found to add ~500ms of GPU cache rebuild latency:
 
 | text length | chars | TTFP (median) | total (median) |
 |------------|-------|--------------|---------------|
-| short      | 3     | ~520 ms      | ~520 ms       |
-| medium     | 19    | ~670 ms      | ~670 ms       |
-| long       | 64    | ~1,300 ms    | ~1,300 ms     |
+| short      | 3     | 456 ms       | 456 ms        |
+| medium     | 19    | 484 ms       | 484 ms        |
+| long       | 64    | 499 ms       | 499 ms        |
 
-Model load time: ~10 s (includes BigVGAN CUDA kernel load from pre-compiled cache, plus CUDA Graph pre-capture of 11 bucket/initial_len pairs at ~0.25 s each).
+Model load time: ~10 s (includes BigVGAN CUDA kernel load from pre-compiled cache, plus CUDA Graph pre-capture of 13 bucket/initial_len pairs at ~0.25 s each).
 
 The BigVGAN CUDA pre-compiled kernel eliminates:
 
 - PyTorch JIT compilation of the upsampling + activation + downsampling chain (~800ms cold)
 - Python-side filter kernel launches (~200ms)
 - CPU-GPU synchronization points in the alias-free activation path (~300ms)
+
+### Keep-Warm
+
+After model load, a lightweight warmup pass primes all GPU execution paths before the first user request:
+
+- **BigVGAN shape warmup**: 3 mel-T sizes (40, 70, 128) × 5 iterations each with `torch.cuda.synchronize()` — covers the range of first-chunk mel sizes.
+- **T2S graph pre-capture**: all 13 bucket/initial_len pairs are captured eagerly, ensuring the first `infer_stream()` call hits a pre-warmed CUDA Graph with zero cold-start overhead.
+
+This prevents the common "first request penalty" where CUDA lazy initialization, cuDNN autotuning, and kernel compilation would otherwise add 200-500ms to the first inference.
 
 ## Environment Variables
 
@@ -147,4 +218,5 @@ The BigVGAN CUDA pre-compiled kernel eliminates:
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph for T2S decode steps |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at model load |
 | `CUDA_GRAPH_PRECAPTURE_BUCKETS` | (all) | Comma-separated bucket sizes to pre-capture |
+| `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |

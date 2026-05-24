@@ -3,10 +3,10 @@ include NOTICE
 include README.md
 include TECHNICAL.md
 
+recursive-include spectralis/_vendor *.cpp *.cu *.h
 recursive-include spectralis/bigvgan/cuda *.cpp *.cu *.h
 recursive-include spectralis/bigvgan/torch *.py
 
-prune GPT_SoVITS
 prune benchmarks
 prune tools
 prune examples
