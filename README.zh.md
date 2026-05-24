@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/banner.png" alt="Aqua-TTS" width="640"/>
+</div>
+
 # Aqua-TTS
 
 **GPT-SoVITS v3 的 GPU 优化推理运行时 — 静态 KV 缓存 + 分段 CUDA Graph + 预编译 BigVGAN 内核。**

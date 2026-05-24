@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/banner.png" alt="Aqua-TTS" width="640"/>
+</div>
+
 # Aqua-TTS
 
 **GPU-optimized inference for GPT-SoVITS v3 — static KV cache + bucketed CUDA Graph + pre-compiled BigVGAN kernel.**
