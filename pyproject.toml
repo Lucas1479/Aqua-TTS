@@ -57,3 +57,14 @@ include = ["aqua*"]
 "aqua._vendor" = ["**/*"]
 "aqua.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
 "aqua.bigvgan.torch" = ["*.py"]
+
+[tool.ruff]
+extend-exclude = [
+    "aqua/_vendor/",
+    "tests/test_server.py",
+    "tests/test_vendor_paths.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]
