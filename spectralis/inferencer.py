@@ -59,7 +59,10 @@ def _gpt_sovits_home() -> str:
 try:
     import librosa
     import re
-    from tools.i18n import I18nAuto
+    try:
+        from tools.i18n import I18nAuto
+    except ImportError:
+        from tools.i18n.i18n import I18nAuto
     from GPT_SoVITS.text.LangSegmenter import LangSegmenter
     from GPT_SoVITS.text import cleaned_text_to_sequence
     from GPT_SoVITS.text.cleaner import clean_text
