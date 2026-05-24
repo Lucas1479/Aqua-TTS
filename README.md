@@ -4,7 +4,8 @@
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Low-Latency Inference Runtime</h1>
 
-<p>GPU-optimized inference for GPT-SoVITS v3 &nbsp;·&nbsp; 5.5× faster T2S &nbsp;·&nbsp; 2–7× lower TTFP</p>
+<p>Built for real-time voice conversation with your LoRA characters</p>
+<p>GPT-SoVITS v3 &nbsp;·&nbsp; 5.5× faster T2S &nbsp;·&nbsp; 2–7× lower TTFP</p>
 
 <p>
   <a href="README.zh.md">中文</a> | English
@@ -20,7 +21,7 @@
 
 ---
 
-Aqua-TTS is a **GPU-optimized runtime service layer** for [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. The result is **5.5x faster** T2S decoding and **2-7x lower** time-to-first-packet.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. The result is **5.5× faster** T2S decoding and **2–7× lower** time-to-first-packet.
 
 > **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aqua/modeling/` and `aqua/_vendor/` are the right starting points for adaptation.
 

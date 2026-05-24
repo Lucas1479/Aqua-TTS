@@ -4,7 +4,8 @@
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> 低延迟推理运行时</h1>
 
-<p>面向 GPT-SoVITS v3 的 GPU 优化推理 &nbsp;·&nbsp; T2S 速度提升 5.5× &nbsp;·&nbsp; 首包延迟降低 2–7×</p>
+<p>为与 LoRA 角色实时语音对话而生</p>
+<p>GPT-SoVITS v3 &nbsp;·&nbsp; T2S 速度提升 5.5× &nbsp;·&nbsp; 首包延迟降低 2–7×</p>
 
 <p>
   中文 | <a href="README.md">English</a>
@@ -20,7 +21,7 @@
 
 ---
 
-Aqua-TTS 是面向 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 的 **GPU 优化推理服务层**。它不替换模型权重，而是替换执行策略：静态 KV 缓存缓冲区、分段 CUDA Graph 捕获/回放以及预编译 BigVGAN CUDA 内核。最终效果是 T2S 解码速度提升 **5.5 倍**，首包延迟降低 **2-7 倍**。
+Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时——核心场景是与你自己的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA 角色进行低延迟流式语音交互。它不替换模型权重，而是替换执行策略：静态 KV 缓存缓冲区、分段 CUDA Graph 捕获/回放以及预编译 BigVGAN CUDA 内核。最终效果是 T2S 解码速度提升 **5.5×**，首包延迟降低 **2–7×**。
 
 > **定位说明** — Aqua-TTS 是面向 GPT-SoVITS **v3** 的独立运行时，不是补丁插件，也不承诺跟进上游更新。本项目涉及的技术——静态 KV 缓存、分段 CUDA Graph、预编译 BigVGAN 内核——已在 [TECHNICAL.md](TECHNICAL.md) 中详细记录，具备可移植性。如需 v4 支持，`aqua/modeling/` 和 `aqua/_vendor/` 是适配的合理起点。
 
