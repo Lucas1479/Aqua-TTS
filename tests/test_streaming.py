@@ -1,7 +1,7 @@
 ﻿import numpy as np
 import pytest
 
-from aqua.inference.streaming import apply_fade_in, apply_fade_out, finalize_stream_chunk
+from aquatts.inference.streaming import apply_fade_in, apply_fade_out, finalize_stream_chunk
 
 
 class TestFadeIn:

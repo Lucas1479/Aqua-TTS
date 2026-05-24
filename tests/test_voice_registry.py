@@ -6,7 +6,7 @@ import os
 import tempfile
 
 import pytest
-from aqua.voice_registry import Voice, VoiceRegistry, registry_from_env
+from aquatts.voice_registry import Voice, VoiceRegistry, registry_from_env
 
 
 class TestVoice:

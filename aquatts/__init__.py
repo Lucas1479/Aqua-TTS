@@ -42,10 +42,10 @@ if _VENDOR_DIR not in sys.path:
 
 # ── Public API (公共 API) ───────────────────────────────────────────────────────────
 # TTSInferencer is imported lazily — import aqua does not trigger
-# the full GPT-SoVITS import chain. Use `from aqua import TTSInferencer`
-# or `from aqua.inferencer import TTSInferencer` to load it.
+# the full GPT-SoVITS import chain. Use `from aquatts import TTSInferencer`
+# or `from aquatts.inferencer import TTSInferencer` to load it.
 # TTSInferencer 采用延迟导入 — import aqua 不会触发完整的 GPT-SoVITS 导入链。
-# 使用 `from aqua import TTSInferencer` 或 `from aqua.inferencer import TTSInferencer` 来加载它。
+# 使用 `from aquatts import TTSInferencer` 或 `from aquatts.inferencer import TTSInferencer` 来加载它。
 
 __all__ = [
     "__version__",
@@ -61,15 +61,15 @@ __all__ = [
 ]
 
 _LAZY_ATTRS = {
-    "TTSInferencer": ("aqua.inferencer", "TTSInferencer"),
-    "VoiceRegistry": ("aqua.voice_registry", "VoiceRegistry"),
-    "Voice": ("aqua.voice_registry", "Voice"),
-    "registry_from_env": ("aqua.voice_registry", "registry_from_env"),
-    "apply_preset": ("aqua.inference.presets", "apply_preset"),
-    "list_presets": ("aqua.inference.presets", "list_presets"),
-    "apply_cuda_graph_preset": ("aqua.inference.presets", "apply_cuda_graph_preset"),
-    "list_cuda_graph_presets": ("aqua.inference.presets", "list_cuda_graph_presets"),
-    "start_server": ("aqua.server", "start_server"),
+    "TTSInferencer": ("aquatts.inferencer", "TTSInferencer"),
+    "VoiceRegistry": ("aquatts.voice_registry", "VoiceRegistry"),
+    "Voice": ("aquatts.voice_registry", "Voice"),
+    "registry_from_env": ("aquatts.voice_registry", "registry_from_env"),
+    "apply_preset": ("aquatts.inference.presets", "apply_preset"),
+    "list_presets": ("aquatts.inference.presets", "list_presets"),
+    "apply_cuda_graph_preset": ("aquatts.inference.presets", "apply_cuda_graph_preset"),
+    "list_cuda_graph_presets": ("aquatts.inference.presets", "list_cuda_graph_presets"),
+    "start_server": ("aquatts.server", "start_server"),
 }
 
 

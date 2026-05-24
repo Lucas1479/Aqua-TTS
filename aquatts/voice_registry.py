@@ -17,7 +17,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple
 
-logger = logging.getLogger("aqua.voice_registry")
+logger = logging.getLogger("aquatts.voice_registry")
 
 
 @dataclass(frozen=True)

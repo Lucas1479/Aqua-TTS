@@ -3,7 +3,7 @@
 
 Usage / 用法::
 
-    python -m aqua.server --host 127.0.0.1 --port 8000
+    python -m aquatts.server --host 127.0.0.1 --port 8000
 
 Endpoints / 端点
 ---------
@@ -24,9 +24,9 @@ from typing import Optional
 
 import numpy as np
 
-from aqua.voice_registry import Voice, VoiceRegistry, registry_from_env
+from aquatts.voice_registry import Voice, VoiceRegistry, registry_from_env
 
-logger = logging.getLogger("aqua.server")
+logger = logging.getLogger("aquatts.server")
 
 
 # ── Internal helpers (内部辅助函数) ──────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ def _create_app(inferencer, voice_registry=None):
 
     @app.get("/presets")
     async def list_presets():
-        from aqua.inference.presets import (
+        from aquatts.inference.presets import (
             GENERATION_PRESETS,
             CUDA_GRAPH_PRESETS,
         )
@@ -293,7 +293,7 @@ def start_server(
 # ── CLI (命令行接口) ────────────────────────────────────────────────────────────────────
 
 def _main():
-    """Entry point: python -m aqua.server / 入口点：python -m aqua.server"""
+    """Entry point: python -m aquatts.server / 入口点：python -m aquatts.server"""
     import argparse
     import os
 
@@ -314,7 +314,7 @@ def _main():
 
     # Import triggers sys.path setup in Aqua/__init__.py
     # 此导入触发 Aqua/__init__.py 中的 sys.path 设置
-    from aqua import TTSInferencer, VoiceRegistry
+    from aquatts import TTSInferencer, VoiceRegistry
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

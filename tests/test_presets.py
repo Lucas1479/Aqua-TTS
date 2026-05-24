@@ -2,7 +2,7 @@
 """Tests for generation and CUDA Graph presets."""
 
 import pytest
-from aqua.inference.presets import (
+from aquatts.inference.presets import (
     GENERATION_PRESETS,
     CUDA_GRAPH_PRESETS,
     apply_preset,

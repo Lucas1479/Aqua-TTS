@@ -79,7 +79,7 @@ try:
 
     from GPT_SoVITS.text import chinese
 
-    from aqua.inference.presets import (
+    from aquatts.inference.presets import (
         apply_cuda_graph_preset as _apply_cg_preset,
         apply_preset as _apply_preset,
     )

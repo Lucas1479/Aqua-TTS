@@ -50,16 +50,16 @@ Homepage = "https://github.com/Lucas1479/Aqua-TTS"
 Repository = "https://github.com/Lucas1479/Aqua-TTS"
 
 [tool.setuptools.packages.find]
-include = ["aqua*"]
+include = ["aquatts*"]
 
 [tool.setuptools.package-data]
-"aqua._vendor" = ["**/*"]
-"aqua.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
-"aqua.bigvgan.torch" = ["*.py"]
+"aquatts._vendor" = ["**/*"]
+"aquatts.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
+"aquatts.bigvgan.torch" = ["*.py"]
 
 [tool.ruff]
 extend-exclude = [
-    "aqua/_vendor/",
+    "aquatts/_vendor/",
     "tests/test_server.py",
     "tests/test_vendor_paths.py",
 ]

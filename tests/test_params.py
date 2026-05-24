@@ -1,4 +1,4 @@
-﻿from aqua.inference.params import get_sovits_params
+﻿from aquatts.inference.params import get_sovits_params
 
 
 class TestGetSovitsParams:

@@ -22,7 +22,7 @@
 
 Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces TTFP from 1.0–3.6 s to **~0.46–0.50 s** on the tested utterances — see [Highlights](#highlights) for the full comparison.
 
-> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aqua/modeling/` and `aqua/_vendor/` are the right starting points for adaptation.
+> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
 
 ## Highlights
 
@@ -48,7 +48,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
-- **Source install** — `pip install -e ".[runtime]"` → `from aqua import TTSInferencer`
+- **Source install** — `pip install -e ".[runtime]"` → `from aquatts import TTSInferencer`
 
 ## Supported Languages
 
@@ -62,11 +62,11 @@ Aqua-TTS inherits GPT-SoVITS v3's language support. Pass the code to `text_langu
 
 ## How it works
 
-Aqua-TTS vendors overrides for two GPT-SoVITS files inside `aqua/_vendor/` using Python namespace packages (`pkgutil.extend_path`). When you `import aqua`, the package automatically configures `sys.path` so the vendored files take precedence over the main GPT-SoVITS repo. Set `GPT_SOVITS_HOME` to point at your GPT-SoVITS installation — Aqua-TTS handles the rest:
+Aqua-TTS vendors overrides for two GPT-SoVITS files inside `aquatts/_vendor/` using Python namespace packages (`pkgutil.extend_path`). When you `import aquatts`, the package automatically configures `sys.path` so the vendored files take precedence over the main GPT-SoVITS repo. Set `GPT_SOVITS_HOME` to point at your GPT-SoVITS installation — Aqua-TTS handles the rest:
 
 ```
 aqua-tts/
-├── aqua/                          # Pure Python package (pip-installable)
+├── aquatts/                       # Pure Python package (pip-installable)
 │   ├── __init__.py                # sys.path configuration + lazy exports
 │   ├── inferencer.py              # TTSInferencer — main entry point
 │   ├── server.py                  # FastAPI HTTP server
@@ -177,7 +177,7 @@ import os
 os.environ["GPT_SOVITS_HOME"] = "/path/to/GPT-SoVITS"
 os.environ["ENABLE_CUDA_GRAPH"] = "1"
 
-from aqua import TTSInferencer
+from aquatts import TTSInferencer
 
 tts = TTSInferencer(
     device="cuda",
@@ -224,7 +224,7 @@ Two layers of presets control quality/speed trade-offs:
 | `off` | Disabled | none | Static KV only, no graphs |
 
 ```python
-from aqua import apply_preset, list_presets
+from aquatts import apply_preset, list_presets
 
 print(list_presets())  # ["balanced", "fast", "quality"]
 params = apply_preset("fast", overrides={"top_k": 5})
@@ -235,7 +235,7 @@ params = apply_preset("fast", overrides={"top_k": 5})
 Start a lightweight inference server:
 
 ```bash
-python -m aqua.server \
+python -m aquatts.server \
     --gpt-model GPT_weights_v3/s1v3.ckpt \
     --sovits-model SoVITS_weights_v3/model.pth \
     --cuda-graph-preset full \
@@ -268,7 +268,7 @@ curl -X POST "http://127.0.0.1:8000/tts/file?text=Hello&voice=alice" -o output.w
 Manage multiple characters/voices without repeating paths:
 
 ```python
-from aqua import Voice, VoiceRegistry
+from aquatts import Voice, VoiceRegistry
 
 registry = VoiceRegistry(json_path="./voices.json")
 
@@ -298,7 +298,7 @@ curl -X POST "http://127.0.0.1:8000/tts?text=Hello&voice=alice"
 For production deployments, pass an explicit registry path:
 
 ```bash
-python -m aqua.server ... --voice-registry /data/voices.json
+python -m aquatts.server ... --voice-registry /data/voices.json
 # or
 export AQUA_VOICE_JSON=/data/voices.json
 ```
@@ -345,9 +345,9 @@ Aqua-TTS was inspired by [GENIE-TTS](https://github.com/w-okada/genie-tts), whic
 MIT — see [LICENSE](LICENSE).
 
 Third-party code:
-- **GPT-SoVITS**: vendored `aqua/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](NOTICE).
+- **GPT-SoVITS**: vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](NOTICE).
 - **NVIDIA BigVGAN**: CUDA kernel sources under Apache 2.0 — see [NOTICE](NOTICE).
-- **alias-free-torch**: `aqua/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](NOTICE).
+- **alias-free-torch**: `aquatts/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](NOTICE).
 
 ## Development
 

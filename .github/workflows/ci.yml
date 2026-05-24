@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check aqua/ tests/
+      - run: ruff check aquatts/ tests/
 
   test:
     runs-on: ubuntu-latest
@@ -33,5 +33,5 @@ jobs:
           python -m pytest tests/ -v \
             --ignore=tests/test_server.py \
             --ignore=tests/test_vendor_paths.py \
-            --cov=aqua \
+            --cov=aquatts \
             --cov-report=term

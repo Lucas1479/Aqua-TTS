@@ -765,7 +765,7 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
 
     This is the main entry point. Call it once after loading the T2S model::
 
-        from aqua.modeling import apply_cuda_graph_patch
+        from aquatts.modeling import apply_cuda_graph_patch
         apply_cuda_graph_patch(t2s_model.model)
 
     Args:
