@@ -196,6 +196,7 @@ class TTSInferencer:
             self._sovits_decode_lock = threading.Lock()
             # 仅在需要做性能剖析时开启；默认关闭以避免流式首句每块都强制同步 GPU。
             self._stream_sync_timing_enabled = os.environ.get("TTS_STREAM_SYNC_TIMING", "0") == "1"
+            self.t2s_stats = []
 
         except Exception as e:
             logger.error(f"❌ 初始化TTS推理器失败: {str(e)}")
@@ -214,6 +215,26 @@ class TTSInferencer:
             except (TypeError, ValueError):
                 pass
         return effective
+
+    def _sync_t2s_timing(self):
+        if self.is_half and str(self.device).lower().startswith("cuda") and torch.cuda.is_available():
+            with torch.cuda.device(self._tts_device_idx):
+                torch.cuda.synchronize()
+
+    def _record_t2s_stat(self, text_item: str, tokens: int, elapsed_sec: float):
+        rate = float(tokens) / elapsed_sec if elapsed_sec > 0 else 0.0
+        stat = {
+            "text": text_item,
+            "tokens": int(tokens),
+            "elapsed_sec": float(elapsed_sec),
+            "tokens_per_sec": rate,
+        }
+        self.t2s_stats.append(stat)
+        logger.info(
+            f"[t2s] tokens={stat['tokens']} elapsed={stat['elapsed_sec']:.3f}s "
+            f"speed={stat['tokens_per_sec']:.0f} it/s"
+        )
+        return stat
 
     def _init_language_dict(self):
         """Initialize language dictionary mappings.
@@ -1313,7 +1334,8 @@ class TTSInferencer:
                      enable_cuda_graph=False,
                      enable_static_kv=True,
                      chunk_size_seconds: float = None,
-                     max_sec_override: float = None):
+                     max_sec_override: float = None,
+                     collect_t2s_stats: bool = False):
         """
         Streaming TTS inference — yields audio chunks as they are generated.
         流式执行TTS推理，逐步返回音频块
@@ -1343,6 +1365,7 @@ class TTSInferencer:
             inp_refs: Additional reference audio paths for voice mixing / 额外的参考音频列表
             if_sr: Whether to use audio super-resolution (v3 only) / 是否使用音频超分辨率
             chunk_size_seconds: If set, partition output into fixed-duration chunks / 按秒数分块输出
+            collect_t2s_stats: Record synchronized T2S token throughput stats / 记录T2S吞吐统计
 
         Yields:
             Generator of (sample_rate, audio_chunk, text_segment) tuples.
@@ -1537,6 +1560,9 @@ class TTSInferencer:
                     # GPT推理
                     logger.info("执行GPT推理...")
                     with torch.no_grad():
+                        if collect_t2s_stats:
+                            self._sync_t2s_timing()
+                            t2s_start = time.perf_counter()
                         pred_semantic, idx = self.t2s_model.model.infer_panel(
                             all_phoneme_ids,
                             all_phoneme_len,
@@ -1549,6 +1575,9 @@ class TTSInferencer:
                             enable_cuda_graph=enable_cuda_graph,
                             enable_static_kv=enable_static_kv,
                         )
+                        if collect_t2s_stats:
+                            self._sync_t2s_timing()
+                            self._record_t2s_stat(text_item, idx, time.perf_counter() - t2s_start)
                         pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                         cache[i_text] = pred_semantic
 

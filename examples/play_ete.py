@@ -90,6 +90,13 @@ def _write_wav(path: Path, sample_rate: int, chunks: list[np.ndarray]) -> None:
         wav.writeframes(pcm16.tobytes())
 
 
+def _summarize_t2s(stats: list[dict]) -> tuple[int, float, float]:
+    tokens = sum(int(stat.get("tokens", 0)) for stat in stats)
+    elapsed = sum(float(stat.get("elapsed_sec", 0.0)) for stat in stats)
+    rate = tokens / elapsed if elapsed > 0 else 0.0
+    return tokens, elapsed, rate
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(description="Aqua-TTS end-to-end playback demo")
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""))
@@ -133,6 +140,7 @@ def _warmup(tts, args, ref_audio: str) -> None:
         enable_cuda_graph=not args.no_cuda_graph,
         enable_static_kv=True,
         chunk_size_seconds=args.chunk_size_seconds,
+        collect_t2s_stats=True,
     ):
         if chunk is not None and len(chunk) > 0:
             break
@@ -191,6 +199,7 @@ def main():
             sample_rate = 24000
             total_samples = 0
             chunks: list[np.ndarray] = []
+            t2s_stats_start = len(tts.t2s_stats)
             start = time.perf_counter()
 
             for sr, chunk, _text in tts.infer_stream(
@@ -208,6 +217,7 @@ def main():
                 enable_cuda_graph=not args.no_cuda_graph,
                 enable_static_kv=True,
                 chunk_size_seconds=args.chunk_size_seconds,
+                collect_t2s_stats=True,
             ):
                 sample_rate = sr or sample_rate
                 if chunk is None or len(chunk) == 0:
@@ -238,7 +248,13 @@ def main():
             elapsed = time.perf_counter() - start
             audio_sec = total_samples / float(sample_rate)
             rtf = elapsed / audio_sec if audio_sec > 0 else float("inf")
-            print(f"[{label}] done: audio={audio_sec:.2f}s elapsed={elapsed:.2f}s rtf={rtf:.2f}x")
+            t2s_tokens, t2s_elapsed, t2s_rate = _summarize_t2s(tts.t2s_stats[t2s_stats_start:])
+            first_audio_display = first_audio_ms if first_audio_ms is not None else float("nan")
+            print(
+                f"[{label}] done: first_audio={first_audio_display:.1f}ms "
+                f"t2s={t2s_rate:.0f} it/s ({t2s_tokens} tokens/{t2s_elapsed:.3f}s) "
+                f"audio={audio_sec:.2f}s elapsed={elapsed:.2f}s rtf={rtf:.2f}x"
+            )
 
             if save_dir is not None:
                 wav_path = save_dir / f"{label}.wav"
