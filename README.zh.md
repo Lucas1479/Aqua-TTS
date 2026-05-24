@@ -364,7 +364,13 @@ pip install -e ".[playback]"
 python examples/play_ete.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
 ```
 
-该 demo 会通过 PyAudio 直接播放三句 Kurisu 风格日语文本（短、中、长），并为每句打印首声延迟、T2S 吞吐和 RTF。
+该 demo 会通过 PyAudio 直接播放三句 Kurisu 风格日语文本（短、中、长），并为每句打印首声延迟、实时句子 T2S 吞吐和 RTF。
+
+如果要录交互式 demo，可以只加载一次音色，然后输入任意日文文本播放：
+
+```bash
+python examples/live_talk.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
+```
 
 ## 致谢
 

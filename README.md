@@ -369,7 +369,13 @@ pip install -e ".[playback]"
 python examples/play_ete.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
 ```
 
-The demo plays three Kurisu-style Japanese utterances (short, medium, long) through PyAudio and prints first-audio latency, T2S throughput, and RTF for each line.
+The demo plays three Kurisu-style Japanese utterances (short, medium, long) through PyAudio and prints first-audio latency, live T2S throughput, and RTF for each line.
+
+For recording an interactive demo, load the voice once and type any Japanese text:
+
+```bash
+python examples/live_talk.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
+```
 
 ## Acknowledgements
 
