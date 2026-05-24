@@ -102,6 +102,7 @@ def main():
         t0 = time.perf_counter()
         first_chunk_ms = None
         chunk_count = 0
+        t2s_stats_start = len(getattr(inferencer, "t2s_stats", []))
 
         for sr, chunk, _text in inferencer.infer_stream(
             text=text,
@@ -115,9 +116,15 @@ def main():
             enable_cuda_graph=not args.no_cuda_graph,
             enable_static_kv=not args.no_static_kv,
             chunk_size_seconds=args.chunk_size_seconds if args.chunk_size_seconds > 0 else None,
+            collect_t2s_stats=True,
         ):
             if chunk is None or len(chunk) == 0:
                 continue
+            if len(getattr(inferencer, "t2s_stats", [])) <= t2s_stats_start:
+                raise RuntimeError(
+                    "TTFP benchmark received audio before any T2S stats were recorded. "
+                    "This usually means inference hit the error fallback path; rerun with logs visible."
+                )
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             if first_chunk_ms is None:
                 first_chunk_ms = elapsed_ms

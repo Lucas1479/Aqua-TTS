@@ -55,6 +55,8 @@ DEFAULT_SPEED = 1.1
 DEFAULT_SAMPLE_STEPS = 4
 DEFAULT_CHUNK_SECONDS = 0.35
 DEFAULT_HOW_TO_CUT = "按标点符号切"
+DEFAULT_SAMPLE_RATE = 24000
+DEFAULT_FRAMES_PER_BUFFER = 1024
 
 
 @contextlib.contextmanager
@@ -147,6 +149,22 @@ def _write_wav(path: Path, sample_rate: int, chunks: list[np.ndarray]) -> None:
         wav.writeframes(pcm16.tobytes())
 
 
+def _open_output_stream(pa, pyaudio, args, sample_rate: int = DEFAULT_SAMPLE_RATE):
+    return pa.open(
+        format=pyaudio.paFloat32,
+        channels=1,
+        rate=sample_rate,
+        output=True,
+        output_device_index=args.output_device_index,
+        frames_per_buffer=DEFAULT_FRAMES_PER_BUFFER,
+    )
+
+
+def _prime_output_stream(stream, sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
+    silence = np.zeros(int(0.020 * sample_rate), dtype=np.float32)
+    stream.write(silence.tobytes())
+
+
 def _summarize_t2s(stats: list[dict]) -> tuple[int, float, float]:
     tokens = sum(int(stat.get("tokens", 0)) for stat in stats)
     elapsed = sum(float(stat.get("elapsed_sec", 0.0)) for stat in stats)
@@ -197,6 +215,8 @@ def _parse_args():
                         help="Enter a Japanese text prompt after the scripted demo.")
     parser.add_argument("--interactive-show-t2s", action="store_true",
                         help="Also print live T2S throughput for interactive prompts.")
+    parser.add_argument("--cold-audio-stream", action="store_true",
+                        help="Open and close the PyAudio stream per utterance instead of reusing one hot stream.")
     parser.add_argument("--output-device-index", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--save-dir", default="",
@@ -245,7 +265,8 @@ def _warmup(tts, args, ref_audio: str, quiet: bool = True) -> None:
 
 
 def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str,
-                   save_dir: Path | None = None, show_t2s: bool = True) -> dict:
+                   save_dir: Path | None = None, show_t2s: bool = True,
+                   output_stream=None) -> dict:
     print(f"\n[{label}] {text}")
     _set_seed(args.seed)
     stream = None
@@ -322,14 +343,10 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
         )
         if first_audio_ms is None:
             first_audio_ms = (time.perf_counter() - start) * 1000.0
-            stream = pa.open(
-                format=pyaudio.paFloat32,
-                channels=1,
-                rate=sample_rate,
-                output=True,
-                output_device_index=args.output_device_index,
-                frames_per_buffer=max(256, min(2048, len(audio))),
-            )
+            if output_stream is not None:
+                stream = output_stream
+            else:
+                stream = _open_output_stream(pa, pyaudio, args, sample_rate)
 
         stream.write(merged.tobytes())
         total_samples += len(merged)
@@ -344,7 +361,7 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     if producer_errors:
         raise producer_errors[0]
 
-    if stream is not None:
+    if stream is not None and output_stream is None:
         stream.stop_stream()
         stream.close()
 
@@ -424,10 +441,15 @@ def main():
 
     texts = [(f"text{i + 1}", text) for i, text in enumerate(args.text)] if args.text else KURISU_DEMO_TEXTS
     save_dir = Path(args.save_dir) if args.save_dir else None
+    output_stream = None
 
     try:
+        if not args.cold_audio_stream:
+            output_stream = _open_output_stream(pa, pyaudio, args)
+            _prime_output_stream(output_stream)
         for label, text in texts:
-            play_utterance(tts, pa, pyaudio, args, ref_audio, label, text, save_dir)
+            play_utterance(tts, pa, pyaudio, args, ref_audio, label, text, save_dir,
+                           output_stream=output_stream)
             if args.pause > 0:
                 time.sleep(args.pause)
         if args.interactive:
@@ -452,9 +474,13 @@ def main():
                     text,
                     save_dir,
                     show_t2s=args.interactive_show_t2s,
+                    output_stream=output_stream,
                 )
                 line_no += 1
     finally:
+        if output_stream is not None:
+            output_stream.stop_stream()
+            output_stream.close()
         pa.terminate()
 
 
