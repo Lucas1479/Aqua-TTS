@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.png" width="720"/>
+<img src="assets/aqua.png" width="720"/>
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Real-Time Inference Runtime on GPU</h1>
 
