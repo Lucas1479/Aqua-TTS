@@ -6,17 +6,18 @@ Usage:
 import os
 import sys
 
-MAIN_REPO = r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401"
+MAIN_REPO = os.environ.get("GPT_SOVITS_HOME")
+if not MAIN_REPO:
+    sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 SPECTRALIS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENDORED_GPT_SOVITS = os.path.join(SPECTRALIS_ROOT, "spectralis", "_vendor")
 
 # Path order:
-#   [0] SPECTRALIS_ROOT  — local_tts_infer (spectralis), spectralis package
+#   [0] SPECTRALIS_ROOT  — spectralis package
 #   [1] MAIN_GPT_SOVITS  — bare AR / BigVGAN absolute imports resolve here
 #   [2] MAIN_REPO        — GPT_SoVITS, config, tools packages
-# Sub-packages with __init__.py in the main repo take precedence over the
-# vendored namespace-only stubs at SPECTRALIS_ROOT/GPT_SoVITS/.
+# Vendored overrides in spectralis/_vendor/ are managed by spectralis/__init__.py.
 sys.path.insert(0, MAIN_GPT_SOVITS)
 sys.path.insert(0, MAIN_REPO)
 sys.path.insert(0, SPECTRALIS_ROOT)
@@ -26,15 +27,14 @@ class _GuardedPath(list):
     """A sys.path that keeps vendored overrides ahead of main-repo originals.
 
     Path order:
-      [0] SPECTRALIS_ROOT      — local_tts_infer, spectralis package, benchmarks
-      [1] VENDORED_GPT_SOVITS  — bare "AR.models.t2s_model" finds spectralis version
+      [0] SPECTRALIS_ROOT      — spectralis package, benchmarks
+      [1] VENDORED_GPT_SOVITS  — spectralis/_vendor (t2s_model.py + BigVGAN CUDA)
       [2] MAIN_GPT_SOVITS      — bare "AR.modules.*" fallback (not in vendored)
       [3] MAIN_REPO            — GPT_SoVITS.xxx, config, tools packages
 
-    VENDORED_GPT_SOVITS only has AR/models/t2s_model.py (spectralis-optimized
-    Text2SemanticDecoder) and AR/ has no __init__.py (namespace package).
-    MAIN_GPT_SOVITS/AR/ has __init__.py so Python treats the merged package
-    as regular — but VENDORED_GPT_SOVITS/AR/models/ is searched first for submodules.
+    VENDORED_GPT_SOVITS contains vendored overrides: t2s_model.py (static KV +
+    CUDA Graph) and BigVGAN CUDA kernel loader. Namespace __init__.py files
+    (pkgutil.extend_path) merge with main GPT-SoVITS at import time.
     """
 
     _CANONICAL = (SPECTRALIS_ROOT, VENDORED_GPT_SOVITS, MAIN_GPT_SOVITS, MAIN_REPO)

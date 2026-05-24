@@ -3,15 +3,20 @@ import os
 import sys
 import time
 import threading
-import torch
-import soundfile as sf
 import logging
 import tempfile
 import traceback
-import numpy as np
 from pathlib import Path
 import string
 from string import punctuation
+
+import torch
+import numpy as np
+
+try:
+    import soundfile as sf
+except ImportError:
+    sf = None  # friendly error in TTSInferencer.__init__
 
 # TTS 语言配置（通过环境变量 TTS_OUTPUT_LANGUAGE 切换，默认日文）
 try:
@@ -77,7 +82,17 @@ try:
 
 
 except ImportError as e:
-    logger.error(f"导入模块失败: {str(e)}")
+    _missing = str(e)
+    if "librosa" in _missing:
+        logger.error("librosa is required. Install with: pip install spectralis-tts[runtime]")
+    elif "peft" in _missing:
+        logger.error("peft is required. Install with: pip install spectralis-tts[runtime]")
+    elif "GPT_SoVITS" in _missing:
+        logger.error(
+            "GPT-SoVITS not found. Set GPT_SOVITS_HOME to your GPT-SoVITS repo root."
+        )
+    else:
+        logger.error(f"Import failed: {_missing}")
     raise
 
 

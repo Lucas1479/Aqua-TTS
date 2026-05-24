@@ -15,10 +15,9 @@ os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MAIN_REPO = os.environ.get(
-    "GPT_SOVITS_HOME",
-    r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401",
-)
+MAIN_REPO = os.environ.get("GPT_SOVITS_HOME")
+if not MAIN_REPO:
+    sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 sys.path.insert(0, os.path.join(ROOT, "spectralis", "_vendor"))
 sys.path.insert(0, ROOT)

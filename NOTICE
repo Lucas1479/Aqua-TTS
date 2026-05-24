@@ -6,7 +6,7 @@ This project includes code from the following third-party projects:
 
 ## GPT-SoVITS
 
-Files: GPT_SoVITS/AR/models/t2s_model.py
+Files: spectralis/_vendor/GPT_SoVITS/AR/models/t2s_model.py
 
 Copyright (c) 2024 RVC-Boss
 Licensed under the MIT License.
@@ -22,10 +22,11 @@ Modifications:
 - Added fallback-on-error path: CUDA Graph → static KV → dynamic torch.cat
 - All decode-step logs use structured `[graph]` prefix for grep-friendly debugging
 
-The vendored GPT_SoVITS/AR/__init__.py and GPT_SoVITS/AR/models/__init__.py
-use pkgutil.extend_path to merge with the main GPT-SoVITS package at import time.
-The BigVGAN CUDA kernel in GPT_SoVITS/BigVGAN/alias_free_activation/cuda/ is
-subject to the NVIDIA BigVGAN license below.
+The vendored spectralis/_vendor/GPT_SoVITS/AR/__init__.py and
+spectralis/_vendor/GPT_SoVITS/AR/models/__init__.py use pkgutil.extend_path
+to merge with the main GPT-SoVITS package at import time.
+The BigVGAN CUDA kernel in spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/
+is subject to the NVIDIA BigVGAN license below.
 
 ---
 
@@ -35,9 +36,9 @@ Files: spectralis/bigvgan/cuda/anti_alias_activation.cpp
        spectralis/bigvgan/cuda/anti_alias_activation_cuda.cu
        spectralis/bigvgan/cuda/compat.h
        spectralis/bigvgan/cuda/type_shim.h
-       GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cpp
-       GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cu
-       GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.h
+       spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cpp
+       spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cu
+       spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.h
 
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 Licensed under the Apache License, Version 2.0.
@@ -45,7 +46,7 @@ Licensed under the Apache License, Version 2.0.
 http://www.apache.org/licenses/LICENSE-2.0
 
 Modifications: Added at::cuda::CUDAGuard for multi-device safety.
-  Added MSVC auto-discovery loader (GPT_SoVITS/BigVGAN/alias_free_activation/cuda/load.py)
+  Added MSVC auto-discovery loader (spectralis/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/load.py)
   that pre-compiles the kernel and caches .pyd files per GPU compute capability.
 
 ---

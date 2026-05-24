@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse, os, statistics, subprocess, sys, tempfile, textwrap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OFFICIAL_REPO = r"F:\Computer_Science\GPT-SoVITS-official"
-MAIN_REPO = r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401"
+OFFICIAL_REPO = os.environ.get("GPT_SOVITS_OFFICIAL_HOME") or os.environ.get("GPT_SOVITS_HOME")
+if not OFFICIAL_REPO:
+    sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
+MAIN_REPO = os.environ.get("GPT_SOVITS_HOME") or OFFICIAL_REPO
 MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
 TOKEN_COUNT = 500
 REPEATS = 5

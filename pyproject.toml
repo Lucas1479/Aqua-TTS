@@ -35,6 +35,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+runtime = [
+    "soundfile>=0.12",
+    "librosa>=0.10",
+    "peft>=0.7",
+]
 server = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",

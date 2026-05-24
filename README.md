@@ -76,8 +76,12 @@ Spectralis-TTS has been tested against GPT-SoVITS v3 (2025-04-01 release).
 ```bash
 git clone https://github.com/SiqiLiOcean/spectralis-tts.git
 cd spectralis-tts
-pip install -e .
+pip install -e ".[runtime]"
 ```
+
+The `[runtime]` extra installs soundfile, librosa, and peft — needed for
+the full `TTSInferencer` pipeline. If you already have GPT-SoVITS installed
+these are likely satisfied.
 
 ### 3. Configure GPT-SoVITS path
 

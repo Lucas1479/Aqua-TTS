@@ -21,9 +21,8 @@ os.environ.setdefault("PYTHONUTF8", "1")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-_MAIN_REPO_FALLBACK = r"F:\BaiduNetdiskDownload\GPT-SoVITS\GPT-SoVITS-v3lora-20250401"
 if not os.environ.get("GPT_SOVITS_HOME"):
-    os.environ["GPT_SOVITS_HOME"] = _MAIN_REPO_FALLBACK
+    sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 
 import torch
 
