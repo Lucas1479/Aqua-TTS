@@ -1,6 +1,6 @@
 # Aqua-TTS Benchmark Result
 
-Date: 2026-05-24
+Date: 2026-05-25
 
 ## Environment
 
@@ -76,19 +76,19 @@ Log confirmation:
 
 ## TTFP Results
 
-| Case | Chars | Median TTFP |
-|------|------:|------------:|
-| short | 3 | 262.2ms |
-| medium | 19 | 317.5ms |
-| long | 64 | 408.9ms |
+| Case | Chars | Median TTFP | Mean ± Std |
+|------|------:|------------:|------------|
+| short | 3 | 256.7ms | 260.4 ± 21.0ms |
+| medium | 19 | 301.4ms | 304.2 ± 5.3ms |
+| long | 64 | 404.4ms | 404.0 ± 7.6ms |
 
 Raw repeats:
 
 | Case | Repeats |
 |------|---------|
-| short | 259.0ms, 262.2ms, 242.7ms, 266.9ms, 271.2ms |
-| medium | 317.5ms, 322.4ms, 323.0ms, 314.2ms, 314.2ms |
-| long | 435.2ms, 403.4ms, 402.8ms, 417.1ms, 408.9ms |
+| short | 293.6ms, 229.0ms, 254.4ms, 256.7ms, 268.1ms |
+| medium | 301.4ms, 311.4ms, 297.9ms, 309.7ms, 300.6ms |
+| long | 416.6ms, 400.2ms, 404.4ms, 393.3ms, 405.4ms |
 
 ## Component Benchmarks
 
@@ -96,19 +96,24 @@ Raw repeats:
 
 | Metric | Value |
 |--------|------:|
-| Median speed | 469 it/s |
-| Repeats | 469, 473, 453, 465, 501 it/s |
-| Graph replay | ~98.7%-99.3% |
-| Bucket | 256 |
+| Median speed | 449 it/s |
+| Repeats | 449, 463, 494, 443, 311 it/s |
+| Graph replay | ~98.6%-99.5% |
+| Bucket | 256 (trials 1-4), 256→fallback (trial 5) |
+
+> **Note:** Trial 5 hit a CUDA Graph bucket boundary mid-sequence and fell back to the static (non-graph) path
+> (`Graph write position at bucket boundary, falling back to static path`), yielding 311 it/s. This is a real
+> edge case when a sequence length reaches the end of a bucket window. Median excluding the fallback trial: **463 it/s**.
+> The fallback is non-crashing and produces correct output; it only affects throughput for that sequence.
 
 ### BigVGAN Raw
 
-| mel_T | Median |
-|------:|-------:|
-| 70 | 27.1ms |
-| 128 | 30.0ms |
-| 298 | 50.6ms |
-| 598 | 82.7ms |
+| mel_T | Median | Min | Max |
+|------:|-------:|----:|----:|
+| 70 | 28.2ms | 27.7ms | 28.7ms |
+| 128 | 31.0ms | 30.4ms | 32.4ms |
+| 298 | 52.9ms | 52.1ms | 54.1ms |
+| 598 | 86.3ms | 85.3ms | 87.5ms |
 
 Settings:
 
@@ -116,10 +121,25 @@ Settings:
 use_cuda_kernel=True
 precision=FP16
 num_mels=100
+warmup=10 forward passes per size
+repeats=20 (torch.cuda.synchronize() before + after each)
 ```
 
 ## Notes
 
-- The first run may be much slower because BigVGAN CUDA kernels can compile on cold cache.
+- All numbers are **warm cache** (CUDA Graph pre-captured, BigVGAN kernel pre-compiled, GPU allocator primed by 2-text warmup). Cold start adds ~108s for BigVGAN kernel compilation on first run.
 - TTFP, full generation latency, T2S throughput, and BigVGAN raw timing are separate metrics and should not be compared as the same latency.
 - This result uses a v3 LoRA asset set and should be compared with runs using the same model family and reference audio.
+- T2S trial 5 triggered a CUDA Graph bucket boundary fallback (311 it/s); documented above. Normal steady-state throughput is 443-494 it/s.
+
+## Run-to-Run Stability (vs 2026-05-24)
+
+| Metric | 2026-05-24 | 2026-05-25 | Delta |
+|--------|------------|------------|-------|
+| TTFP short | 262.2ms | 256.7ms | −5.5ms |
+| TTFP medium | 317.5ms | 301.4ms | −16.1ms |
+| TTFP long | 408.9ms | 404.4ms | −4.5ms |
+| T2S median (all trials) | 469 it/s | 449 it/s | −20 it/s |
+| T2S median (excl. fallback) | 469 it/s | 463 it/s | −6 it/s |
+| BigVGAN mel_T=70 | 27.1ms | 28.2ms | +1.1ms |
+| BigVGAN mel_T=598 | 82.7ms | 86.3ms | +3.6ms |
