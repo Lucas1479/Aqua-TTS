@@ -57,6 +57,8 @@ def _parse_args():
                         help="Streaming playback chunk size. Smaller starts sooner; larger can sound steadier.")
     parser.add_argument("--output-device-index", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
+    parser.add_argument("--show-total", action="store_true",
+                        help="Also print audio duration, wall time, and RTF.")
     parser.add_argument("--no-warmup", action="store_true")
     parser.add_argument("--seed", type=int, default=1234,
                         help="Sampling seed for repeatable demo output; set -1 for random.")

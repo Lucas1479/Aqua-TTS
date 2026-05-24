@@ -192,6 +192,8 @@ def _parse_args():
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--save-dir", default="",
                         help="Optional directory for writing each utterance as WAV.")
+    parser.add_argument("--show-total", action="store_true",
+                        help="Also print audio duration, wall time, and RTF.")
     parser.add_argument("--no-warmup", action="store_true",
                         help="Skip the silent warmup request before playback.")
     parser.add_argument("--seed", type=int, default=1234,
@@ -319,7 +321,6 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
                 output_device_index=args.output_device_index,
                 frames_per_buffer=max(256, min(2048, len(audio))),
             )
-            print(f"[{label}] first_audio={first_audio_ms:.1f}ms")
 
         stream.write(merged.tobytes())
         total_samples += len(merged)
@@ -342,9 +343,12 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     audio_sec = total_samples / float(sample_rate)
     rtf = elapsed / audio_sec if audio_sec > 0 else float("inf")
     t2s_tokens, t2s_elapsed, t2s_rate = _summarize_t2s(tts.t2s_stats[t2s_stats_start:])
+    first_audio_text = f"{first_audio_ms:.1f}ms" if first_audio_ms is not None else "n/a"
     t2s_detail = f" ({t2s_tokens} tokens/{t2s_elapsed:.3f}s)" if args.verbose else ""
-    print(f"[{label}] t2s_live={t2s_rate:.0f} it/s{t2s_detail} | "
-          f"audio={audio_sec:.2f}s | elapsed={elapsed:.2f}s | rtf={rtf:.2f}x")
+    summary = f"[{label}] first_audio={first_audio_text} | t2s_live={t2s_rate:.0f} it/s{t2s_detail}"
+    if getattr(args, "show_total", False):
+        summary += f" | audio={audio_sec:.2f}s | elapsed={elapsed:.2f}s | rtf={rtf:.2f}x"
+    print(summary)
 
     if save_dir is not None:
         wav_path = save_dir / f"{label}.wav"
