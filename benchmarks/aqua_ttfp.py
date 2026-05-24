@@ -139,7 +139,7 @@ def main():
 
     print(f"--- Aqua TTFP ---")
     elapsed_label = "total" if args.measure_total else "elapsed"
-    hdr = f"{'case':<8} {'chars':>5}  {'first_audio':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
+    hdr = f"{'case':<8} {'chars':>5}  {'ttfp':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
     print(hdr)
     print("-" * 80)
 

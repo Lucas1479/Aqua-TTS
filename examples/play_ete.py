@@ -49,11 +49,12 @@ KURISU_DEMO_TEXTS = [
 ]
 WARMUP_TEXT = "これはテストです。"
 DEFAULT_TOP_K = 5
-DEFAULT_TOP_P = 0.9
+DEFAULT_TOP_P = 1.0
 DEFAULT_TEMPERATURE = 0.6
-DEFAULT_SPEED = 1.0
+DEFAULT_SPEED = 1.1
 DEFAULT_SAMPLE_STEPS = 4
 DEFAULT_CHUNK_SECONDS = 0.35
+DEFAULT_HOW_TO_CUT = "按标点符号切"
 
 
 @contextlib.contextmanager
@@ -182,12 +183,20 @@ def _parse_args():
     parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--speed", type=float, default=DEFAULT_SPEED)
+    parser.add_argument("--how-to-cut", default=DEFAULT_HOW_TO_CUT,
+                        choices=["不切", "凑四句一切", "凑50字一切",
+                                 "按中文句号。切", "按英文句号.切", "按标点符号切"],
+                        help="Text segmentation strategy. Default matches the low-latency live path.")
     parser.add_argument("--sample-steps", type=int, default=DEFAULT_SAMPLE_STEPS,
                         help="CFM sampling steps. Higher is steadier but slower.")
     parser.add_argument("--chunk-size-seconds", type=float, default=DEFAULT_CHUNK_SECONDS,
                         help="Streaming playback chunk size. Smaller starts sooner; larger can sound steadier.")
     parser.add_argument("--pause", type=float, default=0.45,
                         help="Seconds to wait between demo utterances.")
+    parser.add_argument("--interactive", action="store_true",
+                        help="Enter a Japanese text prompt after the scripted demo.")
+    parser.add_argument("--interactive-show-t2s", action="store_true",
+                        help="Also print live T2S throughput for interactive prompts.")
     parser.add_argument("--output-device-index", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--save-dir", default="",
@@ -214,7 +223,7 @@ def _warmup(tts, args, ref_audio: str, quiet: bool = True) -> None:
         prompt_text=args.ref_text,
         text_language=args.text_lang,
         prompt_language=args.ref_lang,
-        how_to_cut="按标点符号切",
+        how_to_cut=args.how_to_cut,
         top_k=args.top_k,
         top_p=args.top_p,
         temperature=args.temperature,
@@ -236,7 +245,7 @@ def _warmup(tts, args, ref_audio: str, quiet: bool = True) -> None:
 
 
 def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str,
-                   save_dir: Path | None = None) -> dict:
+                   save_dir: Path | None = None, show_t2s: bool = True) -> dict:
     print(f"\n[{label}] {text}")
     _set_seed(args.seed)
     stream = None
@@ -253,7 +262,7 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
         prompt_text=args.ref_text,
         text_language=args.text_lang,
         prompt_language=args.ref_lang,
-        how_to_cut="按标点符号切",
+        how_to_cut=args.how_to_cut,
         top_k=args.top_k,
         top_p=args.top_p,
         temperature=args.temperature,
@@ -345,7 +354,9 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     t2s_tokens, t2s_elapsed, t2s_rate = _summarize_t2s(tts.t2s_stats[t2s_stats_start:])
     first_audio_text = f"{first_audio_ms:.1f}ms" if first_audio_ms is not None else "n/a"
     t2s_detail = f" ({t2s_tokens} tokens/{t2s_elapsed:.3f}s)" if args.verbose else ""
-    summary = f"[{label}] first_audio={first_audio_text} | t2s_live={t2s_rate:.0f} it/s{t2s_detail}"
+    summary = f"[{label}] ttfp={first_audio_text}"
+    if show_t2s:
+        summary += f" | t2s_live={t2s_rate:.0f} it/s{t2s_detail}"
     if getattr(args, "show_total", False):
         summary += f" | audio={audio_sec:.2f}s | elapsed={elapsed:.2f}s | rtf={rtf:.2f}x"
     print(summary)
@@ -419,6 +430,30 @@ def main():
             play_utterance(tts, pa, pyaudio, args, ref_audio, label, text, save_dir)
             if args.pause > 0:
                 time.sleep(args.pause)
+        if args.interactive:
+            print("\nType Japanese text and press Enter. Use /q to quit.")
+            line_no = 1
+            while True:
+                try:
+                    text = input("ja> ").strip()
+                except EOFError:
+                    break
+                if not text:
+                    continue
+                if text.lower() in {"/q", "/quit", "quit", "exit"}:
+                    break
+                play_utterance(
+                    tts,
+                    pa,
+                    pyaudio,
+                    args,
+                    ref_audio,
+                    f"line{line_no}",
+                    text,
+                    save_dir,
+                    show_t2s=args.interactive_show_t2s,
+                )
+                line_no += 1
     finally:
         pa.terminate()
 

@@ -21,6 +21,7 @@ sys.path[:0] = [str(ROOT), str(EXAMPLES_DIR)]
 
 from play_ete import (  # noqa: E402
     DEFAULT_CHUNK_SECONDS,
+    DEFAULT_HOW_TO_CUT,
     DEFAULT_SAMPLE_STEPS,
     DEFAULT_SPEED,
     DEFAULT_TEMPERATURE,
@@ -51,6 +52,10 @@ def _parse_args():
     parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--speed", type=float, default=DEFAULT_SPEED)
+    parser.add_argument("--how-to-cut", default=DEFAULT_HOW_TO_CUT,
+                        choices=["不切", "凑四句一切", "凑50字一切",
+                                 "按中文句号。切", "按英文句号.切", "按标点符号切"],
+                        help="Text segmentation strategy. Default matches the low-latency live path.")
     parser.add_argument("--sample-steps", type=int, default=DEFAULT_SAMPLE_STEPS,
                         help="CFM sampling steps. Higher is steadier but slower.")
     parser.add_argument("--chunk-size-seconds", type=float, default=DEFAULT_CHUNK_SECONDS,
