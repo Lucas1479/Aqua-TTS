@@ -32,6 +32,16 @@ def _default_ref_free_prompt() -> str:
     return _TTS_REF_TEXT_JA or "こんにちは。今日はいい天気ですね。"
 
 
+def _env_bool(*names: str, default: bool = False) -> bool:
+    """Read the first defined boolean environment variable from names."""
+    for name in names:
+        value = os.environ.get(name)
+        if value is None:
+            continue
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
+
+
 # Set up logging
 # 设置日志记录
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -107,7 +117,9 @@ class TTSInferencer:
                  bert_path=None,
                  cnhubert_path=None,
                  language="Auto",
-                 cuda_graph_preset="full"):
+                 cuda_graph_preset="full",
+                 use_flash_attn=None,
+                 flash_attn_mode=None):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -129,8 +141,20 @@ class TTSInferencer:
                 "minimal" (subset), "lazy" (capture on first use), "off" (static KV only)
                 CUDA Graph 捕获策略 — "full" (全桶预捕获), "minimal" (最小桶集合),
                 "lazy" (惰性捕获), "off" (纯 static KV)
+            use_flash_attn: Optional FlashAttention2 KV-cache decode path for T2S.
+                None means read AQUATTS_T2S_FLASH_ATTN / TTS_T2S_FLASH_ATTN.
+                Default remains disabled.
+            flash_attn_mode: "valid" (true KV length) or "bucket" (zero-padded bucket).
         """
         self._cuda_graph_preset = cuda_graph_preset
+        self._use_flash_attn = use_flash_attn
+        self._flash_attn_mode = (
+            flash_attn_mode
+            or os.environ.get(
+                "AQUATTS_T2S_FLASH_ATTN_MODE",
+                os.environ.get("TTS_T2S_FLASH_ATTN_MODE", "valid"),
+            )
+        ).strip().lower()
         try:
             # 确定模型路径
             base_dir = _gpt_sovits_home() or _PACKAGE_DIR
@@ -339,6 +363,7 @@ class TTSInferencer:
         self.t2s_model = self.t2s_model.to(self.device)
         self.t2s_model.eval()
 
+        self._maybe_enable_flash_attn_t2s()
         self._maybe_precapture_t2s_graph()
 
     def _warmup_bigvgan_shapes(self):
@@ -366,6 +391,43 @@ class TTSInferencer:
             logger.info("[warmup] BigVGAN shape warmup complete")
         except Exception:
             pass  # warmup is best-effort; never block startup
+
+    def _maybe_enable_flash_attn_t2s(self):
+        """Enable optional FlashAttention2 KV-cache decoding before graph capture."""
+        enabled = (
+            bool(self._use_flash_attn)
+            if self._use_flash_attn is not None
+            else _env_bool("AQUATTS_T2S_FLASH_ATTN", "TTS_T2S_FLASH_ATTN")
+        )
+        if not enabled:
+            return
+
+        decoder = getattr(self.t2s_model, "model", None)
+        if decoder is None:
+            return
+
+        try:
+            from aquatts.modeling.t2s_flash_attn import (
+                apply_flash_attn_patch,
+                get_flash_attn_error,
+                is_flash_attn_available,
+            )
+
+            if not is_flash_attn_available():
+                logger.warning(
+                    "T2S FlashAttention2 requested but unavailable: %s",
+                    get_flash_attn_error(),
+                )
+                return
+
+            if apply_flash_attn_patch(decoder, mode=self._flash_attn_mode):
+                logger.info(
+                    "[T2S FlashAttn] enabled flash_attn_with_kvcache "
+                    "(mode=%s)",
+                    getattr(decoder, "flash_attn_kvcache_mode", self._flash_attn_mode),
+                )
+        except Exception as exc:
+            logger.warning("T2S FlashAttention2 setup failed; using SDPA path: %s", exc)
 
     def _maybe_precapture_t2s_graph(self):
         """根据 CUDA Graph preset 预捕获 T2S 阶段的 CUDA Graph。
