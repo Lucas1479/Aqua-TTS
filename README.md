@@ -268,6 +268,49 @@ Two layers of presets control quality/speed trade-offs:
 | `lazy` | No | on-the-fly | Lower memory, slower TTFP |
 | `off` | Disabled | none | Static KV only, no graphs |
 
+**Optional FlashAttention2 T2S path** (experimental, disabled by default):
+
+Aqua-TTS can replace the q_len=1 T2S static-KV attention step with
+`flash_attn_with_kvcache`. This is an opt-in path because the useful `valid`
+mode attends over the true KV length rather than the full zero-padded bucket,
+so output can differ slightly from the default SDPA bucket path.
+
+Enable it for long first-sentence or long-form T2S throughput experiments:
+
+```bash
+export AQUATTS_T2S_FLASH_ATTN=1
+export AQUATTS_T2S_FLASH_ATTN_MODE=valid  # valid | bucket
+```
+
+or from Python:
+
+```python
+tts = TTSInferencer(..., use_flash_attn=True, flash_attn_mode="valid")
+```
+
+Keep it off for short demo lines, early-cut first-sentence demos, or strict
+regression comparisons. On short 448/512-bucket shapes the extra path is often
+within noise or slightly slower; it becomes more interesting on longer 768+
+bucket decode.
+
+Directional AB test on the shared Aqua/Amadeus v3 T2S path
+(RTX 4070 Ti SUPER, PyTorch 2.5.1+cu124, flash-attn 2.7.0.post2,
+CUDA Graph pre-captured, BigVGAN CUDA kernel cached):
+
+| Case | Flash off | Flash on (`valid`) | Note |
+|---|---:|---:|---|
+| T2S short, 3 chars | ~427 it/s | ~414 it/s | no benefit |
+| T2S medium, 19 chars | ~448 it/s | ~478 it/s | small win |
+| T2S long, 64 chars | ~461 it/s | ~500 it/s | ~8% throughput win |
+| TTFP short | ~290ms | ~297ms | no benefit |
+| TTFP medium | ~396ms | ~413ms | no benefit in this run |
+| TTFP long | ~687ms | ~659ms | ~28ms model-side win |
+| TTFP long early-cut | ~317ms | ~336ms | keep off for early-cut |
+
+Treat these as guidance rather than headline numbers: FlashAttention2 helps
+most when attention bucket length is the bottleneck, while Aqua's default
+CUDA-Graph SDPA path is already very fast for short conversational turns.
+
 ```python
 from aquatts import apply_preset, list_presets
 

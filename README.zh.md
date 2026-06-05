@@ -46,6 +46,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **静态 KV 缓存** — 预分配的 scatter 缓冲区，消除每步 `torch.cat` 开销
 - **分段 CUDA Graph** — 6 个桶大小共 13 个预捕获图，无预热抖动
 - **预编译 BigVGAN** — NVIDIA CUDA 内核从预构建 `.pyd` 自动加载，支持 torch 回退
+- **可选 FlashAttention2 KV 缓存** — 实验性的 `flash_attn_with_kvcache` T2S 路径，默认关闭
 - **流式 API** — 基于生成器的 `infer_stream()`，首包尽早 yield
 - **内置预设** — 快速 / 均衡 / 质量 三种生成预设；完整 / 最小 / 延迟 / 关闭 四种 CUDA Graph 预设
 - **角色管理** — 将角色名映射到参考音频和文本提示，支持 JSON 持久化
@@ -76,7 +77,8 @@ aqua-tts/
 │   ├── server.py                  # FastAPI HTTP 服务器
 │   ├── voice_registry.py          # 角色名 → 音频路径映射
 │   ├── modeling/
-│   │   └── t2s_streaming.py       # T2SBlockWithStaticCache, CUDA Graph 补丁
+│   │   ├── t2s_streaming.py       # T2SBlockWithStaticCache, CUDA Graph 补丁
+│   │   └── t2s_flash_attn.py      # 可选 FlashAttention2 KV-cache 补丁
 │   ├── bigvgan/
 │   │   ├── cuda/                  # 独立 CUDA 内核加载器与源码
 │   │   └── torch/                 # 纯 PyTorch 回退
@@ -247,6 +249,40 @@ for sr, chunk, text in tts.infer_stream(
 | `lazy` | 否 | 即时生成 | 较低内存，TTFP 较慢 |
 | `off` | 禁用 | 无 | 仅静态 KV，无图 |
 
+**可选 FlashAttention2 T2S 路径**（实验性，默认关闭）：
+
+Aqua-TTS 可以用 `flash_attn_with_kvcache` 替换 q_len=1 的 T2S 静态 KV attention 步骤。它是 opt-in 路径，因为收益较明显的 `valid` 模式会按真实 KV 长度参与注意力，而不是默认 SDPA 路径里的完整零填充 bucket，因此输出可能和默认路径有轻微差异。
+
+适合在“长首句”或长文本 T2S 吞吐实验中开启：
+
+```bash
+export AQUATTS_T2S_FLASH_ATTN=1
+export AQUATTS_T2S_FLASH_ATTN_MODE=valid  # valid | bucket
+```
+
+也可以从 Python 显式开启：
+
+```python
+tts = TTSInferencer(..., use_flash_attn=True, flash_attn_mode="valid")
+```
+
+短 demo 句、early-cut 首句 demo、严格回归对比时建议保持关闭。短文本通常落在 448/512 bucket，FlashAttention2 的额外路径开销经常抵消收益；当文本更长、路由到 768+ bucket 时才更值得测试。
+
+共享 Aqua/Amadeus v3 T2S 路径上的方向性 AB 测试
+（RTX 4070 Ti SUPER，PyTorch 2.5.1+cu124，flash-attn 2.7.0.post2，CUDA Graph 已预捕获，BigVGAN CUDA kernel 已缓存）：
+
+| 场景 | Flash 关闭 | Flash 开启 (`valid`) | 结论 |
+|---|---:|---:|---|
+| T2S 短句，3 字符 | ~427 it/s | ~414 it/s | 无收益 |
+| T2S 中句，19 字符 | ~448 it/s | ~478 it/s | 小幅收益 |
+| T2S 长句，64 字符 | ~461 it/s | ~500 it/s | 约 8% 吞吐提升 |
+| TTFP 短句 | ~290ms | ~297ms | 无收益 |
+| TTFP 中句 | ~396ms | ~413ms | 本轮无收益 |
+| TTFP 长句 | ~687ms | ~659ms | 模型侧约 28ms 收益 |
+| TTFP 长句 early-cut | ~317ms | ~336ms | early-cut 建议关闭 |
+
+这些数据更适合作为使用建议，而不是宣传基准。Aqua 默认的 CUDA-Graph SDPA 路径在短对话轮次里已经很快，FlashAttention2 主要在 attention bucket 长度成为瓶颈时才更有意义。
+
 ```python
 from aquatts import apply_preset, list_presets
 
@@ -337,6 +373,8 @@ export AQUA_VOICE_JSON=/data/voices.json
 | `AQUA_SESSION_CACHE_MAX` | `8` | 参考音频 session 最大缓存数量 |
 | `ENABLE_CUDA_GRAPH` | `1` | 启用 CUDA Graph 回放 |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | 启动时预捕获所有桶图 |
+| `AQUATTS_T2S_FLASH_ATTN` | `0` | 启用实验性 FlashAttention2 `flash_attn_with_kvcache` T2S 路径 |
+| `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FlashAttention 模式：`valid` 使用真实 KV 长度；`bucket` 保留零填充 bucket 长度 |
 | `TTS_OUTPUT_LANGUAGE` | `日文` | 默认输出语言。非日语用户请改为 `中文` 或 `英文` |
 | `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | 默认日语参考文本 |
 | `TTS_REF_TEXT_EN` | *(空)* | 默认英语参考文本 |
