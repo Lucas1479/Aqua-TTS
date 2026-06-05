@@ -46,6 +46,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 - **Static KV cache** — pre-allocated scatter buffers eliminate per-step `torch.cat` overhead
 - **Bucketed CUDA Graph** — 13 pre-captured graphs across 6 bucket sizes, no warmup jitter
 - **Pre-compiled BigVGAN** — NVIDIA CUDA kernel auto-loaded from pre-built `.pyd`, with torch fallback
+- **Optional FlashAttention2 KV cache** — experimental `flash_attn_with_kvcache` T2S path, disabled by default
 - **Streaming API** — generator-based `infer_stream()` with early first-audio yield
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
@@ -78,7 +79,8 @@ aqua-tts/
 │   ├── server.py                  # FastAPI HTTP server
 │   ├── voice_registry.py          # Voice name → audio path mapping
 │   ├── modeling/
-│   │   └── t2s_streaming.py       # T2SBlockWithStaticCache, CUDA Graph patch
+│   │   ├── t2s_streaming.py       # T2SBlockWithStaticCache, CUDA Graph patch
+│   │   └── t2s_flash_attn.py      # Optional FlashAttention2 KV-cache patch
 │   ├── bigvgan/
 │   │   ├── cuda/                  # Standalone CUDA kernel loader + sources
 │   │   └── torch/                 # Pure-PyTorch fallback (resample, filter, act)
@@ -353,6 +355,8 @@ export AQUA_VOICE_JSON=/data/voices.json
 | `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph replay |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at startup |
+| `AQUATTS_T2S_FLASH_ATTN` | `0` | Enable experimental FlashAttention2 `flash_attn_with_kvcache` path for T2S |
+| `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FlashAttention mode: `valid` uses true KV length; `bucket` preserves zero-padded bucket length |
 | `TTS_OUTPUT_LANGUAGE` | `日文` | Default output language. Change to `中文` or `英文` if not using Japanese |
 | `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | Default Japanese reference text |
 | `TTS_REF_TEXT_EN` | *(empty)* | Default English reference text |
