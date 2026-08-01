@@ -7,14 +7,14 @@
 
 <div align="center">
 
-<img src="assets/aqua.png" width="720"/>
+<img src="https://raw.githubusercontent.com/Lucas1479/Aqua-TTS/main/assets/aqua.png" width="720"/>
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> Low-Latency Inference Runtime on GPU</h1>
 
 <p>Built for low-latency voice conversation with your LoRA characters</p>
 
 <p>
-  <a href="README.zh.md">中文</a> | English
+  <a href="https://github.com/Lucas1479/Aqua-TTS/blob/main/README.zh.md">中文</a> | English
 </p>
 
 <p>
@@ -44,7 +44,7 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 | BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
 | KV-cache allocation | Unbounded growth | Unbounded growth | **Bounded per bucket config** |
 
-*TTFP benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu121, float16, warm cache, static KV cache enabled, bucketed CUDA Graph pre-captured. Aqua-TTS numbers are median of 5 runs. Official baseline uses the same GPT checkpoint; TTFP for non-streaming baselines coincides with full utterance completion. See [benchmarks/README.md](benchmarks/README.md) for full methodology and raw repeats.*
+*TTFP benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu121, float16, warm cache, static KV cache enabled, bucketed CUDA Graph pre-captured. Aqua-TTS numbers are median of 5 runs. Official baseline uses the same GPT checkpoint; TTFP for non-streaming baselines coincides with full utterance completion. See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for full methodology and raw repeats.*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
@@ -58,9 +58,9 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
-- **Source install** — `pip install -e ".[runtime]"` → `from aquatts import TTSInferencer`
+- **PyPI install** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
+> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
 
 > **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
 
@@ -108,7 +108,7 @@ aqua-tts/
 └── tests/                         # Unit tests
 ```
 
-See **[TECHNICAL.md](TECHNICAL.md)** for deep technical documentation.
+See **[TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md)** for deep technical documentation.
 
 ## Requirements
 
@@ -152,21 +152,28 @@ Aqua-TTS has been tested with PyTorch 2.5.1+cu121 on an RTX 4070 Ti SUPER.
 ### 3. Install Aqua-TTS
 
 ```bash
-git clone https://github.com/Lucas1479/Aqua-TTS.git
-cd Aqua-TTS
-
-# Core + runtime dependencies
-pip install -e ".[runtime]"
+# Core + runtime dependencies from PyPI
+pip install "aqua-tts[runtime]"
 
 # Or with HTTP server support
-pip install -e ".[runtime,server]"
+pip install "aqua-tts[server]"
+
+# Or with local playback support
+pip install "aqua-tts[playback]"
 ```
 
-> PyPI package is planned but not yet published.
+For development or unreleased changes, install from source instead:
+
+```bash
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd Aqua-TTS
+pip install -e ".[runtime]"
+```
 
 Extras:
 - `[runtime]` — soundfile, librosa, peft (needed by `TTSInferencer`)
 - `[server]` — FastAPI + uvicorn (includes `[runtime]` automatically)
+- `[playback]` — PyAudio (includes `[runtime]` automatically)
 
 ### 4. Configure GPT-SoVITS path
 
@@ -430,7 +437,7 @@ python benchmarks/aqua_ttfp.py \
 python benchmarks/bigvgan_raw_bench.py
 ```
 
-See [benchmarks/README.md](benchmarks/README.md) for full methodology and results.
+See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for full methodology and results.
 
 ## Speaker Demo
 
@@ -450,16 +457,16 @@ python examples/live_talk.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
 
 ## Acknowledgements
 
-Aqua-TTS was inspired by [GENIE-TTS](https://github.com/w-okada/genie-tts), which demonstrated that a focused, self-contained inference runtime could meaningfully close the latency gap in GPT-SoVITS. That framing — optimise the runtime, not the model — shaped the direction of this project.
+Aqua-TTS was inspired by [GENIE-TTS](https://github.com/High-Logic/Genie-TTS), which demonstrated that a focused, self-contained inference runtime could meaningfully close the latency gap in GPT-SoVITS. That framing — optimise the runtime, not the model — shaped the direction of this project.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/Lucas1479/Aqua-TTS/blob/main/LICENSE).
 
 Third-party code:
-- **GPT-SoVITS**: vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](NOTICE).
-- **NVIDIA BigVGAN**: CUDA kernel sources under Apache 2.0 — see [NOTICE](NOTICE).
-- **alias-free-torch**: `aquatts/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](NOTICE).
+- **GPT-SoVITS**: vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
+- **NVIDIA BigVGAN**: CUDA kernel sources under Apache 2.0 — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
+- **alias-free-torch**: `aquatts/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
 
 ## Development
 
@@ -473,4 +480,5 @@ export GPT_SOVITS_HOME=/path/to/GPT-SoVITS
 python -m pytest tests/ -v
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CONTRIBUTING.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/CONTRIBUTING.md) for contribution guidelines and [CHANGELOG.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/CHANGELOG.md) for release history.
+Release maintainers should follow [PUBLISHING.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/PUBLISHING.md).

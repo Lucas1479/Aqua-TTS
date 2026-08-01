@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aqua-tts"
-version = "0.1.0"
+dynamic = ["version"]
 description = "GPU-optimized inference wrapper for GPT-SoVITS with static KV cache and CUDA Graph acceleration"
-readme = "README.md"
-license = { text = "MIT" }
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.10"
 authors = [
     { name = "Siqi Li" },
@@ -17,7 +18,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
@@ -52,6 +52,11 @@ playback = [
 [project.urls]
 Homepage = "https://github.com/Lucas1479/Aqua-TTS"
 Repository = "https://github.com/Lucas1479/Aqua-TTS"
+Issues = "https://github.com/Lucas1479/Aqua-TTS/issues"
+Changelog = "https://github.com/Lucas1479/Aqua-TTS/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "aquatts.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["aquatts*"]

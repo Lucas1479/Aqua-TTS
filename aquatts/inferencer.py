@@ -4,7 +4,6 @@ import time
 import threading
 import logging
 import traceback
-from pathlib import Path
 from string import punctuation
 
 import torch
@@ -72,7 +71,6 @@ try:
     from tools.audio_sr import AP_BWE
     from GPT_SoVITS.text import chinese
     from GPT_SoVITS.feature_extractor import cnhubert
-    from GPT_SoVITS.TTS_infer_pack.TTS import TTS
     from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
 
     """Load SoVITS model
@@ -81,13 +79,7 @@ try:
     from GPT_SoVITS.process_ckpt import load_sovits_new
     from peft import LoraConfig, get_peft_model
 
-    from GPT_SoVITS.text.LangSegmenter import LangSegmenter
-    from GPT_SoVITS.text import cleaned_text_to_sequence
-    from GPT_SoVITS.text.cleaner import clean_text
-
     from GPT_SoVITS.BigVGAN import bigvgan
-
-    from GPT_SoVITS.text import chinese
 
     from aquatts.inference.presets import (
         apply_cuda_graph_preset as _apply_cg_preset,
@@ -107,6 +99,32 @@ except ImportError as e:
     else:
         logger.error(f"Import failed: {_missing}")
     raise
+
+
+_V3_SPEC_MIN = -12
+_V3_SPEC_MAX = 2
+
+
+def _v3_mel_spectrogram(audio):
+    return mel_spectrogram_torch(
+        audio,
+        n_fft=1024,
+        win_size=1024,
+        hop_size=256,
+        num_mels=100,
+        sampling_rate=24000,
+        fmin=0,
+        fmax=None,
+        center=False,
+    )
+
+
+def _normalize_v3_spec(spec):
+    return (spec - _V3_SPEC_MIN) / (_V3_SPEC_MAX - _V3_SPEC_MIN) * 2 - 1
+
+
+def _denormalize_v3_spec(spec):
+    return (spec + 1) / 2 * (_V3_SPEC_MAX - _V3_SPEC_MIN) + _V3_SPEC_MIN
 
 
 class TTSInferencer:
@@ -211,7 +229,7 @@ class TTSInferencer:
             # 加载GPT和SoVITS模型
             self._load_models()
 
-            logger.info(f"⭐️ TTS推理器初始化完成")
+            logger.info("⭐️ TTS推理器初始化完成")
 
             # 会话级缓存：按(ref_audio_path, prompt_text, prompt_language_code, model_version, is_half)键控
             # 最多保留 AQUA_SESSION_CACHE_MAX 个音色条目，超出时 FIFO 淘汰最旧的。
@@ -627,7 +645,7 @@ class TTSInferencer:
             _use_cuda_kernel = False
             if _cuda_pyd.exists():
                 _use_cuda_kernel = True
-                logger.info(f"[BigVGAN] 检测到已编译 CUDA kernel 缓存，直接加载")
+                logger.info("[BigVGAN] 检测到已编译 CUDA kernel 缓存，直接加载")
             else:
                 try:
                     import subprocess as _sp
@@ -726,20 +744,7 @@ class TTSInferencer:
                 if ref_sr != 24000:
                     ref_audio = self._resample(ref_audio, ref_sr)
 
-                mel_fn = lambda x: mel_spectrogram_torch(x, **{
-                    "n_fft": 1024,
-                    "win_size": 1024,
-                    "hop_size": 256,
-                    "num_mels": 100,
-                    "sampling_rate": 24000,
-                    "fmin": 0,
-                    "fmax": None,
-                    "center": False
-                })
-                spec_min, spec_max = -12, 2
-                norm_spec = lambda x: (x - spec_min) / (spec_max - spec_min) * 2 - 1
-                mel2 = mel_fn(ref_audio)
-                mel2 = norm_spec(mel2)
+                mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
                 cache_item["mel2_norm"] = mel2
 
                 # 5) v3 额外缓存：prompt 侧 decode_encp 结果，避免每句重复做同一份参考编码
@@ -985,9 +990,6 @@ class TTSInferencer:
 
             # Define v3 CFM denorm function up front to avoid undefined branches
             # 统一定义 v3 CFM 解码所需的反归一化函数，避免某些分支下未定义
-            spec_min, spec_max = -12, 2
-            denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
-
             # Convert language code
             # 转换语言代码
             if text_language in self.dict_language:
@@ -1235,20 +1237,7 @@ class TTSInferencer:
                     # 提取mel特征（优先使用会话缓存）
                     mel2 = sess.get("mel2_norm")
                     if mel2 is None:
-                        mel_fn = lambda x: mel_spectrogram_torch(x, **{
-                            "n_fft": 1024,
-                            "win_size": 1024,
-                            "hop_size": 256,
-                            "num_mels": 100,
-                            "sampling_rate": 24000,
-                            "fmin": 0,
-                            "fmax": None,
-                            "center": False
-                        })
-                        spec_min, spec_max = -12, 2
-                        norm_spec = lambda x: (x - spec_min) / (spec_max - spec_min) * 2 - 1
-                        mel2 = mel_fn(ref_audio)
-                        mel2 = norm_spec(mel2)
+                        mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
 
                     # Align lengths to T_min
                     # 调整长度
@@ -1304,7 +1293,7 @@ class TTSInferencer:
                     # Concatenate chunk results
                     # 合并结果
                     cmf_res = torch.cat(cfm_resss, 2)
-                    cmf_res = denorm_spec(cmf_res)
+                    cmf_res = _denormalize_v3_spec(cmf_res)
 
                     # BigVGAN generates waveform / BigVGAN生成波形
                     # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
@@ -1461,9 +1450,6 @@ class TTSInferencer:
 
             # Define v3 CFM denorm function up front to avoid undefined branches
             # 统一定义 v3 CFM 解码所需的反归一化函数，避免某些分支下未定义
-            spec_min, spec_max = -12, 2
-            denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
-
             # Convert language code
             # 转换语言代码
             if text_language in self.dict_language:
@@ -1744,8 +1730,6 @@ class TTSInferencer:
                         mel2 = sess.get("mel2_norm")
                         # Normalization parameters needed for denorm regardless of cache hit
                         # 归一化/反归一化参数与函数（无论是否命中缓存都需要）
-                        spec_min, spec_max = -12, 2
-                        denorm_spec = lambda x: (x + 1) / 2 * (spec_max - spec_min) + spec_min
                         if mel2 is None:
                             ref_audio, ref_sr = torchaudio.load(ref_audio_path)
                             ref_audio = ref_audio.to(self.device)
@@ -1754,19 +1738,7 @@ class TTSInferencer:
                                 ref_audio = ref_audio.mean(0).unsqueeze(0)
                             if ref_sr != 24000:
                                 ref_audio = self._resample(ref_audio, ref_sr)
-                            mel_fn = lambda x: mel_spectrogram_torch(x, **{
-                                "n_fft": 1024,
-                                "win_size": 1024,
-                                "hop_size": 256,
-                                "num_mels": 100,
-                                "sampling_rate": 24000,
-                                "fmin": 0,
-                                "fmax": None,
-                                "center": False
-                            })
-                            norm_spec = lambda x: (x - spec_min) / (spec_max - spec_min) * 2 - 1
-                            mel2 = mel_fn(ref_audio)
-                            mel2 = norm_spec(mel2)
+                            mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
 
                         # Align lengths to T_min
                     # 调整长度
@@ -1842,7 +1814,7 @@ class TTSInferencer:
                             if stream_v3_chunks:
                                 stream_chunk_index += 1
                                 is_last_stream_chunk = idx >= total_todo_frames
-                                chunk_mel = denorm_spec(cfm_res)
+                                chunk_mel = _denormalize_v3_spec(cfm_res)
                                 _t1 = time.perf_counter()
                                 with torch.cuda.device(self._tts_device_idx):
                                     with torch.inference_mode():
@@ -1883,7 +1855,7 @@ class TTSInferencer:
 
                         if not stream_v3_chunks:
                             cmf_res = torch.cat(cfm_resss, 2)
-                            cmf_res = denorm_spec(cmf_res)
+                            cmf_res = _denormalize_v3_spec(cmf_res)
 
                             # Drain prior async CFM work before timing BigVGAN,
                             # otherwise the synchronize below would count CFM+BigVGAN together.
@@ -2092,7 +2064,6 @@ def cut4(inp):
 
 def cut5(inp):
     """按标点符号切 - 按各种标点符号分割"""
-    import re
     inp = inp.strip("\n")
     punds = {',', '.', ';', '?', '!', '、', '，', '。', '？', '！', ';', '：', '…'}
     mergeitems = []
@@ -2119,7 +2090,6 @@ def cut5(inp):
 def split(todo_text):
     """将文本按标点符号分割成句子列表"""
     splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
-    punctuation = set(['!', '?', '…', ',', '.', '-', " "])
 
     todo_text = todo_text.replace("……", "。").replace("——", "，")
     if todo_text[-1] not in splits:

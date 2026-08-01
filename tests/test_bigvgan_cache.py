@@ -24,7 +24,7 @@ class TestSanitizeCacheToken:
 )
 class TestGetGpuCacheSuffix:
     def test_env_override(self):
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from aquatts.bigvgan.cuda.load import _get_gpu_cache_suffix
 
         os.environ["BIGVGAN_CACHE_ID"] = "my_custom_cache"

@@ -10,11 +10,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - run: pip install ruff
+      - run: pip install "ruff>=0.15,<0.16"
       - run: ruff check aquatts/ tests/
 
   test:
@@ -23,8 +23,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e "." pytest pytest-cov numpy
@@ -35,3 +35,37 @@ jobs:
             --ignore=tests/test_vendor_paths.py \
             --cov=aquatts \
             --cov-report=term
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - name: Verify wheel contents and version
+        run: |
+          python - <<'PY'
+          import glob
+          import pathlib
+          import re
+          import zipfile
+
+          wheel = pathlib.Path(glob.glob("dist/*.whl")[0])
+          match = re.match(r"aqua_tts-([^-]+)-", wheel.name)
+          assert match, wheel.name
+          with zipfile.ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+              init_source = archive.read("aquatts/__init__.py").decode("utf-8")
+              version_match = re.search(r'^__version__ = "([^"]+)"', init_source, re.M)
+              assert version_match, "__version__ not found"
+              assert match.group(1) == version_match.group(1), (
+                  match.group(1), version_match.group(1)
+              )
+              assert any(name.endswith(".cu") for name in names)
+              assert any(name.endswith(".cpp") for name in names)
+          print(f"Verified {wheel.name}")
+          PY
