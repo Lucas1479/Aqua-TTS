@@ -4,7 +4,6 @@
 import pytest
 from aquatts.inference.presets import (
     GENERATION_PRESETS,
-    CUDA_GRAPH_PRESETS,
     apply_preset,
     list_presets,
     apply_cuda_graph_preset,

@@ -156,7 +156,6 @@ def _ensure_msvc_on_path() -> None:
 
 
 def load():
-    import torch
     from torch.utils import cpp_extension
 
     # Check if cuda 11 is installed for compute capability 8.0

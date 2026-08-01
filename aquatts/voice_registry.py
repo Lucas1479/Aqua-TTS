@@ -15,7 +15,7 @@ import logging
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, Optional, Tuple
+from typing import Dict, Iterable, Iterator, Optional
 
 logger = logging.getLogger("aquatts.voice_registry")
 
@@ -96,9 +96,7 @@ class VoiceRegistry:
             for entry in data:
                 voice = Voice.from_dict(entry)
                 self._voices[voice.name] = voice
-            logger.info(
-                f"Loaded %d voice(s) from %s", len(self._voices), self._json_path
-            )
+            logger.info("Loaded %d voice(s) from %s", len(self._voices), self._json_path)
         except (json.JSONDecodeError, OSError, KeyError) as exc:
             logger.warning(f"Failed to load voice registry: {exc}")
 

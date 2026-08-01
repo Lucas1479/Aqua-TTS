@@ -3,8 +3,9 @@
 
 import os
 import sys
+from contextlib import contextmanager
 
-__version__ = "1.0.0"
+__version__ = "0.2.0"
 
 # ── Internal path configuration (内部路径配置) ──────────────────────────────────────────
 # Ensure vendored GPT_SoVITS overrides take precedence over the main repo.
@@ -24,12 +25,6 @@ if _GPT_SOVITS_HOME:
     for _p in (_GPT_SOVITS_HOME, _gpt_sovits_pkg):
         if os.path.isdir(_p) and _p not in sys.path:
             sys.path.insert(0, _p)
-    # tools.i18n uses os.path.relpath which fails cross-drive on Windows
-    # tools.i18n 使用 os.path.relpath，在 Windows 跨驱动器时会失败
-    try:
-        os.chdir(_GPT_SOVITS_HOME)
-    except OSError:
-        pass
 
 # Vendored overrides MUST be last (insert(0) → ends up at position 0).
 # Order is: _vendor < GPT_SoVITS/ < repo-root, so the vendored t2s_model.py
@@ -75,10 +70,45 @@ _LAZY_ATTRS = {
 }
 
 
+@contextmanager
+def _gpt_sovits_import_context():
+    """Temporarily use the upstream repo as cwd while importing GPT-SoVITS.
+
+    Some upstream modules resolve resources relative to the process cwd and can
+    fail across Windows drives. Restoring cwd after import avoids surprising
+    callers merely because they imported Aqua-TTS.
+    """
+    original_cwd = os.getcwd()
+    changed_cwd = False
+    if _GPT_SOVITS_HOME and os.path.isdir(_GPT_SOVITS_HOME):
+        try:
+            os.chdir(_GPT_SOVITS_HOME)
+            changed_cwd = True
+        except OSError:
+            pass
+    try:
+        yield
+        # tools.i18n stores a cwd-relative locale path at import time. Make it
+        # absolute before restoring the caller's cwd.
+        try:
+            from tools.i18n import i18n as _i18n_module
+
+            _i18n_module.I18N_JSON_DIR = os.path.join(
+                os.path.dirname(_i18n_module.__file__), "locale"
+            )
+        except ImportError:
+            pass
+    finally:
+        if changed_cwd:
+            os.chdir(original_cwd)
+
+
 def __getattr__(name):
     if name in _LAZY_ATTRS:
         mod_name, attr = _LAZY_ATTRS[name]
         import importlib
-        mod = importlib.import_module(mod_name)
+
+        with _gpt_sovits_import_context():
+            mod = importlib.import_module(mod_name)
         return getattr(mod, attr)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

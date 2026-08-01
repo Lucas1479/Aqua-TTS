@@ -1,0 +1,81 @@
+name: Publish Python package
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Package index to publish to
+        required: true
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Verify release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: python
+        run: |
+          import os
+          import pathlib
+          import re
+
+          init_source = pathlib.Path("aquatts/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'^__version__ = "([^"]+)"$', init_source, re.MULTILINE)
+          if match is None:
+              raise SystemExit("Could not read aquatts.__version__")
+
+          expected_tag = f"v{match.group(1)}"
+          actual_tag = os.environ["GITHUB_REF_NAME"]
+          if actual_tag != expected_tag:
+              raise SystemExit(
+                  f"Release tag {actual_tag!r} does not match package version {expected_tag!r}"
+              )
+      - run: pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-testpypi:
+    if: inputs.repository == 'testpypi'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/aqua-tts
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    if: inputs.repository == 'pypi' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/aqua-tts
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

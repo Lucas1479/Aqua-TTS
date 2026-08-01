@@ -12,7 +12,6 @@ Key optimizations:
 Graceful degradation: CUDA Graph -> static KV -> dynamic KV fallback chain.
 """
 
-import math
 import threading
 import time
 import inspect as _inspect
@@ -25,9 +24,7 @@ from torch.nn import functional as F
 # Upstream GPT-SoVITS imports (vendored alongside this package)
 # ---------------------------------------------------------------------------
 from AR.models.t2s_model import (
-    T2SBlock,
     T2SMLP,
-    T2STransformer,
     Text2SemanticDecoder,
     scaled_dot_product_attention,
     _GRAPH_INITIAL_LEN_STRIDE,
@@ -654,7 +651,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
 
                         if graph_initial_len + graph_step_count >= current_bucket:
                             graph_run_enabled = False
-                            print(f"Graph write position at bucket boundary, falling back to static path")
+                            print("Graph write position at bucket boundary, falling back to static path")
                             _fallback_len = graph_initial_len + graph_step_count
                             static_in_fb = decoder.bucket_static_inputs[graph_key]
                             for _fi in range(len(k_cache)):
@@ -688,7 +685,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
                         xy_pos, k_cache, v_cache, pos_idx_static
                     )
-                    current_lens = [l + 1 for l in current_lens]
+                    current_lens = [length + 1 for length in current_lens]
                     logits = decoder.ar_predict_layer(xy_dec[:, -1])
             else:
                 if pos_idx_static is not None:
@@ -700,7 +697,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                 xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
                     xy_pos, k_cache, v_cache, pos_idx_static
                 )
-                current_lens = [l + 1 for l in current_lens]
+                current_lens = [length + 1 for length in current_lens]
                 logits = decoder.ar_predict_layer(xy_dec[:, -1])
         else:
             if transformer is not dynamic_transformer:
@@ -847,8 +844,6 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
         _warmup_and_capture_bucket(decoder, bs, il, dev)
 
     # --- Replace infer_panel (which delegates to infer_panel_naive) ---
-    original_infer_panel_naive = decoder.infer_panel_naive
-
     def patched_infer_panel_naive(x, x_lens, prompts, bert_feature,
                                    top_k=-100, top_p=100, early_stop_num=-1,
                                    temperature=1.0, repetition_penalty=1.35, **kwargs):
@@ -865,6 +860,6 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
         print(f"Aqua: static KV cache + CUDA Graph patch applied. "
               f"Buckets: {buckets}")
     else:
-        print(f"Aqua: static KV cache patch applied (CUDA Graph disabled).")
+        print("Aqua: static KV cache patch applied (CUDA Graph disabled).")
 
     return decoder

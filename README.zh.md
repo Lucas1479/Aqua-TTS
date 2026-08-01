@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/aqua.png" width="720"/>
+<img src="https://raw.githubusercontent.com/Lucas1479/Aqua-TTS/main/assets/aqua.png" width="720"/>
 
 <h1>🌊 Aqua-TTS: <a href="https://github.com/RVC-Boss/GPT-SoVITS">GPT-SoVITS</a> GPU 实时推理运行时</h1>
 
 <p>为与 LoRA 角色实时语音对话而生</p>
 
 <p>
-  中文 | <a href="README.md">English</a>
+  中文 | <a href="https://github.com/Lucas1479/Aqua-TTS/blob/main/README.md">English</a>
 </p>
 
 <p>
@@ -37,7 +37,7 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 | BigVGAN 声码器 | PyTorch JIT | PyTorch JIT | **预编译 CUDA 内核** |
 | KV 缓存分配 | 无界增长 | 无界增长 | **按桶配置有界分配** |
 
-*在 NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、float16、相同模型权重（xxx-e15.ckpt + xxx_e2_s174_l32.pth）下测量。T2S 以 500 token 为目标测量；TTFP 统计调用方收到第一段可播放音频的时间。对非流式基线，这个时间可能等同于整句/整段生成完成；对 Aqua-TTS，则是 `chunk_size_seconds=0.25` 下的首个流式音频块返回时间。完整方法和消融结果见 [benchmarks/README.md](benchmarks/README.md)。*
+*在 NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、float16、相同模型权重（xxx-e15.ckpt + xxx_e2_s174_l32.pth）下测量。T2S 以 500 token 为目标测量；TTFP 统计调用方收到第一段可播放音频的时间。对非流式基线，这个时间可能等同于整句/整段生成完成；对 Aqua-TTS，则是 `chunk_size_seconds=0.25` 下的首个流式音频块返回时间。完整方法和消融结果见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
@@ -51,9 +51,9 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **内置预设** — 快速 / 均衡 / 质量 三种生成预设；完整 / 最小 / 延迟 / 关闭 四种 CUDA Graph 预设
 - **角色管理** — 将角色名映射到参考音频和文本提示，支持 JSON 持久化
 - **HTTP 服务器** — 轻量 FastAPI 服务，支持流式 TTS 接口、角色管理和健康检查
-- **源码安装** — `pip install -e ".[runtime]"` → `from aquatts import TTSInferencer`
+- **PyPI 安装** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **定位说明** — Aqua-TTS 是面向 GPT-SoVITS **v3** 的独立运行时，不是补丁插件，也不承诺跟进上游更新。本项目涉及的技术——静态 KV 缓存、分段 CUDA Graph、预编译 BigVGAN 内核——已在 [TECHNICAL.md](TECHNICAL.md) 中详细记录，具备可移植性。如需 v4 支持，`aquatts/modeling/` 和 `aquatts/_vendor/` 是适配的合理起点。
+> **定位说明** — Aqua-TTS 是面向 GPT-SoVITS **v3** 的独立运行时，不是补丁插件，也不承诺跟进上游更新。本项目涉及的技术——静态 KV 缓存、分段 CUDA Graph、预编译 BigVGAN 内核——已在 [TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md) 中详细记录，具备可移植性。如需 v4 支持，`aquatts/modeling/` 和 `aquatts/_vendor/` 是适配的合理起点。
 
 ## 语言支持
 
@@ -99,7 +99,7 @@ aqua-tts/
 └── tests/                         # 单元测试
 ```
 
-详细技术文档见 **[TECHNICAL.md](TECHNICAL.md)**。
+详细技术文档见 **[TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md)**。
 
 ## 推荐配置
 
@@ -143,21 +143,28 @@ Aqua-TTS 已在 RTX 4070 Ti SUPER 上使用 PyTorch 2.5.1+cu121 测试通过。
 ### 3. 安装 Aqua-TTS
 
 ```bash
-git clone https://github.com/Lucas1479/Aqua-TTS.git
-cd Aqua-TTS
-
-# 核心 + 运行时依赖
-pip install -e ".[runtime]"
+# 从 PyPI 安装核心 + 运行时依赖
+pip install "aqua-tts[runtime]"
 
 # 或含 HTTP 服务器支持
-pip install -e ".[runtime,server]"
+pip install "aqua-tts[server]"
+
+# 或含本地播放支持
+pip install "aqua-tts[playback]"
 ```
 
-> PyPI 包计划发布，目前尚未上线。
+如需开发版或尚未发布的修改，可从源码安装：
+
+```bash
+git clone https://github.com/Lucas1479/Aqua-TTS.git
+cd Aqua-TTS
+pip install -e ".[runtime]"
+```
 
 扩展说明：
 - `[runtime]` — soundfile, librosa, peft（`TTSInferencer` 所需）
 - `[server]` — FastAPI + uvicorn（自动包含 `[runtime]`）
+- `[playback]` — PyAudio（自动包含 `[runtime]`）
 
 ### 4. 配置 GPT-SoVITS 路径
 
@@ -397,7 +404,7 @@ python benchmarks/aqua_ttfp.py \
 python benchmarks/bigvgan_raw_bench.py
 ```
 
-完整对比方法和结果见 [benchmarks/README.md](benchmarks/README.md)。
+完整对比方法和结果见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。
 
 ## 声卡播放 Demo
 
@@ -417,16 +424,16 @@ python examples/live_talk.py --gpt-sovits-home /path/to/GPT-SoVITS-v3lora
 
 ## 致谢
 
-Aqua-TTS 的灵感来源于 [GENIE-TTS](https://github.com/w-okada/genie-tts)——它证明了一个专注、自包含的推理运行时能够切实缩短 GPT-SoVITS 的延迟。"优化运行时而非模型"这一思路，奠定了本项目的方向。
+Aqua-TTS 的灵感来源于 [GENIE-TTS](https://github.com/High-Logic/Genie-TTS)——它证明了一个专注、自包含的推理运行时能够切实缩短 GPT-SoVITS 的延迟。"优化运行时而非模型"这一思路，奠定了本项目的方向。
 
 ## 许可证
 
-MIT — 详见 [LICENSE](LICENSE)。
+MIT — 详见 [LICENSE](https://github.com/Lucas1479/Aqua-TTS/blob/main/LICENSE)。
 
 第三方代码：
-- **GPT-SoVITS**：vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` 基于 GPT-SoVITS (MIT) — 详见 [NOTICE](NOTICE)。
-- **NVIDIA BigVGAN**：CUDA 内核源码基于 Apache 2.0 — 详见 [NOTICE](NOTICE)。
-- **alias-free-torch**：`aquatts/bigvgan/torch/` 基于 Apache 2.0 — 详见 [NOTICE](NOTICE)。
+- **GPT-SoVITS**：vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` 基于 GPT-SoVITS (MIT) — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
+- **NVIDIA BigVGAN**：CUDA 内核源码基于 Apache 2.0 — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
+- **alias-free-torch**：`aquatts/bigvgan/torch/` 基于 Apache 2.0 — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
 
 ## 开发
 
@@ -440,4 +447,5 @@ export GPT_SOVITS_HOME=/path/to/GPT-SoVITS
 python -m pytest tests/ -v
 ```
 
-贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)，更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+贡献指南见 [CONTRIBUTING.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/CONTRIBUTING.md)，更新日志见 [CHANGELOG.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/CHANGELOG.md)。
+发布维护者请按照 [PUBLISHING.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/PUBLISHING.md) 操作。

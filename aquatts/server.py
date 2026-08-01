@@ -25,7 +25,7 @@ from typing import Optional
 
 import numpy as np
 
-from aquatts.voice_registry import Voice, VoiceRegistry, registry_from_env
+from aquatts.voice_registry import Voice, registry_from_env
 
 logger = logging.getLogger("aquatts.server")
 
@@ -339,7 +339,6 @@ def start_server(
 def _main():
     """Entry point: python -m aquatts.server / 入口点：python -m aquatts.server"""
     import argparse
-    import os
 
     parser = argparse.ArgumentParser(description="Aqua-TTS HTTP Server")
     parser.add_argument("--host", default="127.0.0.1")
@@ -362,7 +361,8 @@ def _main():
 
     # Import triggers sys.path setup in Aqua/__init__.py
     # 此导入触发 Aqua/__init__.py 中的 sys.path 设置
-    from aquatts import TTSInferencer, VoiceRegistry
+    from aquatts import TTSInferencer
+    from aquatts.voice_registry import VoiceRegistry
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

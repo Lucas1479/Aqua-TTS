@@ -2,6 +2,7 @@
 """Tests for vendor path setup and package structure."""
 import os
 import sys
+import importlib
 
 import aquatts
 
@@ -73,7 +74,13 @@ class TestVendorPathSetup:
 
     def test_package_version(self):
         """aquatts.__version__ is set."""
-        assert aquatts.__version__ == "1.0.0"
+        assert aquatts.__version__ == "0.2.0"
+
+    def test_import_does_not_change_working_directory(self):
+        """Reloading the package must not change the caller's cwd."""
+        original_cwd = os.getcwd()
+        importlib.reload(aquatts)
+        assert os.getcwd() == original_cwd
 
     def test_all_exports(self):
         """__all__ lists expected public API."""

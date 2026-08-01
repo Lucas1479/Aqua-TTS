@@ -1,12 +1,11 @@
-﻿include LICENSE
+include LICENSE
 include NOTICE
 include README.md
+include README.zh.md
 include TECHNICAL.md
+include CHANGELOG.md
+include PUBLISHING.md
 
-recursive-include Aqua/_vendor *.cpp *.cu *.h
-recursive-include Aqua/bigvgan/cuda *.cpp *.cu *.h
-recursive-include Aqua/bigvgan/torch *.py
-
-prune benchmarks
-prune tools
-prune examples
+recursive-include aquatts/_vendor *.cpp *.cu *.h
+recursive-include aquatts/bigvgan/cuda *.cpp *.cu *.h
+recursive-include aquatts/bigvgan/torch *.py
