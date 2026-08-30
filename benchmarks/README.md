@@ -109,12 +109,15 @@ not place `torch.cuda.empty_cache()` in the hot path. TTFP intentionally does
 not add CUDA synchronization inside its timing window because it measures the
 latency visible to the caller.
 
-Current warm result with FA2 `valid`, a cached matching BigVGAN CUDA extension,
-0.25-second chunks, two warmup utterances and five repeats:
+Current warm result with a cached matching BigVGAN CUDA extension,
+0.25-second chunks, two warmup utterances and five repeats. All columns share
+the same Aqua text/SoVITS/BigVGAN pipeline and vary only T2S execution:
 
-| Case | Short (3 chars) | Medium (19 chars) | Long (64 chars) |
+| T2S execution | Short (3 chars) | Medium (19 chars) | Long (64 chars) |
 |---|---:|---:|---:|
-| Median TTFP | 233.1 ms | 287.7 ms | 348.3 ms |
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
 
 The first long-text repeat was 3059.3 ms because it triggered one-time frontend
 initialization; the following four were 342.1–369.1 ms. Preserve cold-shape

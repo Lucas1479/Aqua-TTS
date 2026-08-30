@@ -219,11 +219,14 @@ Measured with the automatic FA2 `valid` path, a matching cached BigVGAN CUDA
 extension and 0.25-second streaming chunks. Two utterances warm the pipeline;
 the table reports the median of five first-playable-chunk measurements:
 
-| text length | chars | TTFP (median) |
-|------------|-------|--------------:|
-| short      | 3     | 233.1 ms |
-| medium     | 19    | 287.7 ms |
-| long       | 64    | 348.3 ms |
+| T2S execution | Short / 3 chars | Medium / 19 chars | Long / 64 chars |
+|---|---:|---:|---:|
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
+
+All three TTFP rows use the same Aqua text, SoVITS and BigVGAN pipeline; only
+the T2S execution mode changes.
 
 The first long-text repeat took about 3 seconds because that text shape triggered
 one-time frontend initialization; the following four repeats were 342–369 ms.

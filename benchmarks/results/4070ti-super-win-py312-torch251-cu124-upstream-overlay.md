@@ -51,15 +51,22 @@ FlashAttention2 added approximately 16% at bucket 448, 21% at bucket 512 and
 
 ## Warm TTFP result
 
-The full caller-visible benchmark used the same GPU/runtime, automatic FA2
-`valid`, a cached ABI-matching BigVGAN CUDA extension, 0.25-second streaming
-chunks, two warmup utterances, and five repeats per case:
+The full caller-visible benchmark used the same Aqua text, SoVITS and BigVGAN
+pipeline for every column so only T2S execution changes. It used a cached
+ABI-matching BigVGAN CUDA extension, 0.25-second streaming chunks, two warmup
+utterances, and five repeats per case:
 
-| Case | Repeats (ms) | Median |
-|---|---|---:|
-| Short / 3 chars | 259.8, 223.4, 242.0, 213.4, 233.1 | **233.1 ms** |
-| Medium / 19 chars | 333.7, 287.7, 280.7, 295.1, 276.2 | **287.7 ms** |
-| Long / 64 chars | 3059.3, 342.1, 348.3, 343.9, 369.1 | **348.3 ms** |
+| T2S execution | Short / 3 chars | Medium / 19 chars | Long / 64 chars |
+|---|---:|---:|---:|
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
+
+FA2 raw repeats (ms):
+
+- Short: 259.8, 223.4, 242.0, 213.4, 233.1.
+- Medium: 333.7, 287.7, 280.7, 295.1, 276.2.
+- Long: 3059.3, 342.1, 348.3, 343.9, 369.1.
 
 The 3059.3 ms first long repeat includes a one-time text-frontend
 initialization for that shape. It is retained as cold-shape evidence; the next

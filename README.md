@@ -33,36 +33,27 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
-| | Current upstream | Aqua SDPA fallback | Aqua default with FA2 |
-|---|---:|---:|---:|
+| | Upstream T2S execution* | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
+|---|---|---|---|
 | T2S short / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
 | T2S conversation / bucket 512 | 153.5 it/s | **519.3 it/s** | **627.4 it/s** |
 | T2S long / bucket 768 | 156.0 it/s | **476.9 it/s** | **644.9 it/s** |
+| TTFP short (3 chars) | 416.8 ms | 250.5 ms | **233.1 ms** |
+| TTFP medium (19 chars) | 692.7 ms | 305.0 ms | **287.7 ms** |
+| TTFP long (64 chars) | 1135.2 ms | 394.2 ms | **348.3 ms** |
+| Model definition | Direct upstream module | **Validated upstream + in-memory overlay** | **Validated upstream + in-memory overlay** |
+| Decode attention | Native PyTorch, dynamic KV | SDPA over static bucket | **FA2 over true KV length** |
+| KV-cache writes | Per-token `torch.cat` | **In-place `scatter_`** | **FA2 KV-cache update** |
+| KV allocation | Grows per token | **Pre-allocated and bounded per bucket** | **Pre-allocated and bounded per bucket** |
+| CUDA Graph | None in the standard entry point | **15 common graph keys / 6 configured buckets + lazy capture** | **15 common graph keys / 6 configured buckets + lazy capture** |
+| Replay synchronization | Eager launches | **Stream-ordered; no per-token device sync** | **Stream-ordered; no per-token device sync** |
+| EOS host read | Native condition checks | **Greedy + sampled EOS combined once** | **Greedy + sampled EOS combined once** |
+| Graph concurrency | N/A | **Lock per `(bucket, initial_len)` key** | **Lock per `(bucket, initial_len)` key** |
+| Failure path | Dynamic decoder | **Graph → static KV → dynamic** | **FA2 → SDPA; Graph → static KV → dynamic** |
+| BigVGAN activation | Runtime extension/JIT path | **ABI-keyed CUDA cache → PyTorch fallback** | **ABI-keyed CUDA cache → PyTorch fallback** |
+| Streaming contract | Native upstream generators | **Generators preserved; only direct `infer_panel()` patched** | **Generators preserved; only direct `infer_panel()` patched** |
 
-Warm model-side first-playback latency with the default FA2 path and 0.25 s streaming chunks:
-
-| TTFP case | Short (3 chars) | Medium (19 chars) | Long (64 chars) |
-|---|---:|---:|---:|
-| Published v0.2.0 baseline | ~257 ms | ~301 ms | ~404 ms |
-| Current main, median of 5 | **233.1 ms** | **287.7 ms** | **348.3 ms** |
-| Change | **~9% lower** | **~4% lower** | **~14% lower** |
-
-The speedup comes from the complete execution path, not one kernel:
-
-| Mechanism | Current upstream | Aqua runtime |
-|---|---|---|
-| Model ownership | Direct upstream implementation | **Validated upstream module, patched in memory; no T2S fork** |
-| Decode attention | PyTorch attention with dynamic KV | **FA2 `valid` automatically when available; SDPA fallback** |
-| KV-cache writes | Per-token `torch.cat` growth | **Pre-allocated, bounded bucket buffers with in-place writes** |
-| CUDA Graph | Not used by the standard entry point | **6 configured bucket sizes; 15 common `(bucket, initial_len)` graphs pre-captured, uncommon shapes captured lazily** |
-| Replay ordering | N/A | **CUDA stream ordered; no device-wide sync after every token** |
-| EOS host read | Native per-condition checks | **Greedy and sampled EOS combined into one device-to-host read** |
-| Server concurrency | Native execution | **Per-graph-key locks protect capture and replay** |
-| Failure path | Dynamic decoder | **FA2 → SDPA; CUDA Graph → static KV → dynamic decoder** |
-| BigVGAN activation | Runtime extension path | **ABI-keyed compiled cache with pure-PyTorch fallback** |
-| Streaming contract | Upstream generators | **Upstream generators preserved; Aqua patches only direct `infer_panel()`** |
-
-*Benchmarks: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`. T2S uses 15 warmups and seven synchronized repeats per fixed shape. TTFP uses two warmup utterances, five repeats, FA2 2.7.0.post2, a cached matching BigVGAN CUDA extension, and 0.25 s chunks. FA2 is attempted by default when importable; set `AQUATTS_T2S_FLASH_ATTN=0` to force SDPA. Absolute results are sensitive to Windows GPU P-state. A one-time long-text frontend initialization produced a ~3 s first repeat and is visible in the raw data but does not affect the five-repeat median; see [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for commands and methodology.*
+*Benchmark environment: RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`. T2S throughput uses 15 warmups and seven synchronized repeats per fixed shape. TTFP uses the same Aqua text/SoVITS/BigVGAN pipeline for all three columns so the T2S execution mode is isolated; it uses two warmup utterances, five repeats, a matching cached BigVGAN CUDA extension, and 0.25 s chunks. The published v0.2.0 Aqua TTFP was ~257 / 301 / 404 ms; current FA2 medians are ~9% / 4% / 14% lower. FA2 is attempted automatically when importable and falls back to SDPA; set `AQUATTS_T2S_FLASH_ATTN=0` to force SDPA. One-time long-text frontend initialization produced a ~3 s first repeat, retained in the raw evidence but excluded by the median. See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for commands and methodology.*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 

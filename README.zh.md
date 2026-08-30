@@ -26,36 +26,27 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 
 <sub>**延迟定义：** TTFP 基准 = 预热缓存下模型侧首音延迟（下表）。端到端首音 = 完整管线含音频缓冲和播放启动耗时，实际通常 **0.4–0.7 s**。冷启动 = 初始化 + 模型加载 + 首次推理，主要被 BigVGAN CUDA 内核编译占据（首次约 2 分钟，之后缓存）。</sub>
 
-| | 当前上游 | Aqua SDPA 回退 | Aqua 默认 FA2 |
-|---|---:|---:|---:|
+| | 上游 T2S 执行* | Aqua Graph + SDPA | Aqua 默认（FA2 `valid`） |
+|---|---|---|---|
 | T2S 短形状 / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
 | T2S 对话形状 / bucket 512 | 153.5 it/s | **519.3 it/s** | **627.4 it/s** |
 | T2S 长形状 / bucket 768 | 156.0 it/s | **476.9 it/s** | **644.9 it/s** |
+| TTFP 短句（3 字符） | 416.8 ms | 250.5 ms | **233.1 ms** |
+| TTFP 中句（19 字符） | 692.7 ms | 305.0 ms | **287.7 ms** |
+| TTFP 长句（64 字符） | 1135.2 ms | 394.2 ms | **348.3 ms** |
+| 模型定义 | 直接使用上游模块 | **校验上游 + 内存覆盖层** | **校验上游 + 内存覆盖层** |
+| Decode attention | 原生 PyTorch + 动态 KV | 静态 bucket 上的 SDPA | **按真实 KV 长度读取的 FA2** |
+| KV 缓存写入 | 每 token `torch.cat` | **原位 `scatter_`** | **FA2 KV-cache update** |
+| KV 分配 | 每 token 增长 | **按 bucket 预分配并限界** | **按 bucket 预分配并限界** |
+| CUDA Graph | 标准入口无 | **15 个常用 graph key / 6 个配置 bucket + 惰性捕获** | **15 个常用 graph key / 6 个配置 bucket + 惰性捕获** |
+| Replay 同步 | eager launch | **CUDA stream 保序；无逐 token 设备同步** | **CUDA stream 保序；无逐 token 设备同步** |
+| EOS 主机读取 | 上游条件判断 | **greedy + sampled EOS 合并一次读取** | **greedy + sampled EOS 合并一次读取** |
+| Graph 并发 | 不适用 | **每个 `(bucket, initial_len)` key 独立锁** | **每个 `(bucket, initial_len)` key 独立锁** |
+| 失败回退 | 动态 decoder | **Graph → 静态 KV → 动态** | **FA2 → SDPA；Graph → 静态 KV → 动态** |
+| BigVGAN 激活 | 运行时扩展/JIT 路径 | **ABI 缓存 CUDA → 纯 PyTorch 回退** | **ABI 缓存 CUDA → 纯 PyTorch 回退** |
+| 流式契约 | 上游原生 generator | **保留 generator；仅补丁直接 `infer_panel()`** | **保留 generator；仅补丁直接 `infer_panel()`** |
 
-默认 FA2 路径配合 0.25 秒流式 chunk 的预热模型侧首音：
-
-| TTFP 场景 | 短句（3 字符） | 中句（19 字符） | 长句（64 字符） |
-|---|---:|---:|---:|
-| 已发布 v0.2.0 基线 | ~257 ms | ~301 ms | ~404 ms |
-| 当前 main，5 次中位数 | **233.1 ms** | **287.7 ms** | **348.3 ms** |
-| 变化 | **约降低 9%** | **约降低 4%** | **约降低 14%** |
-
-性能来自整条执行路径，而不是单个内核：
-
-| 机制 | 当前上游 | Aqua 运行时 |
-|---|---|---|
-| 模型源码 | 直接执行上游实现 | **校验上游模块并原位打补丁，不维护 T2S 分叉** |
-| Decode attention | PyTorch attention + 动态 KV | **兼容时自动使用 FA2 `valid`，否则回退 SDPA** |
-| KV 缓存写入 | 每 token `torch.cat` 扩容 | **预分配、按 bucket 限界、原位写入** |
-| CUDA Graph | 标准入口不使用 | **配置 6 个 bucket；预捕获 15 个常用 `(bucket, initial_len)` 图，少见形状惰性捕获** |
-| Replay 顺序 | 不适用 | **由 CUDA stream 保序，不再逐 token 全设备同步** |
-| EOS 主机读取 | 上游条件分别判断 | **greedy 与 sampled EOS 合并为一次 device-to-host 读取** |
-| 服务并发 | 上游执行方式 | **按 graph key 加锁保护捕获与回放** |
-| 失败回退 | 动态 decoder | **FA2 → SDPA；CUDA Graph → 静态 KV → 动态 decoder** |
-| BigVGAN 激活 | 运行时扩展路径 | **按 GPU/Python/Torch/CUDA ABI 缓存，支持纯 PyTorch 回退** |
-| 流式契约 | 上游 generator | **保留上游 generator，只补丁直接 `infer_panel()`** |
-
-*基准环境：NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、PyTorch 2.5.1+cu124、fp16、上游 `08d627c`。T2S 每个固定形状预热 15 次并同步测量 7 次；TTFP 先预热两条文本，再测量 5 次，使用 FA2 2.7.0.post2、匹配 ABI 的 BigVGAN CUDA 缓存和 0.25 秒 chunk。FA2 可导入时默认尝试启用；设置 `AQUATTS_T2S_FLASH_ATTN=0` 可强制 SDPA。绝对结果会受 Windows GPU P-state 影响；长文本首次前端初始化出现约 3 秒的首轮值，保留在原始结果中但不改变 5 次中位数。完整命令和方法见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
+*基准环境：RTX 4070 Ti SUPER (16 GB)、PyTorch 2.5.1+cu124、fp16、上游 `08d627c`。T2S 吞吐对每个固定形状预热 15 次并同步测量 7 次。TTFP 三列共用同一套 Aqua 文本/SoVITS/BigVGAN 管线，只隔离 T2S 执行模式；先预热两条文本，再测量 5 次，使用匹配 ABI 的 BigVGAN CUDA 缓存和 0.25 秒 chunk。已发布 v0.2.0 的 Aqua TTFP 约为 257 / 301 / 404 ms；当前 FA2 中位数分别降低约 9% / 4% / 14%。FA2 可导入时自动尝试，失败回退 SDPA；设置 `AQUATTS_T2S_FLASH_ATTN=0` 可强制 SDPA。长文本首次前端初始化出现约 3 秒的首轮值，保留在原始证据中但被中位数排除。完整命令和方法见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
