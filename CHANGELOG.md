@@ -1,5 +1,31 @@
 ﻿# Changelog
 
+## [0.2.1] — 2026-08-30
+
+### Changed
+
+- Replaced the vendored GPT-SoVITS `t2s_model.py` fork with an in-memory patch
+  over a validated upstream v3 checkout.
+- Preserved upstream `infer_panel_naive()` batching/streaming generator
+  semantics; Aqua now replaces only the direct `infer_panel()` path.
+- Added the public `configure_gpt_sovits()` upstream-routing API for embedding
+  Aqua in products such as Amadeus.
+- Added explicit SoVITS base, BigVGAN, and fast-langdetect asset paths plus a
+  product-owned `BIGVGAN_CACHE_ROOT` for embedded runtimes.
+- Consolidated BigVGAN CUDA extension loading into one canonical Aqua module.
+- Replaced EOS-dependent legacy T2S benchmarks with deterministic cold,
+  bucket-448, bucket-512, and bucket-768 synchronized measurements, including
+  isolated current-upstream and optional FlashAttention2 comparisons.
+
+### Fixed
+
+- Removed the default device-wide synchronize after every CUDA Graph replay;
+  `CUDA_GRAPH_REPLAY_SYNC=1` retains it as a diagnostic.
+- Folded greedy and sampled EOS checks into one device-to-host sync.
+- Cached BigVGAN extensions no longer require a locally installed CUDA Toolkit.
+- BigVGAN cache identities now include Python, Torch, and CUDA versions to
+  avoid loading ABI-incompatible binaries after runtime upgrades.
+
 ## [0.2.0] — 2026-08-02
 
 ### Added
@@ -35,5 +61,6 @@
 - TTFP and T2S throughput benchmarks with ablation flags
 - Example scripts for basic and streaming inference
 
+[0.2.1]: https://github.com/Lucas1479/Aqua-TTS/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Lucas1479/Aqua-TTS/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Lucas1479/Aqua-TTS/releases/tag/v0.1.0

@@ -15,25 +15,74 @@ Graceful degradation: CUDA Graph -> static KV -> dynamic KV fallback chain.
 import threading
 import time
 import inspect as _inspect
+import os
 from typing import List, Optional, Tuple
 
 import torch
 from torch.nn import functional as F
 
 # ---------------------------------------------------------------------------
-# Upstream GPT-SoVITS imports (vendored alongside this package)
+# Upstream GPT-SoVITS imports. Aqua patches these objects in-place and does not
+# replace the upstream t2s_model module.
 # ---------------------------------------------------------------------------
 from AR.models.t2s_model import (
     T2SMLP,
     Text2SemanticDecoder,
     scaled_dot_product_attention,
-    _GRAPH_INITIAL_LEN_STRIDE,
 )
+
+
+_GRAPH_INITIAL_LEN_STRIDE = 32
+_SUPPORTED_PATCH_KWARGS = frozenset({"enable_cuda_graph", "enable_static_kv"})
+
+
+class IncompatibleGPTSoVITSError(RuntimeError):
+    """The selected upstream decoder no longer satisfies Aqua's patch contract."""
+
+
+def _env_flag_enabled(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _should_stop_on_eos(logits: torch.Tensor, samples: torch.Tensor, eos: int) -> bool:
+    """Evaluate both EOS conditions with one device-to-host synchronization."""
+
+    greedy_is_eos = torch.argmax(logits, dim=-1)[0].eq(eos)
+    sampled_is_eos = samples[0, 0].eq(eos)
+    return bool(torch.logical_or(greedy_is_eos, sampled_is_eos).item())
+
+
+def _replay_cuda_graph(decoder, cuda_graph, device) -> None:
+    cuda_graph.replay()
+    if decoder.cuda_graph_replay_sync:
+        torch.cuda.synchronize(device)
+
+
+def _validate_decoder_contract(decoder) -> None:
+    required = (
+        "num_layers",
+        "num_head",
+        "model_dim",
+        "h",
+        "ar_predict_layer",
+        "infer_panel",
+        "infer_panel_naive",
+    )
+    missing = [name for name in required if not hasattr(decoder, name)]
+    if missing:
+        raise IncompatibleGPTSoVITSError(
+            "upstream Text2SemanticDecoder is missing required attributes: "
+            + ", ".join(missing)
+        )
 
 __all__ = [
     "T2SBlockWithStaticCache",
     "T2STransformerWithStaticCache",
     "apply_cuda_graph_patch",
+    "IncompatibleGPTSoVITSError",
     "_GRAPH_INITIAL_LEN_STRIDE",
 ]
 
@@ -638,8 +687,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                         static_inputs["xy_pos"].copy_(xy_pos)
                         static_inputs["pos_idx"].fill_(graph_initial_len + graph_step_count)
 
-                        cuda_graph.replay()
-                        torch.cuda.synchronize(xy_pos.device)
+                        _replay_cuda_graph(decoder, cuda_graph, xy_pos.device)
 
                         logits = static_outputs["logits"]
                         decoder.cuda_graph_stats["graph_replay_steps"] += 1
@@ -722,7 +770,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
         if early_stop_num != -1 and (y.shape[1] - prefix_len) > early_stop_num:
             stop = True
 
-        if torch.argmax(logits, dim=-1)[0] == decoder.EOS or samples[0, 0] == decoder.EOS:
+        if _should_stop_on_eos(logits, samples, decoder.EOS):
             stop = True
 
         if stop:
@@ -772,6 +820,10 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
     Returns:
         The same decoder instance (mutated in-place).
     """
+    _validate_decoder_contract(decoder)
+    if getattr(decoder, "_aquatts_cuda_graph_patched", False):
+        return decoder
+
     if buckets is None:
         buckets = _DEFAULT_BUCKETS
 
@@ -832,10 +884,20 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
         }
 
     # --- Enable flags ---
-    decoder.use_static_kv_cache = torch.cuda.is_available()
-    import os
+    try:
+        decoder_device = next(decoder.parameters()).device
+    except (StopIteration, AttributeError):
+        decoder_device = torch.device("cpu")
+    decoder.use_static_kv_cache = (
+        torch.cuda.is_available() and decoder_device.type == "cuda"
+    )
     cuda_graph_env = os.environ.get("ENABLE_CUDA_GRAPH", "1")
     decoder.cuda_graph_enabled = decoder.use_static_kv_cache and (cuda_graph_env == "1")
+    # CUDA stream dependencies already order replay before sampling. A
+    # device-wide synchronize after every token is useful only for diagnosis.
+    decoder.cuda_graph_replay_sync = _env_flag_enabled(
+        "CUDA_GRAPH_REPLAY_SYNC", False
+    )
 
     # --- Bind methods ---
     decoder.precapture_cuda_graph = lambda buckets=None, kv_range=None: \
@@ -843,17 +905,36 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
     decoder._warmup_and_capture_bucket = lambda bs, il, dev: \
         _warmup_and_capture_bucket(decoder, bs, il, dev)
 
-    # --- Replace infer_panel (which delegates to infer_panel_naive) ---
-    def patched_infer_panel_naive(x, x_lens, prompts, bert_feature,
-                                   top_k=-100, top_p=100, early_stop_num=-1,
-                                   temperature=1.0, repetition_penalty=1.35, **kwargs):
+    # --- Replace only infer_panel. Upstream infer_panel_naive is a generator
+    # used by its batching/streaming entry points and must retain that contract.
+    original_infer_panel = decoder.infer_panel
+    decoder._aquatts_original_infer_panel = original_infer_panel
+    decoder._aquatts_original_infer_panel_naive = decoder.infer_panel_naive
+
+    def patched_infer_panel(x, x_lens, prompts, bert_feature,
+                            top_k=-100, top_p=100, early_stop_num=-1,
+                            temperature=1.0, repetition_penalty=1.35, **kwargs):
+        unsupported = set(kwargs) - _SUPPORTED_PATCH_KWARGS
+        if unsupported:
+            return original_infer_panel(
+                x,
+                x_lens,
+                prompts,
+                bert_feature,
+                top_k,
+                top_p,
+                early_stop_num,
+                temperature,
+                repetition_penalty,
+                **kwargs,
+            )
         return _patched_infer_panel_naive(
             decoder, x, x_lens, prompts, bert_feature,
             top_k, top_p, early_stop_num, temperature, repetition_penalty, **kwargs
         )
 
-    decoder.infer_panel_naive = patched_infer_panel_naive
-    decoder.infer_panel = patched_infer_panel_naive
+    decoder.infer_panel = patched_infer_panel
+    decoder._aquatts_cuda_graph_patched = True
 
     # --- Pre-capture all buckets if CUDA Graph is enabled ---
     if decoder.cuda_graph_enabled:

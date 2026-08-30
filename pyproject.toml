@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aqua-tts"
 dynamic = ["version"]
-description = "GPU-optimized inference wrapper for GPT-SoVITS with static KV cache and CUDA Graph acceleration"
+description = "GPU-optimized upstream GPT-SoVITS overlay with static KV cache and CUDA Graph acceleration"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
@@ -58,13 +58,33 @@ Changelog = "https://github.com/Lucas1479/Aqua-TTS/blob/main/CHANGELOG.md"
 [tool.setuptools.dynamic]
 version = { attr = "aquatts.__version__" }
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 include = ["aquatts*"]
+exclude = ["aquatts**.__pycache__", "aquatts**.__pycache__.*", "aquatts**.build_*", "aquatts**.build_*.*"]
 
 [tool.setuptools.package-data]
-"aquatts._vendor" = ["**/*"]
+"aquatts._vendor" = ["**/*.py"]
 "aquatts.bigvgan.cuda" = ["*.cpp", "*.cu", "*.h"]
 "aquatts.bigvgan.torch" = ["*.py"]
+
+[tool.setuptools.exclude-package-data]
+"*" = [
+    "*.pyc",
+    "*.pyo",
+    "__pycache__/*",
+    "**/__pycache__/*",
+    "*.pyd",
+    "*.o",
+    "*.obj",
+    "*.lib",
+    "*.exp",
+    "build.ninja",
+    "build_*/*",
+    "**/build_*/*",
+]
 
 [tool.ruff]
 extend-exclude = [

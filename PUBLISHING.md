@@ -18,7 +18,8 @@ This repository publishes `aqua-tts` through GitHub Actions and PyPI Trusted Pub
 
 1. Confirm the working tree contains only intentional release changes.
 2. Update `aquatts.__version__` and `CHANGELOG.md`.
-3. Run:
+3. Build from a clean checkout (ignored `build/`, `dist/`, and `*.egg-info`
+   directories must not be reused), then run:
 
    ```bash
    python -m ruff check aquatts tests
@@ -26,6 +27,10 @@ This repository publishes `aqua-tts` through GitHub Actions and PyPI Trusted Pub
    python -m build
    python -m twine check dist/*
    ```
+
+   Inspect the wheel and confirm it contains `aquatts/upstream.py` and the
+   BigVGAN bridge, but no `_vendor/**/t2s_model.py`, `build_*`, `.pyd`, or
+   compiler object files.
 
 4. Merge the release commit and confirm CI is green.
 5. Run the `Publish Python package` workflow with `testpypi`.
@@ -36,7 +41,7 @@ This repository publishes `aqua-tts` through GitHub Actions and PyPI Trusted Pub
    python -c "import aquatts; print(aquatts.__version__)"
    ```
 
-7. Create and push the matching immutable Git tag, for example `v0.2.0`.
+7. Create and push the matching immutable Git tag, for example `v0.2.1`.
 8. Run the workflow again from that tag with `pypi`, then approve the protected `pypi` environment.
 9. Create the matching GitHub Release after the PyPI upload succeeds.
 

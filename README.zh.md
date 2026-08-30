@@ -20,24 +20,21 @@
 
 ---
 
-Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时——核心场景是与你自己的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA 角色进行低延迟流式语音交互。它不替换模型权重，而是替换执行策略：静态 KV 缓存缓冲区、分段 CUDA Graph 捕获/回放以及预编译 BigVGAN CUDA 内核。在 RTX 4070 Ti SUPER 上，T2S 吞吐量可达 **440–470 it/s**，首声播放延迟从 1.0–3.6 s 降至 **~0.26–0.41 s**（测试文本下）——完整对比见 [亮点](#亮点)。
+Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时——核心场景是与你自己的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA 角色进行低延迟流式语音交互。它不替换模型权重，而是替换执行策略：静态 KV 缓存缓冲区、分段 CUDA Graph 捕获/回放以及预编译 BigVGAN CUDA 内核。在 RTX 4070 Ti SUPER 上，当前确定性基准在对话常用的 448/512 bucket 达到 **490–519 同步 it/s**；可选 FlashAttention2 在相同形状达到 **568–627 it/s**。测试环境下模型侧首音延迟通常约 **0.26–0.41 s**——完整对比见 [亮点](#亮点)。
 
 ## 亮点
 
 <sub>**延迟定义：** TTFP 基准 = 预热缓存下模型侧首音延迟（下表）。端到端首音 = 完整管线含音频缓冲和播放启动耗时，实际通常 **0.4–0.7 s**。冷启动 = 初始化 + 模型加载 + 首次推理，主要被 BigVGAN CUDA 内核编译占据（首次约 2 分钟，之后缓存）。</sub>
 
-| | GPT-SoVITS（官方） | + CUDA Graph | Aqua-TTS |
-|---|---|---|---|
-| T2S 吞吐量 | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
-| TTFP（短，3 字符） | 1061ms | 1016ms | **~257ms** |
-| TTFP（中，19 字符） | 1599ms | 1476ms | **~301ms** |
-| TTFP（长，64 字符） | 3598ms | 2852ms | **~404ms** |
-| KV 缓存 | 动态 `torch.cat` | 静态 `scatter_` | **静态 `scatter_` 缓冲区** |
-| CUDA Graph | 无 | 单个延迟图 | **17 个预捕获图，6 个分段** |
-| BigVGAN 声码器 | PyTorch JIT | PyTorch JIT | **预编译 CUDA 内核** |
-| KV 缓存分配 | 无界增长 | 无界增长 | **按桶配置有界分配** |
+| | 当前上游 | Aqua-TTS 默认 | Aqua + FA2 `valid`（可选） |
+|---|---:|---:|---:|
+| T2S 短形状 / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
+| T2S 对话形状 / bucket 512 | 153.5 it/s | **519.3 it/s** | **627.4 it/s** |
+| T2S 长形状 / bucket 768 | 156.0 it/s | **476.9 it/s** | **644.9 it/s** |
+| KV 缓存 | 动态 `torch.cat` | **静态 `scatter_` 缓冲区** | **按有效长度读取的 FA2 KV 缓存** |
+| CUDA Graph | 无 | **分桶预捕获** | **分桶预捕获** |
 
-*在 NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、float16、相同模型权重（xxx-e15.ckpt + xxx_e2_s174_l32.pth）下测量。T2S 以 500 token 为目标测量；TTFP 统计调用方收到第一段可播放音频的时间。对非流式基线，这个时间可能等同于整句/整段生成完成；对 Aqua-TTS，则是 `chunk_size_seconds=0.25` 下的首个流式音频块返回时间。完整方法和消融结果见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
+*T2S 基准环境：NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)、PyTorch 2.5.1+cu124、fp16、上游 `08d627c`；每个形状预热 15 次并进行 7 次 CUDA 同步测量，报告中位数。FlashAttention2 默认仍关闭。绝对吞吐会受 Windows GPU P-state 影响；cold 数据、每轮范围、复现命令和独立 TTFP 方法见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
@@ -53,7 +50,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **HTTP 服务器** — 轻量 FastAPI 服务，支持流式 TTS 接口、角色管理和健康检查
 - **PyPI 安装** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **定位说明** — Aqua-TTS 是面向 GPT-SoVITS **v3** 的独立运行时，不是补丁插件，也不承诺跟进上游更新。本项目涉及的技术——静态 KV 缓存、分段 CUDA Graph、预编译 BigVGAN 内核——已在 [TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md) 中详细记录，具备可移植性。如需 v4 支持，`aquatts/modeling/` 和 `aquatts/_vendor/` 是适配的合理起点。
+> **定位说明** — Aqua-TTS 是上游 GPT-SoVITS **v3** 的优化层。它加载所选上游的 `Text2SemanticDecoder`，验证兼容契约，并且只替换直接 `infer_panel()` 路径；上游 batching/streaming 入口保持原样。不兼容的上游变更会明确失败。当前不支持 GPT-SoVITS v4。
 
 ## 语言支持
 
@@ -67,12 +64,13 @@ Aqua-TTS 继承 GPT-SoVITS v3 的语言能力。通过 `text_language` / `prompt
 
 ## 工作原理
 
-Aqua-TTS 将两个 GPT-SoVITS 文件的修改版本置于 `aquatts/_vendor/` 内，通过 Python 命名空间包（`pkgutil.extend_path`）机制覆盖主仓库版本。当你 `import aquatts` 时，包会自动配置 `sys.path` 使 vendored 文件优先于主 GPT-SoVITS 仓库。设置 `GPT_SOVITS_HOME` 环境变量指向你的 GPT-SoVITS 安装目录即可：
+Aqua-TTS 从 `GPT_SOVITS_HOME` 指定的上游 checkout 加载模型定义和文本/运行时模块，并在 checkpoint 加载后原位应用静态 KV/CUDA Graph 优化。`_vendor/` 只保留 BigVGAN CUDA 激活到 Aqua 统一加载器的命名空间桥接，不再包含分叉的 `t2s_model.py`：
 
 ```
 aqua-tts/
 ├── aquatts/                       # 纯 Python 包（pip 可安装）
 │   ├── __init__.py                # sys.path 配置 + 延迟导出
+│   ├── upstream.py                # 上游 checkout 校验与路由
 │   ├── inferencer.py              # TTSInferencer — 主入口
 │   ├── server.py                  # FastAPI HTTP 服务器
 │   ├── voice_registry.py          # 角色名 → 音频路径映射
@@ -87,13 +85,8 @@ aqua-tts/
 │   │   ├── params.py              # SoVITS 参数预设
 │   │   └── presets.py             # 命名预设（生成 + CUDA Graph）
 │   └── _vendor/
-│       └── GPT_SoVITS/            # 覆盖文件（命名空间包）
-│           ├── AR/models/
-│           │   └── t2s_model.py   # 静态 KV + CUDA Graph T2S 解码器
-│           └── BigVGAN/alias_free_activation/cuda/
-│               ├── load.py        # 预编译内核加载器
-│               ├── activation1d.py  # 融合抗混叠激活
-│               └── *.cpp, *.cu, *.h  # NVIDIA BigVGAN CUDA 内核源码
+│       └── GPT_SoVITS/            # 命名空间桥接，不含模型分叉
+│           └── BigVGAN/alias_free_activation/cuda/  # Aqua 加载器薄适配
 ├── benchmarks/                    # TTFP、T2S 对比、BigVGAN 原始基准测试
 ├── examples/                      # 示例脚本
 └── tests/                         # 单元测试
@@ -273,22 +266,18 @@ export AQUATTS_T2S_FLASH_ATTN_MODE=valid  # valid | bucket
 tts = TTSInferencer(..., use_flash_attn=True, flash_attn_mode="valid")
 ```
 
-短 demo 句、early-cut 首句 demo、严格回归对比时建议保持关闭。短文本通常落在 448/512 bucket，FlashAttention2 的额外路径开销经常抵消收益；当文本更长、路由到 768+ bucket 时才更值得测试。
+FlashAttention2 仍为可选功能，主要考虑额外依赖的可移植性，以及它需要独立的语义与音频回归覆盖。2026 年 6 月“短句无收益、长句约提升 8%”的结论是在 CUDA Graph replay 逐 token 强制同步仍存在时测得，已不代表当前性能。
 
-共享 Aqua/Amadeus v3 T2S 路径上的方向性 AB 测试
-（RTX 4070 Ti SUPER，PyTorch 2.5.1+cu124，flash-attn 2.7.0.post2，CUDA Graph 已预捕获，BigVGAN CUDA kernel 已缓存）：
+取消逐 token replay 同步后的确定性 A/B
+（RTX 4070 Ti SUPER，PyTorch 2.5.1+cu124，flash-attn 2.7.0.post2，预热 15 次，每个形状同步测量 7 次）：
 
-| 场景 | Flash 关闭 | Flash 开启 (`valid`) | 结论 |
-|---|---:|---:|---|
-| T2S 短句，3 字符 | ~427 it/s | ~414 it/s | 无收益 |
-| T2S 中句，19 字符 | ~448 it/s | ~478 it/s | 小幅收益 |
-| T2S 长句，64 字符 | ~461 it/s | ~500 it/s | 约 8% 吞吐提升 |
-| TTFP 短句 | ~290ms | ~297ms | 无收益 |
-| TTFP 中句 | ~396ms | ~413ms | 本轮无收益 |
-| TTFP 长句 | ~687ms | ~659ms | 模型侧约 28ms 收益 |
-| TTFP 长句 early-cut | ~317ms | ~336ms | early-cut 建议关闭 |
+| 场景 | Flash 关闭 | Flash 开启 (`valid`) | 方向性收益 |
+|---|---:|---:|---:|
+| T2S 短形状 / bucket 448 | 490.0 it/s | 568.5 it/s | 约 16% |
+| T2S 对话形状 / bucket 512 | 519.3 it/s | 627.4 it/s | 约 21% |
+| T2S 长形状 / bucket 768 | 476.9 it/s | 644.9 it/s | 约 35% |
 
-这些数据更适合作为使用建议，而不是宣传基准。Aqua 默认的 CUDA-Graph SDPA 路径在短对话轮次里已经很快，FlashAttention2 主要在 attention bucket 长度成为瓶颈时才更有意义。
+之前两条路径共同承担的设备级同步掩盖了部分 attention 内核差异。现在每个 step 只保留 EOS 所需同步，FA2 按有效 KV 长度读取的优势会直接体现，尤其是 bucket 768。百分比仍与硬件和 P-state 有关；在改变默认值前，应在目标部署 GPU 上复现，并完成语义/音频回归。
 
 ```python
 from aquatts import apply_preset, list_presets
@@ -375,6 +364,7 @@ export AQUA_VOICE_JSON=/data/voices.json
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(必填)* | GPT-SoVITS 仓库根目录路径 |
+| `BIGVGAN_CACHE_ROOT` | 包内缓存 | 可选的产品侧/可写 BigVGAN 编译扩展缓存根目录 |
 | `AQUA_API_KEY` | *(未设置)* | 服务器所有端点的 Bearer 令牌；未设置则无鉴权 |
 | `AQUA_VOICE_JSON` | `./voices.json` | 角色注册表 JSON 文件路径。**建议始终设置**——默认值相对于进程 CWD，目录切换后数据将丢失 |
 | `AQUA_SESSION_CACHE_MAX` | `8` | 参考音频 session 最大缓存数量 |
@@ -391,7 +381,10 @@ export AQUA_VOICE_JSON=/data/voices.json
 
 ```bash
 # T2S 对比（官方 vs 官方+CUDA Graph vs Aqua-TTS）
-python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/s1v3.ckpt
+python benchmarks/t2s_comparison_bench.py \
+  --upstream-home /path/to/GPT-SoVITS \
+  --gpt-model /path/to/xxx-e15.ckpt \
+  --flash-ab
 
 # TTFP 基准（端到端流式）
 python benchmarks/aqua_ttfp.py \
@@ -431,7 +424,7 @@ Aqua-TTS 的灵感来源于 [GENIE-TTS](https://github.com/High-Logic/Genie-TTS)
 MIT — 详见 [LICENSE](https://github.com/Lucas1479/Aqua-TTS/blob/main/LICENSE)。
 
 第三方代码：
-- **GPT-SoVITS**：vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` 基于 GPT-SoVITS (MIT) — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
+- **GPT-SoVITS**：以单独的上游 checkout 提供并遵循其 MIT 许可证；Aqua 不再分发其 T2S 模型源码。
 - **NVIDIA BigVGAN**：CUDA 内核源码基于 Apache 2.0 — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
 - **alias-free-torch**：`aquatts/bigvgan/torch/` 基于 Apache 2.0 — 详见 [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE)。
 

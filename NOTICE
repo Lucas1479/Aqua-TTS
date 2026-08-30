@@ -6,13 +6,16 @@ This project includes code from the following third-party projects:
 
 ## GPT-SoVITS
 
-Files: aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py
+Upstream runtime: supplied separately through GPT_SOVITS_HOME.
+Integration/optimization files: aquatts/upstream.py
+                                aquatts/modeling/t2s_streaming.py
+                                aquatts/modeling/t2s_flash_attn.py
 
 Copyright (c) 2024 RVC-Boss
 Licensed under the MIT License.
 https://github.com/RVC-Boss/GPT-SoVITS
 
-Modifications:
+Runtime modifications applied in memory:
 - Replaced dynamic `torch.cat` KV cache with static `scatter_` buffers
 - Added bucketed CUDA Graph capture/replay (6 bucket sizes, 13 pre-captured pairs)
 - Added `cuda_graph_stats` dict for per-step and EOS performance logging
@@ -20,11 +23,10 @@ Modifications:
 - Added `apply_cuda_graph_patch()` entry point in aquatts.modeling
 - Added fallback-on-error path: CUDA Graph → static KV → dynamic torch.cat
 
-The vendored aquatts/_vendor/GPT_SoVITS/AR/__init__.py and
+The namespace bridge files aquatts/_vendor/GPT_SoVITS/AR/__init__.py and
 aquatts/_vendor/GPT_SoVITS/AR/models/__init__.py use pkgutil.extend_path
-to merge with the main GPT-SoVITS package at import time.
-The BigVGAN CUDA kernel in aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/
-is subject to the NVIDIA BigVGAN license below.
+to merge with the selected upstream GPT-SoVITS package at import time. Aqua-TTS
+does not redistribute a modified GPT-SoVITS t2s_model.py.
 
 ---
 
@@ -34,9 +36,6 @@ Files: aquatts/bigvgan/cuda/anti_alias_activation.cpp
        aquatts/bigvgan/cuda/anti_alias_activation_cuda.cu
        aquatts/bigvgan/cuda/compat.h
        aquatts/bigvgan/cuda/type_shim.h
-       aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cpp
-       aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.cu
-       aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/*.h
 
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 Licensed under the Apache License, Version 2.0.
@@ -44,8 +43,8 @@ Licensed under the Apache License, Version 2.0.
 http://www.apache.org/licenses/LICENSE-2.0
 
 Modifications: Added at::cuda::CUDAGuard for multi-device safety.
-  Added MSVC auto-discovery loader (aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/load.py)
-  that pre-compiles the kernel and caches .pyd files per GPU compute capability.
+  Added MSVC auto-discovery loader (aquatts/bigvgan/cuda/load.py) that compiles
+  the kernel and caches .pyd files per GPU, Python, Torch, and CUDA runtime.
 
 ---
 
