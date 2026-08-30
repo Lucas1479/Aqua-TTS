@@ -16,6 +16,10 @@
 - Replaced EOS-dependent legacy T2S benchmarks with deterministic cold,
   bucket-448, bucket-512, and bucket-768 synchronized measurements, including
   isolated current-upstream and optional FlashAttention2 comparisons.
+- Prefer FlashAttention2 `valid` automatically when it is importable, with
+  transparent SDPA fallback and an explicit `AQUATTS_T2S_FLASH_ATTN=0` opt-out.
+- Expanded the public highlights into separate throughput, warm TTFP, and
+  execution-mechanism matrices.
 
 ### Fixed
 

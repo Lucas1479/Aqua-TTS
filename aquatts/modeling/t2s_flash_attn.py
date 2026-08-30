@@ -1,8 +1,9 @@
-"""Optional FlashAttention2 KV-cache path for GPT-SoVITS T2S decoding.
+"""Preferred FlashAttention2 KV-cache path for GPT-SoVITS T2S decoding.
 
-The default Aqua-TTS decoder stays on the static-KV SDPA/CUDA-Graph path.
-When explicitly enabled, this module replaces ``t2s_transformer_static`` with
-a q_len=1 decode block backed by ``flash_attn_with_kvcache``.
+Aqua uses this path automatically when FlashAttention2 is importable and falls
+back to static-KV SDPA otherwise. This module replaces
+``t2s_transformer_static`` with a q_len=1 decode block backed by
+``flash_attn_with_kvcache``.
 """
 
 from typing import List, Optional, Tuple

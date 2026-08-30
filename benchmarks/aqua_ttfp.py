@@ -45,6 +45,11 @@ def main():
     parser = argparse.ArgumentParser(description="Aqua TTFP benchmark")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
+    parser.add_argument("--sovits-pretrain")
+    parser.add_argument("--bert-model")
+    parser.add_argument("--cnhubert-model")
+    parser.add_argument("--bigvgan-model")
+    parser.add_argument("--fast-langdetect-model")
     parser.add_argument("--ref-audio", required=True)
     parser.add_argument("--ref-text", required=True)
     parser.add_argument("--ref-lang", default="日文")
@@ -95,6 +100,11 @@ def main():
         device="cuda",
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
+        sovits_pretrain_path=args.sovits_pretrain,
+        bert_path=args.bert_model,
+        cnhubert_path=args.cnhubert_model,
+        bigvgan_path=args.bigvgan_model,
+        fast_langdetect_path=args.fast_langdetect_model,
     )
     # BigVGAN kernel toggle (set before first inference)
     if args.no_bigvgan_kernel and hasattr(inferencer, 'bigvgan_model'):
