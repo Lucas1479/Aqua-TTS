@@ -4,10 +4,17 @@ import time
 import threading
 import logging
 import traceback
+import inspect
+from pathlib import Path
 from string import punctuation
 
 import torch
 import numpy as np
+
+from aquatts.upstream import (
+    configured_gpt_sovits_home,
+    upstream_t2s_model_path,
+)
 
 try:
     import soundfile as sf
@@ -52,7 +59,8 @@ _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _gpt_sovits_home() -> str:
     """Return the main GPT-SoVITS repo root, or '' if not configured."""
-    return os.environ.get('GPT_SOVITS_HOME', '')
+    home = configured_gpt_sovits_home()
+    return str(home) if home is not None else ""
 
 
 # Import required modules from GPT-SoVITS
@@ -134,6 +142,9 @@ class TTSInferencer:
                  sovits_path=None,
                  bert_path=None,
                  cnhubert_path=None,
+                 sovits_pretrain_path=None,
+                 bigvgan_path=None,
+                 fast_langdetect_path=None,
                  language="Auto",
                  cuda_graph_preset="full",
                  use_flash_attn=None,
@@ -152,7 +163,10 @@ class TTSInferencer:
             bert_path: Path to BERT model directory
                        BERT模型路径，如果为None则使用默认路径
             cnhubert_path: Path to CNHuBERT model directory
-                           CNHuBERT模型路径，如果为None则使用默认路径
+                            CNHuBERT模型路径，如果为None则使用默认路径
+            sovits_pretrain_path: Path to the v3 SoVITS base checkpoint.
+            bigvgan_path: Path to the local BigVGAN model directory.
+            fast_langdetect_path: Directory containing the cached lid.176.bin.
             language: Default language — "Auto", "中文", "英文", "日文", etc.
                       默认语言
             cuda_graph_preset: CUDA Graph capture strategy — "full" (all buckets pre-captured),
@@ -197,13 +211,26 @@ class TTSInferencer:
             default_bert_path = os.path.join(base_dir, "GPT_SoVITS", "pretrained_models",
                                              "chinese-roberta-wwm-ext-large")
             default_cnhubert_path = os.path.join(base_dir, "GPT_SoVITS", "pretrained_models", "chinese-hubert-base")
+            default_bigvgan_path = os.path.join(
+                base_dir,
+                "GPT_SoVITS",
+                "pretrained_models",
+                "models--nvidia--bigvgan_v2_24khz_100band_256x",
+            )
+            default_fast_langdetect_path = os.path.join(
+                base_dir, "GPT_SoVITS", "pretrained_models", "fast_langdetect"
+            )
 
             # 使用传入参数或默认路径
             self.gpt_path = gpt_path or default_gpt_path
             self.sovits_path = sovits_path or default_sovits_path
             self.bert_path = bert_path or default_bert_path
             self.cnhubert_path = cnhubert_path or default_cnhubert_path
-            self.sovits_pretrain_path = default_sovits_pretrain_path
+            self.sovits_pretrain_path = sovits_pretrain_path or default_sovits_pretrain_path
+            self.bigvgan_path = bigvgan_path or default_bigvgan_path
+            self.fast_langdetect_path = (
+                fast_langdetect_path or default_fast_langdetect_path
+            )
 
             # 检查必要文件是否存在
             for path, desc in [
@@ -211,10 +238,14 @@ class TTSInferencer:
                 (self.sovits_path, "SoVITS权重"),
                 (self.sovits_pretrain_path, "SoVITS预训练权重"),
                 (self.bert_path, "BERT模型"),
-                (self.cnhubert_path, "CNHuBERT模型")
+                (self.cnhubert_path, "CNHuBERT模型"),
+                (self.bigvgan_path, "BigVGAN模型"),
+                (self.fast_langdetect_path, "fast-langdetect模型"),
             ]:
                 if not os.path.exists(path):
                     logger.warning(f"必要文件不存在: {path} ({desc})，请确保路径正确")
+
+            self._configure_fast_langdetect()
 
             # 初始化国际化
             self.i18n = I18nAuto(language=language)
@@ -244,6 +275,16 @@ class TTSInferencer:
             logger.error(f"❌ 初始化TTS推理器失败: {str(e)}")
             logger.error(traceback.format_exc())
             raise
+
+    def _configure_fast_langdetect(self):
+        """Point upstream LangSegmenter at the caller-owned model cache."""
+
+        import fast_langdetect
+
+        infer = fast_langdetect.infer
+        infer._default_detector = infer.LangDetector(
+            infer.LangDetectConfig(cache_dir=Path(self.fast_langdetect_path))
+        )
 
     def _get_effective_max_sec(self, override_value):
         """Compute the effective max duration (seconds) for current inference.
@@ -381,8 +422,29 @@ class TTSInferencer:
         self.t2s_model = self.t2s_model.to(self.device)
         self.t2s_model.eval()
 
+        self._apply_aqua_t2s_patch()
         self._maybe_enable_flash_attn_t2s()
         self._maybe_precapture_t2s_graph()
+
+    def _apply_aqua_t2s_patch(self):
+        """Patch the selected upstream decoder without replacing its module."""
+
+        decoder = getattr(self.t2s_model, "model", None)
+        if decoder is None:
+            raise RuntimeError("GPT-SoVITS checkpoint did not expose a T2S decoder")
+
+        selected = upstream_t2s_model_path()
+        source = Path(inspect.getfile(decoder.__class__)).resolve()
+        if selected is not None and source != selected.resolve():
+            raise RuntimeError(
+                "Aqua loaded a different GPT-SoVITS T2S module than the configured "
+                f"upstream checkout: loaded={source}, expected={selected}"
+            )
+
+        from aquatts.modeling.t2s_streaming import apply_cuda_graph_patch
+
+        apply_cuda_graph_patch(decoder)
+        logger.info("[Aqua] patched upstream GPT-SoVITS decoder: %s", source)
 
     def _warmup_bigvgan_shapes(self):
         """Warm BigVGAN + cuDNN for common streaming chunk mel_T sizes.
@@ -611,34 +673,22 @@ class TTSInferencer:
         try:
 
 
-            bigvgan_path = os.path.join(_gpt_sovits_home(), "GPT_SoVITS", "pretrained_models",
-                                        "models--nvidia--bigvgan_v2_24khz_100band_256x")
+            bigvgan_path = self.bigvgan_path
             logger.info(f"加载BigVGAN模型: {bigvgan_path}")
 
             # use_cuda_kernel=True：编译 anti-aliased activation 的融合 CUDA kernel，
             # 减少内存读写，对 CUDA Graph 之后的 L2 cache miss 不敏感。
             # 优先检查预编译 .pyd 缓存（无需 cl.exe/nvcc），否则尝试现场编译。
-            import pathlib as _pathlib
+            from aquatts.bigvgan.cuda.load import (
+                _get_cache_root,
+                _get_gpu_cache_suffix,
+            )
+
             # Use the device index that was resolved at __init__ time.
             _tts_device_idx = self._tts_device_idx
-            _cache_id = os.environ.get("BIGVGAN_CACHE_ID", "").strip()
-            if _cache_id:
-                import re as _re
-                _cache_suffix = _re.sub(r"[^A-Za-z0-9_.-]+", "_", _cache_id.lower()).strip("_") or "unknown"
-            elif torch.cuda.is_available():
-                try:
-                    import re as _re
-                    _props = torch.cuda.get_device_properties(_tts_device_idx)
-                    _name = _re.sub(r"[^A-Za-z0-9_.-]+", "_", _props.name.lower()).strip("_") or "unknown"
-                    _mem_gb = int(round(_props.total_memory / (1024 ** 3)))
-                    _cache_suffix = f"sm{_props.major}{_props.minor}_{_mem_gb}gb_{_name}"
-                except Exception:
-                    _cache_suffix = f"device{_tts_device_idx}"
-            else:
-                _cache_suffix = f"device{_tts_device_idx}"
+            _cache_suffix = _get_gpu_cache_suffix(_tts_device_idx)
             _cuda_pyd = (
-                _pathlib.Path(_PACKAGE_DIR)
-                / "_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda"
+                _get_cache_root()
                 / f"build_{_cache_suffix}"
                 / "anti_alias_activation_cuda.pyd"
             )

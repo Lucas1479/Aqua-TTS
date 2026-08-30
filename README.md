@@ -27,24 +27,21 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, this reaches **440–470 it/s** T2S throughput and reduces model-side first-audio latency from 1.0–3.6 s to **~0.26–0.40 s**. In the full streaming player pipeline, practical first-audio latency is typically **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead — see [Highlights](#highlights) for the full comparison.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **490–519 synchronized it/s** on conversational 448/512 buckets; optional FlashAttention2 reaches **568–627 it/s** on the same shapes. Model-side first-audio latency is typically **~0.26–0.40 s** in the tested setup. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead — see [Highlights](#highlights) for the full comparison.
 
 ## Highlights
 
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
-| | GPT-SoVITS (official) | + CUDA Graph | Aqua-TTS |
-|---|---|---|---|
-| T2S throughput | ~80-90 it/s | ~230 it/s | **440-470 it/s** |
-| TTFP (short, 3 chars) | 1061ms | 1016ms | **~257ms** |
-| TTFP (medium, 19 chars) | 1599ms | 1476ms | **~301ms** |
-| TTFP (long, 64 chars) | 3598ms | 2852ms | **~404ms** |
-| KV cache | Dynamic `torch.cat` | Static `scatter_` | **Static `scatter_` buffer** |
-| CUDA Graph | None | Single lazy graph | **17 pre-captured graphs, 6 buckets** |
-| BigVGAN vocoder | PyTorch JIT | PyTorch JIT | **Pre-compiled CUDA kernel** |
-| KV-cache allocation | Unbounded growth | Unbounded growth | **Bounded per bucket config** |
+| | Current upstream | Aqua-TTS default | Aqua + FA2 `valid` (opt-in) |
+|---|---:|---:|---:|
+| T2S short / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
+| T2S conversation / bucket 512 | 153.5 it/s | **519.3 it/s** | **627.4 it/s** |
+| T2S long / bucket 768 | 156.0 it/s | **476.9 it/s** | **644.9 it/s** |
+| KV cache | Dynamic `torch.cat` | **Static `scatter_` buffer** | **Valid-length FA2 KV cache** |
+| CUDA Graph | None | **Bucketed, pre-captured** | **Bucketed, pre-captured** |
 
-*TTFP benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu121, float16, warm cache, static KV cache enabled, bucketed CUDA Graph pre-captured. Aqua-TTS numbers are median of 5 runs. Official baseline uses the same GPT checkpoint; TTFP for non-streaming baselines coincides with full utterance completion. See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for full methodology and raw repeats.*
+*T2S benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`, 15 warmups and seven synchronized repeats per shape. FlashAttention2 remains disabled by default. Absolute throughput is sensitive to Windows GPU P-state; see [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for cold results, trial ranges, commands, and the separate TTFP methodology.*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
@@ -60,7 +57,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
 - **PyPI install** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **Scope notice** — Aqua-TTS is a self-contained runtime for GPT-SoVITS **v3**. It is not a plugin and does not track upstream changes. The techniques here — static KV cache, bucketed CUDA Graph, pre-compiled BigVGAN kernel — are documented in [TECHNICAL.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/TECHNICAL.md) and designed to be portable. If you need v4 support, `aquatts/modeling/` and `aquatts/_vendor/` are the right starting points for adaptation.
+> **Scope notice** — Aqua-TTS is an optimization layer for upstream GPT-SoVITS **v3**. It loads the selected upstream `Text2SemanticDecoder`, validates the required contract, and patches only the direct `infer_panel()` path. Upstream batching and streaming entry points remain intact; incompatible upstream changes fail closed. GPT-SoVITS v4 is not currently supported.
 
 > **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
 
@@ -76,12 +73,13 @@ Aqua-TTS inherits GPT-SoVITS v3's language support. Pass the code to `text_langu
 
 ## How it works
 
-Aqua-TTS vendors overrides for two GPT-SoVITS files inside `aquatts/_vendor/` using Python namespace packages (`pkgutil.extend_path`). When you `import aquatts`, the package automatically configures `sys.path` so the vendored files take precedence over the main GPT-SoVITS repo. Set `GPT_SOVITS_HOME` to point at your GPT-SoVITS installation — Aqua-TTS handles the rest:
+Aqua-TTS loads model definitions and text/runtime modules from the checkout selected by `GPT_SOVITS_HOME`. After the checkpoint is loaded it applies the static-KV/CUDA-Graph optimization in place. The small namespace bridge under `_vendor/` redirects only BigVGAN's CUDA activation to Aqua's canonical extension loader; it does not contain a forked `t2s_model.py`:
 
 ```
 aqua-tts/
 ├── aquatts/                       # Pure Python package (pip-installable)
 │   ├── __init__.py                # sys.path configuration + lazy exports
+│   ├── upstream.py                # Upstream checkout validation and routing
 │   ├── inferencer.py              # TTSInferencer — main entry point
 │   ├── server.py                  # FastAPI HTTP server
 │   ├── voice_registry.py          # Voice name → audio path mapping
@@ -96,13 +94,8 @@ aqua-tts/
 │   │   ├── params.py              # SoVITS parameter presets
 │   │   └── presets.py             # Named presets (generation + CUDA Graph)
 │   └── _vendor/
-│       └── GPT_SoVITS/            # Vendored overrides (namespace packages)
-│           ├── AR/models/
-│           │   └── t2s_model.py   # Static KV + CUDA Graph T2S decoder
-│           └── BigVGAN/alias_free_activation/cuda/
-│               ├── load.py        # Pre-compiled kernel loader (MSVC auto-discovery)
-│               ├── activation1d.py  # Fused anti-alias activation
-│               └── *.cpp, *.cu, *.h  # NVIDIA BigVGAN CUDA kernel sources
+│       └── GPT_SoVITS/            # Namespace bridge; no model fork
+│           └── BigVGAN/alias_free_activation/cuda/  # Thin Aqua loader adapters
 ├── benchmarks/                    # TTFP, T2S comparison, BigVGAN raw benchmarks
 ├── examples/                      # basic_usage.py, streaming_inference.py
 └── tests/                         # Unit tests
@@ -295,28 +288,27 @@ or from Python:
 tts = TTSInferencer(..., use_flash_attn=True, flash_attn_mode="valid")
 ```
 
-Keep it off for short demo lines, early-cut first-sentence demos, or strict
-regression comparisons. On short 448/512-bucket shapes the extra path is often
-within noise or slightly slower; it becomes more interesting on longer 768+
-bucket decode.
+FlashAttention2 remains opt-in for dependency portability and separate
+semantic/audio regression coverage. The old June 2026 guidance that it had no
+short-case benefit and only about 8% long-case benefit was measured before
+CUDA Graph replay synchronization became diagnostic-only, so it is no longer
+the current performance conclusion.
 
-Directional AB test on the shared Aqua/Amadeus v3 T2S path
+Deterministic A/B after removing the per-token replay synchronization
 (RTX 4070 Ti SUPER, PyTorch 2.5.1+cu124, flash-attn 2.7.0.post2,
-CUDA Graph pre-captured, BigVGAN CUDA kernel cached):
+15 warmups, seven synchronized repeats):
 
-| Case | Flash off | Flash on (`valid`) | Note |
-|---|---:|---:|---|
-| T2S short, 3 chars | ~427 it/s | ~414 it/s | no benefit |
-| T2S medium, 19 chars | ~448 it/s | ~478 it/s | small win |
-| T2S long, 64 chars | ~461 it/s | ~500 it/s | ~8% throughput win |
-| TTFP short | ~290ms | ~297ms | no benefit |
-| TTFP medium | ~396ms | ~413ms | no benefit in this run |
-| TTFP long | ~687ms | ~659ms | ~28ms model-side win |
-| TTFP long early-cut | ~317ms | ~336ms | keep off for early-cut |
+| Case | Flash off | Flash on (`valid`) | Directional gain |
+|---|---:|---:|---:|
+| T2S short / bucket 448 | 490.0 it/s | 568.5 it/s | ~16% |
+| T2S conversation / bucket 512 | 519.3 it/s | 627.4 it/s | ~21% |
+| T2S long / bucket 768 | 476.9 it/s | 644.9 it/s | ~35% |
 
-Treat these as guidance rather than headline numbers: FlashAttention2 helps
-most when attention bucket length is the bottleneck, while Aqua's default
-CUDA-Graph SDPA path is already very fast for short conversational turns.
+The shared device-wide synchronization previously hid part of the attention
+kernel difference. With one EOS synchronization per step, FA2's valid-length
+KV reads are much more visible, especially at bucket 768. Treat the percentages
+as hardware-specific and reproduce them on the deployment GPU before changing
+the default.
 
 ```python
 from aquatts import apply_preset, list_presets
@@ -407,6 +399,7 @@ export AQUA_VOICE_JSON=/data/voices.json
 | Env variable | Default | Description |
 |---|---|---|
 | `GPT_SOVITS_HOME` | *(required)* | Path to GPT-SoVITS repo root |
+| `BIGVGAN_CACHE_ROOT` | package cache | Optional writable/product-owned compiled extension cache root |
 | `AQUA_API_KEY` | *(unset)* | Bearer token for all server endpoints; unset = no auth |
 | `AQUA_VOICE_JSON` | `./voices.json` | Path to voice registry JSON file. **Always set this** — default is relative to process CWD and will be lost on directory change |
 | `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
@@ -424,7 +417,10 @@ export AQUA_VOICE_JSON=/data/voices.json
 ```bash
 # T2S comparison (official vs official+CUDA Graph vs Aqua-TTS)
 # Replace with your own GPT checkpoint (s1v3.ckpt or a self-trained .ckpt)
-python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
+python benchmarks/t2s_comparison_bench.py \
+  --upstream-home /path/to/GPT-SoVITS \
+  --gpt-model /path/to/xxx-e15.ckpt \
+  --flash-ab
 
 # TTFP benchmark (streaming end-to-end)
 python benchmarks/aqua_ttfp.py \
@@ -464,7 +460,7 @@ Aqua-TTS was inspired by [GENIE-TTS](https://github.com/High-Logic/Genie-TTS), w
 MIT — see [LICENSE](https://github.com/Lucas1479/Aqua-TTS/blob/main/LICENSE).
 
 Third-party code:
-- **GPT-SoVITS**: vendored `aquatts/_vendor/GPT_SoVITS/AR/models/t2s_model.py` is based on GPT-SoVITS (MIT) — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
+- **GPT-SoVITS**: supplied as a separate upstream checkout and consumed under its own MIT license; Aqua does not redistribute its T2S model source.
 - **NVIDIA BigVGAN**: CUDA kernel sources under Apache 2.0 — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
 - **alias-free-torch**: `aquatts/bigvgan/torch/` adapted under Apache 2.0 — see [NOTICE](https://github.com/Lucas1479/Aqua-TTS/blob/main/NOTICE).
 

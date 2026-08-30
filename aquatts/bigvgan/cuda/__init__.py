@@ -1,4 +1,4 @@
-from aquatts.bigvgan.cuda.load import load
+from . import load
 
 __all__ = ["Activation1d", "FusedAntiAliasActivation", "load"]
 

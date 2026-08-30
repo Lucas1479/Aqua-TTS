@@ -6,6 +6,7 @@ include TECHNICAL.md
 include CHANGELOG.md
 include PUBLISHING.md
 
-recursive-include aquatts/_vendor *.cpp *.cu *.h
 recursive-include aquatts/bigvgan/cuda *.cpp *.cu *.h
 recursive-include aquatts/bigvgan/torch *.py
+prune aquatts/_vendor/GPT_SoVITS/BigVGAN/alias_free_activation/cuda/build_*
+global-exclude *.pyd *.o *.obj *.lib *.exp build.ninja

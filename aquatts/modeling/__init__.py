@@ -1,6 +1,7 @@
 ﻿from aquatts.modeling.t2s_streaming import (
     T2SBlockWithStaticCache,
     T2STransformerWithStaticCache,
+    IncompatibleGPTSoVITSError,
     apply_cuda_graph_patch,
     _GRAPH_INITIAL_LEN_STRIDE,
 )
@@ -15,6 +16,7 @@ from aquatts.modeling.t2s_flash_attn import (
 __all__ = [
     "T2SBlockWithStaticCache",
     "T2STransformerWithStaticCache",
+    "IncompatibleGPTSoVITSError",
     "T2SBlockWithStaticCacheFlash",
     "T2STransformerWithStaticCacheFlash",
     "apply_cuda_graph_patch",

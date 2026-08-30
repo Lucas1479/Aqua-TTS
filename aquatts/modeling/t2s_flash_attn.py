@@ -10,7 +10,8 @@ from typing import List, Optional, Tuple
 import torch
 from torch.nn import functional as F
 
-from AR.models.t2s_model import T2SBlockWithStaticCache, T2SMLP
+from AR.models.t2s_model import T2SMLP
+from aquatts.modeling.t2s_streaming import T2SBlockWithStaticCache
 
 __all__ = [
     "T2SBlockWithStaticCacheFlash",

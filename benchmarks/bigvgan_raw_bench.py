@@ -33,7 +33,7 @@ sys.path[:0] = [
 ]
 os.chdir(MAIN_REPO)
 
-import torch
+import torch  # noqa: E402
 
 MEL_T_SIZES = [70, 128, 298, 598]
 WARMUP = 10
@@ -82,7 +82,7 @@ def load_bigvgan():
 
 
 def main():
-    print(f"Loading BigVGAN directly...")
+    print("Loading BigVGAN directly...")
     t0 = time.perf_counter()
     model = load_bigvgan()
     print(f"Loaded in {time.perf_counter() - t0:.1f}s")

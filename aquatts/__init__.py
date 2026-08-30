@@ -2,40 +2,23 @@
 """Aqua-TTS: GPU-optimized runtime for GPT-SoVITS v3. / Aqua-TTS：针对 GPT-SoVITS v3 的 GPU 优化运行时。"""
 
 import os
-import sys
 from contextlib import contextmanager
 
-__version__ = "0.2.0"
+from aquatts.upstream import (
+    GPTSoVITSConfigurationError,
+    configure_gpt_sovits,
+    configured_gpt_sovits_home,
+    upstream_t2s_model_path,
+)
+
+
+__version__ = "0.2.1"
 
 # ── Internal path configuration (内部路径配置) ──────────────────────────────────────────
-# Ensure vendored GPT_SoVITS overrides take precedence over the main repo.
-# The _vendor dir contains our static-KV + CUDA Graph t2s_model.py and the
-# BigVGAN CUDA kernel loader — these must be on sys.path BEFORE the main
-# GPT-SoVITS repo for the namespace package (pkgutil.extend_path) to work.
-# 确保 vendored 的 GPT_SoVITS 覆盖优先于主仓库。_vendor 目录包含我们的静态 KV + CUDA Graph
-# t2s_model.py 和 BigVGAN CUDA 内核加载器 — 这些必须在主 GPT-SoVITS 仓库之前加入 sys.path，
-# 以确保命名空间包 (pkgutil.extend_path) 正常工作。
-
-# Main GPT-SoVITS repo — required for config/, tools/, and the rest of
-# GPT_SoVITS/ modules that we don't vendor.
-# 主 GPT-SoVITS 仓库 — config/、tools/ 以及其余未 vendored 的 GPT_SoVITS/ 模块所需。
-_GPT_SOVITS_HOME = os.environ.get("GPT_SOVITS_HOME", "")
-if _GPT_SOVITS_HOME:
-    _gpt_sovits_pkg = os.path.join(_GPT_SOVITS_HOME, "GPT_SoVITS")
-    for _p in (_GPT_SOVITS_HOME, _gpt_sovits_pkg):
-        if os.path.isdir(_p) and _p not in sys.path:
-            sys.path.insert(0, _p)
-
-# Vendored overrides MUST be last (insert(0) → ends up at position 0).
-# Order is: _vendor < GPT_SoVITS/ < repo-root, so the vendored t2s_model.py
-# and BigVGAN CUDA loader take precedence at import time.
-# Vendored 覆盖必须最后添加 (insert(0) → 最终在位置 0)。顺序为：_vendor < GPT_SoVITS/ < repo-root，
-# 因此 vendored 的 t2s_model.py 和 BigVGAN CUDA 加载器在导入时具有优先权。
-_VENDOR_DIR = os.path.join(os.path.dirname(__file__), "_vendor")
-_VENDOR_GPT_SOVITS_DIR = os.path.join(_VENDOR_DIR, "GPT_SoVITS")
-for _p in (_VENDOR_DIR, _VENDOR_GPT_SOVITS_DIR):
-    if os.path.isdir(_p) and _p not in sys.path:
-        sys.path.insert(0, _p)
+# The bundled namespace bridge only redirects BigVGAN's CUDA extension loader.
+# Text2SemanticDecoder itself comes from the configured upstream checkout and
+# is optimized in-place after its checkpoint has loaded.
+configure_gpt_sovits(require=False)
 
 # ── Public API (公共 API) ───────────────────────────────────────────────────────────
 # TTSInferencer is imported lazily — import aqua does not trigger
@@ -46,6 +29,10 @@ for _p in (_VENDOR_DIR, _VENDOR_GPT_SOVITS_DIR):
 
 __all__ = [
     "__version__",
+    "GPTSoVITSConfigurationError",
+    "configure_gpt_sovits",
+    "configured_gpt_sovits_home",
+    "upstream_t2s_model_path",
     "TTSInferencer",
     "VoiceRegistry",
     "Voice",
@@ -80,9 +67,10 @@ def _gpt_sovits_import_context():
     """
     original_cwd = os.getcwd()
     changed_cwd = False
-    if _GPT_SOVITS_HOME and os.path.isdir(_GPT_SOVITS_HOME):
+    upstream_home = configured_gpt_sovits_home()
+    if upstream_home is not None:
         try:
-            os.chdir(_GPT_SOVITS_HOME)
+            os.chdir(upstream_home)
             changed_cwd = True
         except OSError:
             pass

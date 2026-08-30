@@ -29,7 +29,7 @@ sys.path.insert(0, ROOT)
 if not os.environ.get("GPT_SOVITS_HOME"):
     sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
 
-import torch
+import torch  # noqa: E402
 
 BENCH_TEXTS = [
     ("short",  "実験？"),
@@ -70,12 +70,15 @@ def main():
     from aquatts import TTSInferencer
 
     print(f"\n{'='*80}")
-    print(f"  Aqua TTFP Benchmark")
+    print("  Aqua TTFP Benchmark")
     print(f"{'='*80}")
     flags = []
-    if not args.no_cuda_graph: flags.append("CUDA Graph")
-    if not args.no_static_kv: flags.append("Static KV")
-    if not args.no_bigvgan_kernel: flags.append("BigVGAN Kernel")
+    if not args.no_cuda_graph:
+        flags.append("CUDA Graph")
+    if not args.no_static_kv:
+        flags.append("Static KV")
+    if not args.no_bigvgan_kernel:
+        flags.append("BigVGAN Kernel")
     print(f"  Optimizations: {', '.join(flags) if flags else 'ALL OFF'}")
     print(f"  Segmentation: {args.how_to_cut}")
     if args.chunk_size_seconds and args.chunk_size_seconds > 0:
@@ -144,7 +147,7 @@ def main():
         _measure(wt)
     print("[bench] Warmup done\n")
 
-    print(f"--- Aqua TTFP ---")
+    print("--- Aqua TTFP ---")
     elapsed_label = "total" if args.measure_total else "elapsed"
     hdr = f"{'case':<8} {'chars':>5}  {'ttfp':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
     print(hdr)

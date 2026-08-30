@@ -4,6 +4,12 @@
 
 Aqua-TTS is an optimization layer between GPT-SoVITS's AR Text-to-Semantic decoder and its BigVGAN vocoder. It does not replace any model weights — it replaces the *execution strategy*.
 
+Since 0.2.1, the model definition is loaded from the checkout selected by
+`GPT_SOVITS_HOME`; Aqua no longer distributes a forked `t2s_model.py`. The
+runtime validates the upstream decoder shape, builds the static-cache blocks
+from its loaded weights, and replaces only `infer_panel()`. Upstream
+`infer_panel_naive()` remains a generator for native batching and streaming.
+
 ### Pipeline
 
 ```
@@ -76,6 +82,11 @@ This produces **13 graphs** across the 6 buckets, covering all initial_len value
 
 Each `(bucket, initial_len)` pair gets its own `threading.Lock`. Multi-threaded servers (e.g., FastAPI with multiple workers) can safely replay different graphs concurrently. Only threads hitting the same bucket+initial_len key serialize.
 
+CUDA stream dependencies order graph replay before sampling, so Aqua does not
+perform a device-wide synchronization after every token. Set
+`CUDA_GRAPH_REPLAY_SYNC=1` only when diagnosing graph failures. Greedy and
+sampled EOS conditions are combined before the single device-to-host check.
+
 ### Graceful Degradation
 
 ```
@@ -144,7 +155,8 @@ bigvgan/torch/
 
 ## Performance Analysis
 
-Measured on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11, PyTorch 2.1.2+cu121.
+Measured on an NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM), Windows 11,
+Python 3.12, PyTorch 2.5.1+cu124, against upstream GPT-SoVITS `08d627c`.
 
 ### T2S Decoding Speed
 
@@ -155,21 +167,34 @@ The AR decoder is memory-bound on attention — each step reads the full KV cach
 - CUDA kernel launch overhead
 - Shape-inference overhead
 
-Measured throughput: **440-470 iterations/second** (median) — a **5.5x speedup** over the official `torch.cat` KV cache baseline (~80-90 it/s) and **2x faster** than the official CUDA Graph implementation (~230 it/s). CUDA Graph replay hit rate is typically **98-99.5%** across bucket sizes.
+The current benchmark fixes the input length, bucket and reported AR steps,
+synchronizes CUDA around every measured call, performs 15 P-state warmups and
+reports the median of seven repeats:
 
-| Variant | T2S Speed | KV Cache | CUDA Graph |
-|---------|-----------|----------|------------|
-| Official (no Graph) | ~80-90 it/s | `torch.cat` | None |
-| Official (CUDA Graph) | ~230 it/s | Static `scatter_` | Single graph, lazy |
-| Aqua | **~440-470 it/s** | Static `scatter_` | 13 graphs, pre-captured |
+| Variant | Short / 448 | Conversation / 512 | Long / 768 | KV Cache |
+|---------|------------:|-------------------:|-----------:|----------|
+| Current upstream | 145.5 it/s | 153.5 it/s | 156.0 it/s | Dynamic `torch.cat` |
+| Aqua Graph + SDPA | **490.0 it/s** | **519.3 it/s** | **476.9 it/s** | Static `scatter_` |
+| Aqua Graph + FA2 `valid` | **568.5 it/s** | **627.4 it/s** | **644.9 it/s** | Valid-length FlashAttention2 |
 
-*All measured with the same 24-layer GPT checkpoint on RTX 4070 Ti SUPER via `benchmarks/t2s_comparison_bench.py`.*
+CUDA Graph replay coverage was 98.1–99.4% across these shapes. Absolute rates
+remain sensitive to Windows GPU P-state; raw ranges and cold measurements are
+recorded in `benchmarks/results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md`.
 
-Key reasons Aqua outperforms the official CUDA Graph implementation:
-- **No `empty_cache` in hot path** — official calls `torch.cuda.empty_cache()` every 100 decode steps and at end-of-sequence, flushing the CUDA allocator cache
-- **Pre-captured graphs** — 13 graphs captured at load time vs official's single lazy-captured graph
-- **Bucketed sizing** — bucket selection based on initial_len provides near-optimal graph reuse
-- **No NestedTensor overhead** — Aqua uses regular tensors throughout, avoiding the prototype API overhead of `torch.nested`
+Key reasons Aqua outperforms the current upstream path:
+
+- **Static KV buffers** — no per-step `torch.cat` growth or allocation.
+- **Pre-captured graphs** — stable bucket/initial-length graph keys are ready before the first request.
+- **No device-wide replay sync in production** — stream ordering handles graph replay; `CUDA_GRAPH_REPLAY_SYNC=1` is diagnostic-only.
+- **One EOS synchronization** — greedy and sampled EOS conditions are combined into one device-to-host read.
+- **Bucketed sizing** — selection based on aligned initial length reserves generation space without routing ordinary conversation shapes to an unnecessarily large bucket.
+
+The no-replay-sync change also alters the FlashAttention2 trade-off. The older
+June 2026 result (no short benefit, about 8% on the long text) included a large
+shared synchronization cost. Once that cost is removed, valid-length FA2 reads
+showed approximately 16%, 21% and 35% directional gains at buckets 448, 512 and
+768 in this run. FA2 remains opt-in pending broader platform and semantic/audio
+regression coverage.
 
 ### BigVGAN Kernel (Raw)
 
@@ -219,4 +244,6 @@ This prevents the common "first request penalty" where CUDA lazy initialization,
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at model load |
 | `CUDA_GRAPH_PRECAPTURE_BUCKETS` | (all) | Comma-separated bucket sizes to pre-capture |
 | `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
+| `CUDA_GRAPH_REPLAY_SYNC` | `0` | Force a device sync after each graph replay for diagnostics |
+| `BIGVGAN_CACHE_ROOT` | package CUDA directory | Product-owned root for ABI-keyed compiled BigVGAN extensions |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |

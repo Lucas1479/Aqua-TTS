@@ -1,325 +1,147 @@
-﻿# -*- coding: utf-8 -*-
-"""T2S throughput comparison: Official vs Official CUDA Graph vs aqua.
+# -*- coding: utf-8 -*-
+"""Run deterministic T2S engines in isolated subprocesses.
 
-Each variant runs in its own subprocess to avoid import conflicts.
-
-Usage:
-    python benchmarks/t2s_comparison_bench.py --gpt-model GPT_weights_v3/xxx-e15.ckpt
+The subprocess boundary prevents GPT-SoVITS module-path contamination while
+keeping every engine on the same checkpoint, tensor shapes and step counts.
 """
 from __future__ import annotations
 
-import argparse, os, statistics, subprocess, sys, tempfile, textwrap
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OFFICIAL_REPO = os.environ.get("GPT_SOVITS_OFFICIAL_HOME") or os.environ.get("GPT_SOVITS_HOME")
-if not OFFICIAL_REPO:
-    sys.exit("GPT_SOVITS_HOME must be set to your GPT-SoVITS repo root")
-MAIN_REPO = os.environ.get("GPT_SOVITS_HOME") or OFFICIAL_REPO
-MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
-TOKEN_COUNT = 500
-REPEATS = 5
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from typing import Any
 
 
-def _run_official(gpt_model: str, timeout: int = 300) -> dict:
-    """Benchmark official GPT-SoVITS (torch.cat KV cache, no CUDA Graph)."""
-    script = textwrap.dedent(f"""\
-import os, statistics, sys, time
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-os.environ.setdefault("PYTHONUTF8", "1")
-OFFICIAL = {OFFICIAL_REPO!r}
-sys.path.insert(0, OFFICIAL)
-sys.path.insert(0, os.path.join(OFFICIAL, "GPT_SoVITS"))
-os.chdir(OFFICIAL)
-
-# Suppress tqdm before importing torch/tqdm
-from functools import partial as _partial
-class _NoopTqdm:
-    def __init__(self, iterable=None, *a, **kw):
-        self._it = iter(iterable) if iterable is not None else iter([])
-    def __iter__(self): return self
-    def __next__(self): return next(self._it)
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
-    def update(self, *a, **kw): pass
-    def close(self): pass
-    def set_description(self, *a): pass
-    @staticmethod
-    def write(*a, **kw): pass
-import tqdm as _tqdm
-_tqdm.tqdm = _NoopTqdm
-
-import torch
-from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
-
-print("[official] Loading...", flush=True)
-d = torch.load({gpt_model!r}, map_location="cpu")
-cfg = d["config"]
-m = Text2SemanticLightningModule(cfg, "****", is_train=False)
-m.load_state_dict(d["weight"])
-m = m.half().cuda().eval()
-
-x = torch.randint(0, cfg["model"]["phoneme_vocab_size"], (1, 20)).long().cuda()
-xl = torch.tensor([20]).long().cuda()
-p = torch.randint(0, cfg["model"]["vocab_size"], (1, 3)).long().cuda()
-b = torch.randn(1, 1024, 20).half().cuda()
-
-# official infer_panel_naive is a generator — consume it to get (y, idx)
-def _run_infer(model, *a, **kw):
-    for _y, _steps in model.infer_panel_naive(*a, **kw):
-        pass
-    return _y, _steps
-
-print("[official] Warmup...", flush=True)
-for _ in range(3):
-    _run_infer(m.model, x, xl, p, b, top_k=5, top_p=1, temperature=0.6)
-
-print(f"[official] {REPEATS} trials...", flush=True)
-rates = []
-for trial in range({REPEATS}):
-    torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    _, steps = _run_infer(m.model, x, xl, p, b, top_k=5, top_p=1, temperature=0.6)
-    torch.cuda.synchronize()
-    dt = time.perf_counter() - t0
-    r = steps / dt if dt > 0 else 0
-    rates.append(r)
-    print(f"  trial {{trial+1}}: {{steps}} tok in {{dt:.3f}}s = {{r:.0f}} it/s", flush=True)
-
-med = statistics.median(rates)
-print(f"RESULT: median={{med:.0f}}", flush=True)
-""")
-    return _run_script(script, timeout)
+ROOT = Path(__file__).resolve().parents[1]
+SPEED_BENCH = ROOT / "benchmarks" / "t2s_speed_bench.py"
 
 
-def _run_official_cudagraph(gpt_model: str, timeout: int = 300) -> dict:
-    """Benchmark official GPT-SoVITS CUDA Graph runner."""
-    script = textwrap.dedent(f"""\
-import os, statistics, sys, time
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-os.environ.setdefault("PYTHONUTF8", "1")
-OFFICIAL = {OFFICIAL_REPO!r}
-sys.path.insert(0, OFFICIAL)
-sys.path.insert(0, os.path.join(OFFICIAL, "GPT_SoVITS"))
-os.chdir(OFFICIAL)
-
-class _NoopTqdm:
-    def __init__(self, iterable=None, *a, **kw):
-        self._it = iter(iterable) if iterable is not None else iter([])
-    def __iter__(self): return self
-    def __next__(self): return next(self._it)
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
-    def update(self, *a, **kw): pass
-    def close(self): pass
-    def set_description(self, *a): pass
-    @staticmethod
-    def write(*a, **kw): pass
-import tqdm as _tqdm
-_tqdm.tqdm = _NoopTqdm
-
-import torch
-from AR.models.t2s_model_cudagraph import CUDAGraphRunner
-from AR.models.structs_cudagraph import T2SRequest
-
-print("[official+cuda] Loading...", flush=True)
-runner = CUDAGraphRunner(
-    CUDAGraphRunner.load_decoder({gpt_model!r}),
-    torch.device("cuda"),
-    torch.float16,
-)
-
-d = torch.load({gpt_model!r}, map_location="cpu")
-cfg = d["config"]
-del d
-x0 = torch.randint(0, cfg["model"]["phoneme_vocab_size"], (20,)).long().cuda()
-xl = torch.tensor([20]).long().cuda()
-prompt_tok = torch.randint(0, cfg["model"]["vocab_size"], (1, 3)).long().cuda()
-bf = torch.randn(1024, 20).half().cuda()
-
-request = T2SRequest(
-    x=[x0], x_lens=xl, prompts=prompt_tok, bert_feature=[bf],
-    valid_length=1, top_k=5, top_p=1.0, temperature=0.6,
-    repetition_penalty=1.0, early_stop_num=-1, use_cuda_graph=True,
-)
-
-print("[official+cuda] Warmup...", flush=True)
-for _ in range(3):
-    runner.generate(request)
-
-print(f"[official+cuda] {REPEATS} trials...", flush=True)
-rates = []
-for trial in range({REPEATS}):
-    torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    result = runner.generate(request)
-    torch.cuda.synchronize()
-    dt = time.perf_counter() - t0
-    if result.exception is not None:
-        print(f"  ERROR: {{result.exception}}", flush=True)
-        if result.traceback:
-            print(f"  TRACEBACK: {{result.traceback[-600:]}}", flush=True)
-        rates.append(0.0)
-        continue
-    tokens = sum(r.size(0) for r in result.result if r is not None)
-    rate = tokens / dt if dt > 0 else 0
-    rates.append(rate)
-    print(f"  trial {{trial+1}}: {{tokens}} tok in {{dt:.3f}}s = {{rate:.0f}} it/s", flush=True)
-
-med = statistics.median(rates)
-print(f"RESULT: median={{med:.0f}}", flush=True)
-""")
-    return _run_script(script, timeout)
-
-
-def _run_Aqua(gpt_model: str, timeout: int = 300) -> dict:
-    """Benchmark Aqua-vendored model (static KV + pre-captured CUDA Graph)."""
-    script = textwrap.dedent(f"""\
-import os, statistics, sys, time
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-os.environ.setdefault("PYTHONUTF8", "1")
-os.environ["ENABLE_CUDA_GRAPH"] = "1"
-os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] = "1"
-
-ROOT = {ROOT!r}
-MAIN_REPO = {MAIN_REPO!r}
-MAIN_GPT_SOVITS = os.path.join(MAIN_REPO, "GPT_SoVITS")
-# Vendored overrides must come BEFORE main GPT_SoVITS for t2s_model.py override
-sys.path.insert(0, os.path.join(ROOT, "Aqua", "_vendor"))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, MAIN_REPO)
-sys.path.insert(0, MAIN_GPT_SOVITS)
-os.chdir(MAIN_REPO)
-
-class _NoopTqdm:
-    def __init__(self, iterable=None, *a, **kw):
-        self._it = iter(iterable) if iterable is not None else iter([])
-    def __iter__(self): return self
-    def __next__(self): return next(self._it)
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
-    def update(self, *a, **kw): pass
-    def close(self): pass
-    def set_description(self, *a): pass
-    @staticmethod
-    def write(*a, **kw): pass
-import tqdm as _tqdm
-_tqdm.tqdm = _NoopTqdm
-
-import torch
-from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
-
-print("[Aqua] Loading...", flush=True)
-d = torch.load({gpt_model!r}, map_location="cpu")
-cfg = d["config"]
-m = Text2SemanticLightningModule(cfg, "****", is_train=False)
-m.load_state_dict(d["weight"])
-m = m.half().cuda().eval()
-
-from aqua.modeling import apply_cuda_graph_patch
-apply_cuda_graph_patch(m.model)
-m.model.precapture_cuda_graph()
-
-x = torch.randint(0, cfg["model"]["phoneme_vocab_size"], (1, 20)).long().cuda()
-xl = torch.tensor([20]).long().cuda()
-p = torch.randint(0, cfg["model"]["vocab_size"], (1, 3)).long().cuda()
-b = torch.randn(1, 1024, 20).half().cuda()
-
-print("[Aqua] Warmup...", flush=True)
-for _ in range(3):
-    m.model.infer_panel_naive(x, xl, p, b, top_k=5, top_p=1, temperature=0.6)
-
-print(f"[Aqua] {REPEATS} trials...", flush=True)
-rates = []
-for trial in range({REPEATS}):
-    torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    _, steps = m.model.infer_panel_naive(x, xl, p, b, top_k=5, top_p=1, temperature=0.6)
-    torch.cuda.synchronize()
-    dt = time.perf_counter() - t0
-    r = steps / dt if dt > 0 else 0
-    rates.append(r)
-    print(f"  trial {{trial+1}}: {{steps}} tok in {{dt:.3f}}s = {{r:.0f}} it/s", flush=True)
-
-med = statistics.median(rates)
-print(f"RESULT: median={{med:.0f}}", flush=True)
-""")
-    return _run_script(script, timeout)
-
-
-def _run_script(script: str, timeout: int) -> dict:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
-        f.write(script)
-        tmp_path = f.name
+def _run_variant(args, name: str, engine: str, flash_attn: str) -> dict[str, Any]:
+    handle = tempfile.NamedTemporaryFile(prefix="aqua-t2s-", suffix=".json", delete=False)
+    json_path = Path(handle.name)
+    handle.close()
+    command = [
+        sys.executable,
+        str(SPEED_BENCH),
+        "--upstream-home",
+        str(Path(args.upstream_home).expanduser().resolve()),
+        "--gpt-model",
+        args.gpt_model,
+        "--engine",
+        engine,
+        "--flash-attn",
+        flash_attn,
+        "--device",
+        args.device,
+        "--warmup",
+        str(args.warmup),
+        "--repeats",
+        str(args.repeats),
+        "--json-output",
+        str(json_path),
+    ]
+    print(f"\n--- {name} ---", flush=True)
     try:
-        proc = subprocess.run(
-            [sys.executable, tmp_path],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout,
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
             env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=args.timeout,
         )
-        stdout = proc.stdout or ""
-        stderr = proc.stderr or ""
-        for line in stdout.splitlines():
-            print(f"  | {line}")
-        if stderr.strip():
-            print(f"  [stderr] {stderr[:2000]}", file=sys.stderr)
-
-        result = {}
-        for line in stdout.splitlines():
-            if line.startswith("RESULT:"):
-                for p in line.split()[1:]:
-                    k, v = p.split("=")
-                    result[k] = float(v)
-        if "median" not in result:
-            print(f"  WARNING: no RESULT line — check stderr above")
-            result["median"] = 0.0
-        return result
+        if completed.stdout:
+            print(completed.stdout.rstrip())
+        if completed.stderr:
+            print(completed.stderr.rstrip(), file=sys.stderr)
+        if completed.returncode:
+            raise RuntimeError(f"{name} benchmark failed with exit code {completed.returncode}")
+        return json.loads(json_path.read_text(encoding="utf-8"))
     finally:
-        os.unlink(tmp_path)
+        json_path.unlink(missing_ok=True)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="T2S comparison benchmark")
+def _format_rate(result: dict[str, Any], case: str) -> str:
+    return f"{result['cases'][case]['median_sync_it_s']:.1f}"
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Isolated T2S throughput comparison")
+    parser.add_argument("--upstream-home", default=os.environ.get("GPT_SOVITS_HOME"))
     parser.add_argument("--gpt-model", required=True)
+    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--warmup", type=int, default=15)
+    parser.add_argument("--repeats", type=int, default=7)
+    parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--flash-ab", action="store_true", help="also benchmark Aqua + FlashAttention2 valid mode")
     parser.add_argument("--skip-official", action="store_true")
-    parser.add_argument("--skip-official-cudagraph", action="store_true")
-    parser.add_argument("--skip-Aqua", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--skip-aqua-static", action="store_true")
+    parser.add_argument("--skip-aqua", action="store_true")
+    parser.add_argument("--json-output")
+    parser.add_argument("--skip-official-cudagraph", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--skip-Aqua", action="store_true", help=argparse.SUPPRESS)
+    return parser
 
-    if not os.path.exists(args.gpt_model):
-        print(f"ERROR: model not found: {args.gpt_model}")
-        sys.exit(1)
 
-    print(f"\n{'='*70}")
-    print(f"  T2S Throughput Comparison")
-    print(f"  Model: {args.gpt_model}")
-    print(f"  Repeats: {REPEATS}")
-    print(f"{'='*70}")
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    if not args.upstream_home:
+        raise SystemExit("--upstream-home or GPT_SOVITS_HOME is required")
+    if args.skip_Aqua:
+        args.skip_aqua = True
 
-    results = {}
-
+    variants = []
     if not args.skip_official:
-        print(f"\n--- Official (torch.cat KV, no CUDA Graph) ---")
-        results["Official (no Graph)"] = _run_official(args.gpt_model)
+        variants.append(("Official upstream", "official", "off"))
+    if not args.skip_aqua_static:
+        variants.append(("Aqua static KV", "aqua-static", "off"))
+    if not args.skip_aqua:
+        variants.append(("Aqua CUDA Graph", "aqua", "off"))
+        if args.flash_ab:
+            variants.append(("Aqua CUDA Graph + FA2 valid", "aqua", "valid"))
+    if not variants:
+        raise SystemExit("all benchmark variants were skipped")
 
-    if not args.skip_official_cudagraph:
-        print(f"\n--- Official CUDA Graph (static KV, lazy capture) ---")
-        results["Official (CUDA Graph)"] = _run_official_cudagraph(args.gpt_model)
+    results = {
+        name: _run_variant(args, name, engine, flash_attn)
+        for name, engine, flash_attn in variants
+    }
 
-    if not args.skip_Aqua:
-        print(f"\n--- Aqua (static KV, pre-captured CUDA Graph) ---")
-        results["Aqua"] = _run_Aqua(args.gpt_model)
+    print("\n" + "=" * 92)
+    print("Synchronized T2S throughput summary (median it/s)")
+    print("=" * 92)
+    print(f"{'Variant':<36} {'Cold':>10} {'Short/448':>12} {'Conv/512':>12} {'Long/768':>12}")
+    print("-" * 92)
+    for name, result in results.items():
+        print(
+            f"{name:<36} "
+            f"{result['cold']['sync_it_s']:>10.1f} "
+            f"{_format_rate(result, 'short'):>12} "
+            f"{_format_rate(result, 'conversation'):>12} "
+            f"{_format_rate(result, 'long'):>12}"
+        )
 
-    print(f"\n{'='*70}")
-    print(f"  Summary")
-    print(f"{'='*70}")
-    print(f"  {'Variant':<32} {'T2S Speed':>12}")
-    print(f"  {'-'*44}")
-    for name, r in results.items():
-        speed = r.get("median", 0)
-        print(f"  {name:<32} {speed:>8.0f} it/s")
-    print()
+    output = {
+        "schema_version": 1,
+        "upstream_home": str(Path(args.upstream_home).expanduser().resolve()),
+        "gpt_model": str(Path(args.gpt_model).expanduser()),
+        "warmup_runs": args.warmup,
+        "measured_repeats": args.repeats,
+        "results": results,
+    }
+    if args.json_output:
+        destination = Path(args.json_output).expanduser().resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"json={destination}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

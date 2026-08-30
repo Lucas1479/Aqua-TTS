@@ -7,6 +7,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 
 """
 Setting this param to a list has a problem of generating different compilation commands (with diferent order of architectures) and leading to recompilation of fused kernels.
@@ -48,7 +49,17 @@ def _get_gpu_cache_suffix(device_idx: int) -> str:
     major = getattr(props, "major", "x")
     minor = getattr(props, "minor", "x")
     total_gb = int(round(getattr(props, "total_memory", 0) / (1024 ** 3)))
-    return f"sm{major}{minor}_{total_gb}gb_{name}"
+    py_tag = f"py{sys.version_info.major}{sys.version_info.minor}"
+    torch_tag = _sanitize_cache_token(f"torch{torch.__version__.split('+', 1)[0]}")
+    cuda_tag = _sanitize_cache_token(f"cu{torch.version.cuda or 'cpu'}")
+    return f"sm{major}{minor}_{total_gb}gb_{name}_{py_tag}_{torch_tag}_{cuda_tag}"
+
+
+def _get_cache_root() -> pathlib.Path:
+    override = os.environ.get("BIGVGAN_CACHE_ROOT", "").strip()
+    if override:
+        return pathlib.Path(override).expanduser().resolve()
+    return pathlib.Path(__file__).parent.absolute()
 
 
 def _find_vcvars64():
@@ -155,20 +166,25 @@ def _ensure_msvc_on_path() -> None:
         print(f"[BigVGAN] vcvars64.bat loaded but cl.exe is still unavailable: {vcvars64}")
 
 
+def _load_cached_extension(pyd_path: pathlib.Path):
+    if not pyd_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("anti_alias_activation_cuda", pyd_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    print(f"[BigVGAN] Loaded cached CUDA kernel: {pyd_path}")
+    return module
+
+
 def load():
     from torch.utils import cpp_extension
-
-    # Check if cuda 11 is installed for compute capability 8.0
-    cc_flag = []
-    _, bare_metal_major, _ = _get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
-    if int(bare_metal_major) >= 11:
-        cc_flag.append("-gencode")
-        cc_flag.append("arch=compute_80,code=sm_80")
 
     # Build path — per-device cache so switching GPU doesn't break the kernel
     device_idx = _get_tts_device_index()
     srcpath = pathlib.Path(__file__).parent.absolute()
-    buildpath = srcpath / f"build_{_get_gpu_cache_suffix(device_idx)}"
+    buildpath = _get_cache_root() / f"build_{_get_gpu_cache_suffix(device_idx)}"
     _create_build_dir(buildpath)
     print(f"[BigVGAN] CUDA kernel cache dir: {buildpath} (TTS_DEVICE=cuda:{device_idx})")
 
@@ -215,12 +231,20 @@ def load():
     # Try cached pre-compiled .pyd first to skip compilation (no cl.exe/ninja needed).
     # Cache directory is per-device isolated; switching GPU triggers a rebuild.
     pyd_path = buildpath / "anti_alias_activation_cuda.pyd"
-    if pyd_path.exists():
-        spec = importlib.util.spec_from_file_location("anti_alias_activation_cuda", pyd_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        print(f"[BigVGAN] Loaded cached CUDA kernel: {pyd_path}")
-        return module
+    cached = _load_cached_extension(pyd_path)
+    if cached is not None:
+        return cached
+
+    # A cached extension does not need a local CUDA toolkit. Probe nvcc only
+    # when this environment actually has to build a new binary.
+    if not cpp_extension.CUDA_HOME:
+        raise RuntimeError(
+            "BigVGAN CUDA kernel cache is missing and no local CUDA toolkit was found"
+        )
+    cc_flag = []
+    _, bare_metal_major, _ = _get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
+    if int(bare_metal_major) >= 11:
+        cc_flag.extend(["-gencode", "arch=compute_80,code=sm_80"])
 
     _ensure_msvc_on_path()
 
