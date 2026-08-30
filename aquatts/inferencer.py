@@ -44,7 +44,10 @@ def _env_bool(*names: str, default: bool = False) -> bool:
         value = os.environ.get(name)
         if value is None:
             continue
-        return value.strip().lower() in {"1", "true", "yes", "on"}
+        normalized = value.strip().lower()
+        if normalized in {"", "auto"}:
+            continue
+        return normalized in {"1", "true", "yes", "on"}
     return default
 
 
@@ -174,8 +177,8 @@ class TTSInferencer:
                 CUDA Graph 捕获策略 — "full" (全桶预捕获), "minimal" (最小桶集合),
                 "lazy" (惰性捕获), "off" (纯 static KV)
             use_flash_attn: Optional FlashAttention2 KV-cache decode path for T2S.
-                None means read AQUATTS_T2S_FLASH_ATTN / TTS_T2S_FLASH_ATTN.
-                Default remains disabled.
+                None means read AQUATTS_T2S_FLASH_ATTN / TTS_T2S_FLASH_ATTN,
+                then auto-enable when FlashAttention2 is available.
             flash_attn_mode: "valid" (true KV length) or "bucket" (zero-padded bucket).
         """
         self._cuda_graph_preset = cuda_graph_preset
@@ -473,11 +476,16 @@ class TTSInferencer:
             pass  # warmup is best-effort; never block startup
 
     def _maybe_enable_flash_attn_t2s(self):
-        """Enable optional FlashAttention2 KV-cache decoding before graph capture."""
+        """Prefer FlashAttention2 KV-cache decoding before graph capture."""
+        env_names = ("AQUATTS_T2S_FLASH_ATTN", "TTS_T2S_FLASH_ATTN")
+        explicitly_configured = self._use_flash_attn is not None or any(
+            os.environ.get(name, "").strip().lower() not in {"", "auto"}
+            for name in env_names
+        )
         enabled = (
             bool(self._use_flash_attn)
             if self._use_flash_attn is not None
-            else _env_bool("AQUATTS_T2S_FLASH_ATTN", "TTS_T2S_FLASH_ATTN")
+            else _env_bool(*env_names, default=True)
         )
         if not enabled:
             return
@@ -494,8 +502,9 @@ class TTSInferencer:
             )
 
             if not is_flash_attn_available():
-                logger.warning(
-                    "T2S FlashAttention2 requested but unavailable: %s",
+                log = logger.warning if explicitly_configured else logger.info
+                log(
+                    "T2S FlashAttention2 unavailable; using SDPA path: %s",
                     get_flash_attn_error(),
                 )
                 return

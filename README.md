@@ -27,30 +27,42 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, and pre-compiled BigVGAN CUDA kernels. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **490–519 synchronized it/s** on conversational 448/512 buckets; optional FlashAttention2 reaches **568–627 it/s** on the same shapes. Model-side first-audio latency is typically **~0.26–0.40 s** in the tested setup. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead — see [Highlights](#highlights) for the full comparison.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, FlashAttention2 when compatible, and an ABI-keyed BigVGAN CUDA extension cache. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **568–645 synchronized it/s** with FA2 and **477–519 it/s** through the automatic SDPA fallback. Warm model-side first-audio medians are **233 / 288 / 348 ms** for the short, medium, and long cases below. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead.
 
 ## Highlights
 
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
-| | Current upstream | Aqua-TTS default | Aqua + FA2 `valid` (opt-in) |
-|---|---:|---:|---:|
+| | Upstream T2S execution* | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
+|---|---|---|---|
 | T2S short / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
 | T2S conversation / bucket 512 | 153.5 it/s | **519.3 it/s** | **627.4 it/s** |
 | T2S long / bucket 768 | 156.0 it/s | **476.9 it/s** | **644.9 it/s** |
-| KV cache | Dynamic `torch.cat` | **Static `scatter_` buffer** | **Valid-length FA2 KV cache** |
-| CUDA Graph | None | **Bucketed, pre-captured** | **Bucketed, pre-captured** |
+| TTFP short (3 chars) | 416.8 ms | 250.5 ms | **233.1 ms** |
+| TTFP medium (19 chars) | 692.7 ms | 305.0 ms | **287.7 ms** |
+| TTFP long (64 chars) | 1135.2 ms | 394.2 ms | **348.3 ms** |
+| Model definition | Direct upstream module | **Validated upstream + in-memory overlay** | **Validated upstream + in-memory overlay** |
+| Decode attention | Native PyTorch, dynamic KV | SDPA over static bucket | **FA2 over true KV length** |
+| KV-cache writes | Per-token `torch.cat` | **In-place `scatter_`** | **FA2 KV-cache update** |
+| KV allocation | Grows per token | **Pre-allocated and bounded per bucket** | **Pre-allocated and bounded per bucket** |
+| CUDA Graph | None in the standard entry point | **15 common graph keys / 6 configured buckets + lazy capture** | **15 common graph keys / 6 configured buckets + lazy capture** |
+| Replay synchronization | Eager launches | **Stream-ordered; no per-token device sync** | **Stream-ordered; no per-token device sync** |
+| EOS host read | Native condition checks | **Greedy + sampled EOS combined once** | **Greedy + sampled EOS combined once** |
+| Graph concurrency | N/A | **Lock per `(bucket, initial_len)` key** | **Lock per `(bucket, initial_len)` key** |
+| Failure path | Dynamic decoder | **Graph → static KV → dynamic** | **FA2 → SDPA; Graph → static KV → dynamic** |
+| BigVGAN activation | Runtime extension/JIT path | **ABI-keyed CUDA cache → PyTorch fallback** | **ABI-keyed CUDA cache → PyTorch fallback** |
+| Streaming contract | Native upstream generators | **Generators preserved; only direct `infer_panel()` patched** | **Generators preserved; only direct `infer_panel()` patched** |
 
-*T2S benchmark: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`, 15 warmups and seven synchronized repeats per shape. FlashAttention2 remains disabled by default. Absolute throughput is sensitive to Windows GPU P-state; see [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for cold results, trial ranges, commands, and the separate TTFP methodology.*
+*Benchmark environment: RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`. T2S throughput uses 15 warmups and seven synchronized repeats per fixed shape. TTFP uses the same Aqua text/SoVITS/BigVGAN pipeline for all three columns so the T2S execution mode is isolated; it uses two warmup utterances, five repeats, a matching cached BigVGAN CUDA extension, and 0.25 s chunks. The published v0.2.0 Aqua TTFP was ~257 / 301 / 404 ms; current FA2 medians are ~9% / 4% / 14% lower. FA2 is attempted automatically when importable and falls back to SDPA; set `AQUATTS_T2S_FLASH_ATTN=0` to force SDPA. One-time long-text frontend initialization produced a ~3 s first repeat, retained in the raw evidence but excluded by the median. See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for commands and methodology.*
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 ## Features
 
 - **Static KV cache** — pre-allocated scatter buffers eliminate per-step `torch.cat` overhead
-- **Bucketed CUDA Graph** — 13 pre-captured graphs across 6 bucket sizes, no warmup jitter
-- **Pre-compiled BigVGAN** — NVIDIA CUDA kernel auto-loaded from pre-built `.pyd`, with torch fallback
-- **Optional FlashAttention2 KV cache** — experimental `flash_attn_with_kvcache` T2S path, disabled by default
+- **Bucketed CUDA Graph** — 15 common graph keys pre-captured across 6 configured bucket sizes, with lazy capture for uncommon shapes
+- **Cached BigVGAN CUDA extension** — NVIDIA kernel cached by GPU/Python/Torch/CUDA ABI, with torch fallback
+- **Adaptive FlashAttention2 KV cache** — `flash_attn_with_kvcache` `valid` mode is preferred automatically, with SDPA fallback
 - **Streaming API** — generator-based `infer_stream()` with early first-audio yield
 - **Built-in presets** — fast / balanced / quality generation presets; full / minimal / lazy / off CUDA Graph presets
 - **Voice registry** — map voice names to reference audio + prompt, with JSON persistence
@@ -85,7 +97,7 @@ aqua-tts/
 │   ├── voice_registry.py          # Voice name → audio path mapping
 │   ├── modeling/
 │   │   ├── t2s_streaming.py       # T2SBlockWithStaticCache, CUDA Graph patch
-│   │   └── t2s_flash_attn.py      # Optional FlashAttention2 KV-cache patch
+│   │   └── t2s_flash_attn.py      # Adaptive FlashAttention2 KV-cache patch
 │   ├── bigvgan/
 │   │   ├── cuda/                  # Standalone CUDA kernel loader + sources
 │   │   └── torch/                 # Pure-PyTorch fallback (resample, filter, act)
@@ -268,37 +280,37 @@ Two layers of presets control quality/speed trade-offs:
 | `lazy` | No | on-the-fly | Lower memory, slower TTFP |
 | `off` | Disabled | none | Static KV only, no graphs |
 
-**Optional FlashAttention2 T2S path** (experimental, disabled by default):
+**Adaptive FlashAttention2 T2S path** (preferred automatically when available):
 
 Aqua-TTS can replace the q_len=1 T2S static-KV attention step with
-`flash_attn_with_kvcache`. This is an opt-in path because the useful `valid`
-mode attends over the true KV length rather than the full zero-padded bucket,
-so output can differ slightly from the default SDPA bucket path.
+`flash_attn_with_kvcache`. The `valid` mode attends over the true KV length
+rather than the full zero-padded bucket and is now the default whenever a
+compatible FlashAttention2 installation can be imported. If FA2 is absent or a
+kernel rejects the active shape/device, Aqua falls back to SDPA.
 
-Enable it for long first-sentence or long-form T2S throughput experiments:
+No environment variable is required. Override the automatic choice when needed:
 
 ```bash
-export AQUATTS_T2S_FLASH_ATTN=1
+export AQUATTS_T2S_FLASH_ATTN=0  # force SDPA
+# export AQUATTS_T2S_FLASH_ATTN=1  # explicitly request FA2
 export AQUATTS_T2S_FLASH_ATTN_MODE=valid  # valid | bucket
 ```
 
-or from Python:
+or from Python with `use_flash_attn=False` / `True`:
 
 ```python
 tts = TTSInferencer(..., use_flash_attn=True, flash_attn_mode="valid")
 ```
 
-FlashAttention2 remains opt-in for dependency portability and separate
-semantic/audio regression coverage. The old June 2026 guidance that it had no
-short-case benefit and only about 8% long-case benefit was measured before
-CUDA Graph replay synchronization became diagnostic-only, so it is no longer
-the current performance conclusion.
+The old June 2026 guidance that FA2 had no short-case benefit and only about 8%
+long-case benefit was measured before CUDA Graph replay synchronization became
+diagnostic-only, so it is no longer the current performance conclusion.
 
 Deterministic A/B after removing the per-token replay synchronization
 (RTX 4070 Ti SUPER, PyTorch 2.5.1+cu124, flash-attn 2.7.0.post2,
 15 warmups, seven synchronized repeats):
 
-| Case | Flash off | Flash on (`valid`) | Directional gain |
+| Case | SDPA fallback | Default FA2 (`valid`) | Directional gain |
 |---|---:|---:|---:|
 | T2S short / bucket 448 | 490.0 it/s | 568.5 it/s | ~16% |
 | T2S conversation / bucket 512 | 519.3 it/s | 627.4 it/s | ~21% |
@@ -308,7 +320,7 @@ The shared device-wide synchronization previously hid part of the attention
 kernel difference. With one EOS synchronization per step, FA2's valid-length
 KV reads are much more visible, especially at bucket 768. Treat the percentages
 as hardware-specific and reproduce them on the deployment GPU before changing
-the default.
+the automatic policy or requiring bit-for-bit continuity with the SDPA path.
 
 ```python
 from aquatts import apply_preset, list_presets
@@ -405,7 +417,7 @@ export AQUA_VOICE_JSON=/data/voices.json
 | `AQUA_SESSION_CACHE_MAX` | `8` | Max number of cached reference audio sessions |
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph replay |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at startup |
-| `AQUATTS_T2S_FLASH_ATTN` | `0` | Enable experimental FlashAttention2 `flash_attn_with_kvcache` path for T2S |
+| `AQUATTS_T2S_FLASH_ATTN` | `auto` / unset | `0` forces SDPA; `1` explicitly requests FlashAttention2; `auto`, empty, or unset prefers FA2 when importable |
 | `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FlashAttention mode: `valid` uses true KV length; `bucket` preserves zero-padded bucket length |
 | `TTS_OUTPUT_LANGUAGE` | `日文` | Default output language. Change to `中文` or `英文` if not using Japanese |
 | `TTS_REF_TEXT_JA` | `こんにちは。今日はいい天気ですね。` | Default Japanese reference text |

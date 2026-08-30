@@ -69,14 +69,17 @@ A CUDA Graph captures a specific tensor shape. Different prompt lengths produce 
 
 ### Pre-capture Strategy
 
-At model load time, all viable `(bucket, initial_len)` pairs are enumerated and captured eagerly. The initial_len range per bucket is computed as:
+At model load time, common `(bucket, initial_len)` pairs are enumerated and captured eagerly. The initial_len range per bucket is computed as:
 
 ```python
-lo = max(stride * 6, prev_bucket - gap)   # stride*6 = 192, covers initial_len=224
-hi = bucket - gap
+lo = max(stride * 8, prev_bucket - generation_reserve)
+hi = min(bucket - generation_reserve - 1, int(bucket * 0.75))
 ```
 
-This produces **13 graphs** across the 6 buckets, covering all initial_len values reachable from typical prompt lengths. The lower bound of `stride*6` (192) was chosen to include `initial_len=224`, which arises from short single-sentence prompts — avoiding expensive on-the-fly capture during the first inference.
+With the default six bucket sizes this currently produces **15 pre-captured
+graphs**: 3 for bucket 448, 2 for 512, 6 for 768, and 4 for 1024. Very short or
+uncommon aligned lengths are captured lazily on first use. This bounds startup
+work while keeping the ordinary conversation shapes warm.
 
 ### Thread Safety
 
@@ -193,8 +196,9 @@ The no-replay-sync change also alters the FlashAttention2 trade-off. The older
 June 2026 result (no short benefit, about 8% on the long text) included a large
 shared synchronization cost. Once that cost is removed, valid-length FA2 reads
 showed approximately 16%, 21% and 35% directional gains at buckets 448, 512 and
-768 in this run. FA2 remains opt-in pending broader platform and semantic/audio
-regression coverage.
+768 in this run. Aqua now prefers FA2 `valid` automatically when the package is
+importable and falls back to SDPA when it is absent or rejects a runtime shape.
+Set `AQUATTS_T2S_FLASH_ATTN=0` for explicit SDPA continuity.
 
 ### BigVGAN Kernel (Raw)
 
@@ -211,15 +215,25 @@ These are the pure BigVGAN kernel costs after the CFM generates the mel spectrog
 
 ### TTFP (Time-To-First-Packet)
 
-Measured with streaming audio output (2 chunks per utterance). All timings exclude `torch.cuda.empty_cache()` which was found to add ~500ms of GPU cache rebuild latency:
+Measured with the automatic FA2 `valid` path, a matching cached BigVGAN CUDA
+extension and 0.25-second streaming chunks. Two utterances warm the pipeline;
+the table reports the median of five first-playable-chunk measurements:
 
-| text length | chars | TTFP (median) | total (median) |
-|------------|-------|--------------|---------------|
-| short      | 3     | 456 ms       | 456 ms        |
-| medium     | 19    | 484 ms       | 484 ms        |
-| long       | 64    | 499 ms       | 499 ms        |
+| T2S execution | Short / 3 chars | Medium / 19 chars | Long / 64 chars |
+|---|---:|---:|---:|
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
 
-Model load time: ~10 s (includes BigVGAN CUDA kernel load from pre-compiled cache, plus CUDA Graph pre-capture of 13 bucket/initial_len pairs at ~0.25 s each).
+All three TTFP rows use the same Aqua text, SoVITS and BigVGAN pipeline; only
+the T2S execution mode changes.
+
+The first long-text repeat took about 3 seconds because that text shape triggered
+one-time frontend initialization; the following four repeats were 342–369 ms.
+It is retained as cold-shape evidence and does not change the five-repeat median.
+
+Model load time was 10.21 s, including BigVGAN CUDA cache loading and CUDA Graph
+pre-capture of 15 common bucket/initial-length pairs at roughly 0.25 s each.
 
 The BigVGAN CUDA pre-compiled kernel eliminates:
 
@@ -232,7 +246,7 @@ The BigVGAN CUDA pre-compiled kernel eliminates:
 After model load, a lightweight warmup pass primes all GPU execution paths before the first user request:
 
 - **BigVGAN shape warmup**: 3 mel-T sizes (40, 70, 128) × 5 iterations each with `torch.cuda.synchronize()` — covers the range of first-chunk mel sizes.
-- **T2S graph pre-capture**: all 13 bucket/initial_len pairs are captured eagerly, ensuring the first `infer_stream()` call hits a pre-warmed CUDA Graph with zero cold-start overhead.
+- **T2S graph pre-capture**: 15 common bucket/initial-length pairs are captured eagerly; uncommon shapes retain lazy capture.
 
 This prevents the common "first request penalty" where CUDA lazy initialization, cuDNN autotuning, and kernel compilation would otherwise add 200-500ms to the first inference.
 
@@ -245,5 +259,7 @@ This prevents the common "first request penalty" where CUDA lazy initialization,
 | `CUDA_GRAPH_PRECAPTURE_BUCKETS` | (all) | Comma-separated bucket sizes to pre-capture |
 | `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
 | `CUDA_GRAPH_REPLAY_SYNC` | `0` | Force a device sync after each graph replay for diagnostics |
+| `AQUATTS_T2S_FLASH_ATTN` | `auto` / unset | `0` forces SDPA; `1` explicitly requests FA2; `auto`, empty, or unset prefers FA2 when importable |
+| `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FA2 reads the true KV length; `bucket` preserves padded-bucket attention |
 | `BIGVGAN_CACHE_ROOT` | package CUDA directory | Product-owned root for ABI-keyed compiled BigVGAN extensions |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |

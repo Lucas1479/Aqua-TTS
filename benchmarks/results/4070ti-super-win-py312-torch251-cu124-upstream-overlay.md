@@ -42,12 +42,35 @@ Synchronized throughput, median it/s:
 | Engine | Cold conversation | Short / 448 | Conversation / 512 | Long / 768 |
 |---|---:|---:|---:|---:|
 | Current upstream, unpatched | 106.8 | 145.5 | 153.5 | 156.0 |
-| Aqua CUDA Graph, SDPA (default) | 346.7 | 490.0 | 519.3 | 476.9 |
-| Aqua CUDA Graph, FA2 `valid` | 398.6 | 568.5 | 627.4 | 644.9 |
+| Aqua CUDA Graph, SDPA fallback | 346.7 | 490.0 | 519.3 | 476.9 |
+| Aqua CUDA Graph, FA2 `valid` (runtime default when available) | 398.6 | 568.5 | 627.4 | 644.9 |
 
-In this run, Aqua's default path was 3.1–3.4x faster than the current upstream
-decoder. FlashAttention2 added approximately 16% at bucket 448, 21% at bucket
-512 and 35% at bucket 768 relative to the default Aqua run.
+Aqua's SDPA fallback was 3.1–3.4x faster than the current upstream decoder.
+FlashAttention2 added approximately 16% at bucket 448, 21% at bucket 512 and
+35% at bucket 768 relative to the SDPA run.
+
+## Warm TTFP result
+
+The full caller-visible benchmark used the same Aqua text, SoVITS and BigVGAN
+pipeline for every column so only T2S execution changes. It used a cached
+ABI-matching BigVGAN CUDA extension, 0.25-second streaming chunks, two warmup
+utterances, and five repeats per case:
+
+| T2S execution | Short / 3 chars | Medium / 19 chars | Long / 64 chars |
+|---|---:|---:|---:|
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
+
+FA2 raw repeats (ms):
+
+- Short: 259.8, 223.4, 242.0, 213.4, 233.1.
+- Medium: 333.7, 287.7, 280.7, 295.1, 276.2.
+- Long: 3059.3, 342.1, 348.3, 343.9, 369.1.
+
+The 3059.3 ms first long repeat includes a one-time text-frontend
+initialization for that shape. It is retained as cold-shape evidence; the next
+four long repeats were 342.1–369.1 ms.
 
 ## Interpretation
 
@@ -57,10 +80,9 @@ per-token cost shared by both SDPA and FlashAttention2, so it hid part of the
 attention-kernel difference. Once removed, FA2's valid-length KV reads are much
 more visible, especially at bucket 768.
 
-FlashAttention2 remains opt-in. The default stays SDPA because FA2 is an extra
-platform-specific dependency and the alternate attention path needs separate
-semantic/audio regression coverage. These numbers support re-evaluating the
-default later; they do not by themselves authorize changing it.
+The runtime now prefers FA2 `valid` when the optional package is importable.
+Missing or rejected FA2 kernels fall back to SDPA, and
+`AQUATTS_T2S_FLASH_ATTN=0` forces the fallback for continuity checks.
 
 Windows GPU P-state and desktop scheduling can move absolute SDPA throughput
 between processes. That is why the benchmark records cold and steady-state

@@ -6,7 +6,7 @@ checkout. Benchmark commands require `GPT_SOVITS_HOME` or an explicit
 
 ## T2S AR throughput
 
-Run the default Aqua CUDA Graph + SDPA path:
+Run the Aqua CUDA Graph + SDPA fallback baseline:
 
 ```bash
 python benchmarks/t2s_speed_bench.py \
@@ -14,7 +14,8 @@ python benchmarks/t2s_speed_bench.py \
   --gpt-model /path/to/xxx-e15.ckpt
 ```
 
-Run the optional FlashAttention2 path:
+Run the preferred FlashAttention2 path explicitly (the product runtime selects
+this automatically when FA2 is importable; the benchmark keeps variants explicit):
 
 ```bash
 python benchmarks/t2s_speed_bench.py \
@@ -72,16 +73,16 @@ upstream GPT-SoVITS `08d627c`, seven-repeat median:
 | Engine | Cold | Short / 448 | Conversation / 512 | Long / 768 |
 |---|---:|---:|---:|---:|
 | Current upstream | 106.8 | 145.5 | 153.5 | 156.0 |
-| Aqua Graph + SDPA (default) | 346.7 | 490.0 | 519.3 | 476.9 |
-| Aqua Graph + FA2 `valid` | 398.6 | 568.5 | 627.4 | 644.9 |
+| Aqua Graph + SDPA fallback | 346.7 | 490.0 | 519.3 | 476.9 |
+| Aqua Graph + FA2 `valid` (runtime default when available) | 398.6 | 568.5 | 627.4 | 644.9 |
 
 See the [raw methodology and interpretation](results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md).
 
 The old June 2026 claim that FlashAttention2 had no short-case benefit and only
 about 8% long-case benefit predates the removal of the per-token CUDA Graph
-replay synchronization. It is historical, not the current recommendation.
-FlashAttention2 remains opt-in because dependency and semantic/audio regression
-coverage are separate from throughput.
+replay synchronization. It is historical, not the current recommendation. The
+runtime now prefers FA2 when it is installed and falls back to SDPA otherwise;
+the benchmark still requires an explicit variant so A/B evidence stays clear.
 
 Absolute rates are sensitive to Windows GPU P-state and desktop scheduling.
 Use the JSON trial range and reproduce on the deployment GPU before treating a
@@ -93,6 +94,11 @@ percentage as portable.
 python benchmarks/aqua_ttfp.py \
   --gpt-model /path/to/xxx-e15.ckpt \
   --sovits-model /path/to/xxx_e2_s174_l32.pth \
+  --sovits-pretrain /path/to/s2Gv3.pth \
+  --bert-model /path/to/chinese-roberta-wwm-ext-large \
+  --cnhubert-model /path/to/chinese-hubert-base \
+  --bigvgan-model /path/to/models--nvidia--bigvgan_v2_24khz_100band_256x \
+  --fast-langdetect-model /path/to/fast_langdetect \
   --ref-audio /path/to/ref_audio.wav \
   --ref-text "reference transcript"
 ```
@@ -102,6 +108,21 @@ Use two or more warmup texts, five repeats per text, and report the median. Do
 not place `torch.cuda.empty_cache()` in the hot path. TTFP intentionally does
 not add CUDA synchronization inside its timing window because it measures the
 latency visible to the caller.
+
+Current warm result with a cached matching BigVGAN CUDA extension,
+0.25-second chunks, two warmup utterances and five repeats. All columns share
+the same Aqua text/SoVITS/BigVGAN pipeline and vary only T2S execution:
+
+| T2S execution | Short (3 chars) | Medium (19 chars) | Long (64 chars) |
+|---|---:|---:|---:|
+| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
+| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
+| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
+
+The first long-text repeat was 3059.3 ms because it triggered one-time frontend
+initialization; the following four were 342.1–369.1 ms. Preserve cold-shape
+outliers in raw evidence, but do not substitute one cold sample for the warm
+five-repeat median.
 
 ## BigVGAN raw kernel timing
 
