@@ -194,12 +194,14 @@ class T2SBlockWithStaticCache:
         k_cache: torch.Tensor,   # fixed [B, bucket_size, hidden]
         v_cache: torch.Tensor,   # fixed [B, bucket_size, hidden]
         pos_idx: torch.Tensor,   # [B, 1, hidden] long, persistent GPU tensor
+        key_valid_mask: torch.Tensor,  # [B, bucket_size] bool
+        valid_kv_len: int = -1,
         torch_sdpa: bool = True
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         scatter_ writes current-step KV into pos_idx position.
-        Attention looks at the full bucket — unwritten positions are 0,
-        yielding near-zero softmax weight and negligible impact.
+        Attention masks unwritten and graph-alignment gap positions. Zero KV
+        does not mean zero softmax weight, so padding must never be visible.
         pos_idx is a persistent GPU tensor updated via fill_() outside the graph,
         so the replay sees the correct write position without shape changes.
         """
@@ -209,16 +211,30 @@ class T2SBlockWithStaticCache:
         v_cache.scatter_(1, pos_idx, v)
 
         batch_size = q.shape[0]
-        kv_len = k_cache.shape[1]  # always bucket_size (static shape, graph-friendly)
+        kv_len = valid_kv_len if valid_kv_len > 0 else k_cache.shape[1]
 
         q = q.view(batch_size, 1, self.num_heads, -1).transpose(1, 2)
-        k_full = k_cache.view(batch_size, kv_len, self.num_heads, -1).transpose(1, 2)
-        v_full = v_cache.view(batch_size, kv_len, self.num_heads, -1).transpose(1, 2)
+        k_full = k_cache[:, :kv_len, :].view(
+            batch_size, kv_len, self.num_heads, -1
+        ).transpose(1, 2)
+        v_full = v_cache[:, :kv_len, :].view(
+            batch_size, kv_len, self.num_heads, -1
+        ).transpose(1, 2)
 
-        if torch_sdpa:
+        if valid_kv_len > 0 and torch_sdpa:
             attn = F.scaled_dot_product_attention(q, k_full, v_full)
-        else:
+        elif valid_kv_len > 0:
             attn = scaled_dot_product_attention(q, k_full, v_full, None)
+        elif torch_sdpa:
+            valid_attn_mask = key_valid_mask.unsqueeze(1).unsqueeze(1)
+            attn = F.scaled_dot_product_attention(
+                q, k_full, v_full, attn_mask=valid_attn_mask
+            )
+        else:
+            valid_attn_mask = key_valid_mask.unsqueeze(1).unsqueeze(1)
+            attn = scaled_dot_product_attention(
+                q, k_full, v_full, ~valid_attn_mask
+            )
 
         attn = attn.transpose(1, 2).reshape(batch_size, 1, -1)
         attn = F.linear(attn, self.out_w, self.out_b)
@@ -269,12 +285,16 @@ class T2STransformerWithStaticCache:
         k_cache: List[torch.Tensor],
         v_cache: List[torch.Tensor],
         pos_idx: torch.Tensor,
+        key_valid_mask: torch.Tensor,
+        valid_kv_len: int = -1,
         torch_sdpa: bool = True
     ):
-        """All layers share the same pos_idx."""
+        """All layers share the same write position and validity mask."""
+        key_valid_mask.scatter_(1, pos_idx[:, :, 0], True)
         for i in range(self.num_blocks):
             x, k_cache[i], v_cache[i] = self.blocks[i].decode_next_token_with_static_cache(
-                x, k_cache[i], v_cache[i], pos_idx, torch_sdpa
+                x, k_cache[i], v_cache[i], pos_idx, key_valid_mask,
+                valid_kv_len, torch_sdpa
             )
         return x, k_cache, v_cache
 
@@ -346,14 +366,19 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
         ]
 
         for i in range(decoder.num_layers):
-            k_cache[i][:, :initial_len, :] = torch.randn(
-                batch_size, initial_len, hidden_dim, dtype=model_dtype, device=device
-            )
-            v_cache[i][:, :initial_len, :] = torch.randn(
-                batch_size, initial_len, hidden_dim, dtype=model_dtype, device=device
-            )
+            # Capture is an implementation detail and must not consume the
+            # caller's sampling RNG.
+            k_cache[i][:, :initial_len, :].fill_(0.01)
+            v_cache[i][:, :initial_len, :].fill_(0.02)
 
-        xy_pos = torch.randn(batch_size, 1, hidden_dim, dtype=model_dtype, device=device)
+        key_valid_mask = torch.zeros(
+            batch_size, bucket_size, dtype=torch.bool, device=device
+        )
+        key_valid_mask[:, :initial_len] = True
+        xy_pos = torch.full(
+            (batch_size, 1, hidden_dim), 0.03,
+            dtype=model_dtype, device=device,
+        )
         pos_idx = torch.full(
             (batch_size, 1, hidden_dim), initial_len, dtype=torch.long, device=device
         )
@@ -361,7 +386,7 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
         # Warmup
         for _ in range(_CUDA_GRAPH_WARMUP_STEPS):
             xy_dec, k_cache, v_cache = decoder.t2s_transformer_static.decode_next_token_with_static_cache(
-                xy_pos, k_cache, v_cache, pos_idx
+                xy_pos, k_cache, v_cache, pos_idx, key_valid_mask
             )
             logits = decoder.ar_predict_layer(xy_dec[:, -1])
 
@@ -379,13 +404,16 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
             for _ in range(decoder.num_layers)
         ]
         for i in range(decoder.num_layers):
-            k_cache[i][:, :initial_len, :] = torch.randn(
-                batch_size, initial_len, hidden_dim, dtype=model_dtype, device=device
-            )
-            v_cache[i][:, :initial_len, :] = torch.randn(
-                batch_size, initial_len, hidden_dim, dtype=model_dtype, device=device
-            )
-        xy_pos = torch.randn(batch_size, 1, hidden_dim, dtype=model_dtype, device=device)
+            k_cache[i][:, :initial_len, :].fill_(0.01)
+            v_cache[i][:, :initial_len, :].fill_(0.02)
+        key_valid_mask = torch.zeros(
+            batch_size, bucket_size, dtype=torch.bool, device=device
+        )
+        key_valid_mask[:, :initial_len] = True
+        xy_pos = torch.full(
+            (batch_size, 1, hidden_dim), 0.03,
+            dtype=model_dtype, device=device,
+        )
         pos_idx = torch.full(
             (batch_size, 1, hidden_dim), initial_len, dtype=torch.long, device=device
         )
@@ -404,7 +432,7 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
             cuda_graph = torch.cuda.CUDAGraph()
             with torch.cuda.graph(cuda_graph, **_graph_extra):
                 xy_dec, k_cache_out, v_cache_out = decoder.t2s_transformer_static.decode_next_token_with_static_cache(
-                    xy_pos, k_cache, v_cache, pos_idx
+                    xy_pos, k_cache, v_cache, pos_idx, key_valid_mask
                 )
                 logits = decoder.ar_predict_layer(xy_dec[:, -1])
 
@@ -417,6 +445,7 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
             "k_cache": k_cache,
             "v_cache": v_cache,
             "pos_idx": pos_idx,
+            "key_valid_mask": key_valid_mask,
         }
         decoder.bucket_static_outputs[graph_key] = {
             "xy_dec": xy_dec,
@@ -564,9 +593,11 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     bucket_captured = False
     current_lens = None
     graph_key = None
-    graph_initial_len = None
+    graph_initial_len = None  # graph reuse key only
+    graph_prompt_len = None   # real contiguous prompt length
     graph_step_count = 0
     pos_idx_static: Optional[torch.Tensor] = None
+    key_valid_mask: Optional[torch.Tensor] = None
 
     static_transformer = getattr(decoder, "t2s_transformer_static", None)
     dynamic_transformer = decoder.t2s_transformer
@@ -614,6 +645,10 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     k_cache = k_cache_static
                     v_cache = v_cache_static
                     current_lens = [kv_cache_len] * len(k_cache)
+                    key_valid_mask = torch.zeros(
+                        batch_size, current_bucket, dtype=torch.bool, device=device
+                    )
+                    key_valid_mask[:, :kv_cache_len] = True
 
                     pos_idx_static = torch.full(
                         (batch_size, 1, hidden_dim), kv_cache_len,
@@ -621,6 +656,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     )
 
                     if graph_run_enabled:
+                        graph_prompt_len = kv_cache_len
                         if kv_cache_len >= current_bucket - 1:
                             graph_run_enabled = False
                         else:
@@ -656,26 +692,30 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                                         )
                                         static_in["k_cache"][_i][:, kv_cache_len:, :].zero_()
                                         static_in["v_cache"][_i][:, kv_cache_len:, :].zero_()
-                                    static_in["pos_idx"].fill_(graph_initial_len)
+                                    static_in["key_valid_mask"].zero_()
+                                    static_in["key_valid_mask"][:, :kv_cache_len] = True
+                                    static_in["pos_idx"].fill_(kv_cache_len)
                 else:
                     static_mode_active = False
                     transformer = dynamic_transformer
                     graph_run_enabled = False
 
         elif static_mode_active and current_bucket is not None and current_lens is not None:
-            if current_lens[0] >= current_bucket - 1:
-                keep_len = current_bucket - 1
-                if not hasattr(decoder, "_sliding_window_triggered"):
-                    decoder._sliding_window_triggered = True
-                    print(f"Sliding window: keeping last {keep_len} tokens")
-                for i in range(len(k_cache)):
-                    k_cache[i][:, :keep_len, :] = k_cache[i][:, -keep_len:, :].clone()
-                    v_cache[i][:, :keep_len, :] = v_cache[i][:, -keep_len:, :].clone()
-                    k_cache[i][:, keep_len:, :].zero_()
-                    v_cache[i][:, keep_len:, :].zero_()
-                current_lens = [keep_len] * len(current_lens)
+            # Never discard the prompt/text conditioning. When a fixed bucket
+            # fills, preserve its complete prefix and continue with dynamic KV.
+            if current_lens[0] >= current_bucket:
+                dynamic_len = current_lens[0]
+                k_cache = [item[:, :dynamic_len, :].clone() for item in k_cache]
+                v_cache = [item[:, :dynamic_len, :].clone() for item in v_cache]
+                static_mode_active = False
+                graph_run_enabled = False
+                transformer = dynamic_transformer
+                xy_dec, k_cache, v_cache = dynamic_transformer.decode_next_token(
+                    xy_pos, k_cache, v_cache
+                )
+                logits = decoder.ar_predict_layer(xy_dec[:, -1])
 
-            if graph_run_enabled and bucket_captured and graph_key is not None and graph_key in decoder.bucket_graphs:
+            elif graph_run_enabled and bucket_captured and graph_key is not None and graph_key in decoder.bucket_graphs:
                 replay_failed = False
                 bucket_lock = _get_bucket_lock(decoder, graph_key)
                 with bucket_lock:
@@ -685,7 +725,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                         static_outputs = decoder.bucket_static_outputs[graph_key]
 
                         static_inputs["xy_pos"].copy_(xy_pos)
-                        static_inputs["pos_idx"].fill_(graph_initial_len + graph_step_count)
+                        static_inputs["pos_idx"].fill_(graph_prompt_len + graph_step_count)
 
                         _replay_cuda_graph(decoder, cuda_graph, xy_pos.device)
 
@@ -697,21 +737,22 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                             decoder._cuda_graph_replay_started = True
                             print(f"CUDA Graph replay active (key={graph_key})")
 
-                        if graph_initial_len + graph_step_count >= current_bucket:
+                        if graph_prompt_len + graph_step_count >= current_bucket:
                             graph_run_enabled = False
-                            print("Graph write position at bucket boundary, falling back to static path")
-                            _fallback_len = graph_initial_len + graph_step_count
+                            static_mode_active = False
+                            transformer = dynamic_transformer
+                            print("Graph bucket full; continuing with full-context dynamic KV")
+                            _fallback_len = graph_prompt_len + graph_step_count
                             static_in_fb = decoder.bucket_static_inputs[graph_key]
-                            for _fi in range(len(k_cache)):
-                                k_cache[_fi].copy_(static_in_fb["k_cache"][_fi])
-                                v_cache[_fi].copy_(static_in_fb["v_cache"][_fi])
+                            k_cache = [
+                                item[:, :_fallback_len, :].clone()
+                                for item in static_in_fb["k_cache"]
+                            ]
+                            v_cache = [
+                                item[:, :_fallback_len, :].clone()
+                                for item in static_in_fb["v_cache"]
+                            ]
                             current_lens = [_fallback_len] * len(k_cache)
-                            if pos_idx_static is not None:
-                                pos_idx_static.fill_(_fallback_len)
-                            else:
-                                pos_idx_static = k_cache[0].new_full(
-                                    (k_cache[0].shape[0], 1, k_cache[0].shape[2]),
-                                    _fallback_len, dtype=torch.long)
                     except RuntimeError as e:
                         replay_failed = True
                         graph_run_enabled = False
@@ -722,7 +763,9 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     for i in range(len(k_cache)):
                         k_cache[i].copy_(static_inputs["k_cache"][i])
                         v_cache[i].copy_(static_inputs["v_cache"][i])
-                    _fallback_len = graph_initial_len + graph_step_count
+                    if key_valid_mask is not None:
+                        key_valid_mask.copy_(static_inputs["key_valid_mask"])
+                    _fallback_len = graph_prompt_len + graph_step_count
                     current_lens = [_fallback_len] * len(k_cache)
                     if pos_idx_static is not None:
                         pos_idx_static.fill_(_fallback_len)
@@ -731,7 +774,8 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                             (k_cache[0].shape[0], 1, k_cache[0].shape[2]),
                             _fallback_len, dtype=torch.long)
                     xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
-                        xy_pos, k_cache, v_cache, pos_idx_static
+                        xy_pos, k_cache, v_cache, pos_idx_static, key_valid_mask,
+                        _fallback_len + 1
                     )
                     current_lens = [length + 1 for length in current_lens]
                     logits = decoder.ar_predict_layer(xy_dec[:, -1])
@@ -743,7 +787,8 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                         (k_cache[0].shape[0], 1, k_cache[0].shape[2]),
                         current_lens[0], dtype=torch.long)
                 xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
-                    xy_pos, k_cache, v_cache, pos_idx_static
+                    xy_pos, k_cache, v_cache, pos_idx_static, key_valid_mask,
+                    current_lens[0] + 1
                 )
                 current_lens = [length + 1 for length in current_lens]
                 logits = decoder.ar_predict_layer(xy_dec[:, -1])

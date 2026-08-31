@@ -149,9 +149,11 @@ class T2SBlockWithStaticCacheFlash:
         v_cache_fa = v_cache.view(
             batch_size, v_cache.shape[1], self.num_heads, self.head_dim
         )
-        cache_seqlens = torch.full(
-            (batch_size,), k_cache.shape[1], dtype=torch.int32, device=x.device
-        )
+        # The full allocation is not a valid sequence length: unwritten slots
+        # and any graph-key alignment gap would receive attention. The current
+        # token has already been scattered, so include exactly that contiguous
+        # prefix and nothing beyond it.
+        cache_seqlens = pos_idx[:, 0, 0].to(dtype=torch.int32) + 1
         return _flash_attn_with_kvcache(
             q,
             k_cache_fa,
@@ -166,11 +168,14 @@ class T2SBlockWithStaticCacheFlash:
         k_cache: torch.Tensor,
         v_cache: torch.Tensor,
         pos_idx: torch.Tensor,
+        key_valid_mask: torch.Tensor,
+        valid_kv_len: int = -1,
         torch_sdpa: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if _flash_attn_with_kvcache is None:
             return self.sdpa_block.decode_next_token_with_static_cache(
-                x, k_cache, v_cache, pos_idx, torch_sdpa
+                x, k_cache, v_cache, pos_idx, key_valid_mask,
+                valid_kv_len, torch_sdpa
             )
         try:
             if self.mode == "bucket":
@@ -179,7 +184,8 @@ class T2SBlockWithStaticCacheFlash:
                 attn = self._flash_valid_len(x, k_cache, v_cache, pos_idx)
         except RuntimeError:
             return self.sdpa_block.decode_next_token_with_static_cache(
-                x, k_cache, v_cache, pos_idx, torch_sdpa
+                x, k_cache, v_cache, pos_idx, key_valid_mask,
+                valid_kv_len, torch_sdpa
             )
         return self._finish_attention(x, attn), k_cache, v_cache
 
@@ -214,11 +220,15 @@ class T2STransformerWithStaticCacheFlash:
         k_cache: List[torch.Tensor],
         v_cache: List[torch.Tensor],
         pos_idx: torch.Tensor,
+        key_valid_mask: torch.Tensor,
+        valid_kv_len: int = -1,
         torch_sdpa: bool = True,
     ):
+        key_valid_mask.scatter_(1, pos_idx[:, :, 0], True)
         for i, block in enumerate(self.blocks):
             x, k_cache[i], v_cache[i] = block.decode_next_token_with_static_cache(
-                x, k_cache[i], v_cache[i], pos_idx, torch_sdpa
+                x, k_cache[i], v_cache[i], pos_idx, key_valid_mask,
+                valid_kv_len, torch_sdpa
             )
         return x, k_cache, v_cache
 

@@ -53,6 +53,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 ## 特性
 
 - **静态 KV 缓存** — 预分配的 scatter 缓冲区，消除每步 `torch.cat` 开销
+- **语义稳定性保护** — 在声码器前拒绝重复 token 塌缩，并进行一次有界重试
 - **分桶 CUDA Graph** — 6 个配置 bucket 预捕获 15 个常用 graph key，少见形状惰性捕获
 - **BigVGAN CUDA 扩展缓存** — 按 GPU/Python/Torch/CUDA ABI 缓存 NVIDIA 内核，支持 torch 回退
 - **自适应 FlashAttention2 KV 缓存** — 自动优先 `flash_attn_with_kvcache` `valid` 模式，并可回退 SDPA
@@ -94,6 +95,7 @@ aqua-tts/
 │   │   └── torch/                 # 纯 PyTorch 回退
 │   ├── inference/
 │   │   ├── streaming.py           # 音频后处理
+│   │   ├── semantic_stability.py  # 声码器前的语义塌缩准入检查
 │   │   ├── params.py              # SoVITS 参数预设
 │   │   └── presets.py             # 命名预设（生成 + CUDA Graph）
 │   └── _vendor/

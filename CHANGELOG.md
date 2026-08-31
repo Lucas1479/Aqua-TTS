@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Mask unused static/CUDA-Graph KV slots and keep graph-key alignment gaps out
+  of SDPA and FlashAttention2 attention.
+- Preserve the complete prompt and generated context when a fixed KV bucket
+  fills, continuing with dynamic KV instead of evicting the oldest entries.
+- Make CUDA Graph capture sampling-RNG neutral.
+- Reject and retry pathological semantic-token loops before SoVITS/BigVGAN.
+
 ## [0.2.1] — 2026-08-30
 
 ### Changed
