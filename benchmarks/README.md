@@ -88,6 +88,22 @@ Absolute rates are sensitive to Windows GPU P-state and desktop scheduling.
 Use the JSON trial range and reproduce on the deployment GPU before treating a
 percentage as portable.
 
+### RTX 4070 Laptop GPU (8 GB)
+
+The same Aqua Graph + FA2 `valid` command and deterministic protocol were run
+on a render-free RTX 4070 Laptop GPU in the same Windows 11 dual-GPU host. The
+software environment, checkpoint, fixed shapes, 15 warmups, and seven
+synchronized repeats were unchanged.
+
+| Engine | Cold | Short / 448 | Conversation / 512 | Long / 768 |
+|---|---:|---:|---:|---:|
+| Aqua Graph + FA2 `valid` | 313.4 | 542.1 | 585.3 | 568.1 |
+
+This is isolated T2S AR throughput rather than TTFP. The result shows that the
+optimized decoder remains comfortably real-time on an 8 GB, lower-power mobile
+Ada GPU; full-pipeline latency still depends on the SoVITS/CFM/BigVGAN workload
+and local audio scheduling.
+
 ## TTFP (time to first playable audio)
 
 ```bash

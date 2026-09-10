@@ -20,7 +20,7 @@
 
 ---
 
-Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时——核心场景是与你自己的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA 角色进行低延迟流式语音交互。它不替换模型权重，而是替换执行策略：静态 KV 缓存、分桶 CUDA Graph、兼容时自动启用的 FlashAttention2，以及按 ABI 区分的 BigVGAN CUDA 扩展缓存。在 RTX 4070 Ti SUPER 上，当前确定性基准使用 FA2 达到 **568–645 同步 it/s**，自动回退 SDPA 时为 **477–519 it/s**。下述短、中、长场景的预热模型侧首音中位数分别为 **233 / 288 / 348 ms**。
+Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时——核心场景是与你自己的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA 角色进行低延迟流式语音交互。它不替换模型权重，而是替换执行策略：静态 KV 缓存、分桶 CUDA Graph、兼容时自动启用的 FlashAttention2，以及按 ABI 区分的 BigVGAN CUDA 扩展缓存。在 RTX 4070 Ti SUPER 上，当前确定性基准使用 FA2 达到 **568–645 同步 it/s**，自动回退 SDPA 时为 **477–519 it/s**。额外的 8 GB RTX 4070 Laptop GPU 验证仍达到 **542–585 同步 it/s**，表明优化后的 AR 路径在较低功耗的移动显卡上也能保持很好的性能。下述短、中、长场景的预热模型侧首音中位数分别为 **233 / 288 / 348 ms**。
 
 ## 亮点
 
@@ -47,6 +47,16 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 | 流式契约 | 上游原生 generator | **保留 generator；仅补丁直接 `infer_panel()`** | **保留 generator；仅补丁直接 `infer_panel()`** |
 
 *基准环境：RTX 4070 Ti SUPER (16 GB)、PyTorch 2.5.1+cu124、fp16、上游 `08d627c`。T2S 吞吐对每个固定形状预热 15 次并同步测量 7 次。TTFP 三列共用同一套 Aqua 文本/SoVITS/BigVGAN 管线，只隔离 T2S 执行模式；先预热两条文本，再测量 5 次，使用匹配 ABI 的 BigVGAN CUDA 缓存和 0.25 秒 chunk。已发布 v0.2.0 的 Aqua TTFP 约为 257 / 301 / 404 ms；当前 FA2 中位数分别降低约 9% / 4% / 14%。FA2 可导入时自动尝试，失败回退 SDPA；设置 `AQUATTS_T2S_FLASH_ATTN=0` 可强制 SDPA。长文本首次前端初始化出现约 3 秒的首轮值，保留在原始证据中但被中位数排除。完整命令和方法见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。*
+
+### 8 GB 移动显卡验证
+
+同一套确定性 FA2 `valid` 协议也在同一台 Windows 11 主机的 **RTX 4070 Laptop GPU（8 GB）** 上运行。该移动 GPU 不负责显示输出；Python、PyTorch、FlashAttention2、checkpoint、固定形状、15 次预热与 7 次同步测量均保持一致。
+
+| GPU | 冷启动对话形状 | 短形状 / 448 | 对话形状 / 512 | 长形状 / 768 |
+|---|---:|---:|---:|---:|
+| RTX 4070 Laptop GPU（8 GB） | 313.4 it/s | **542.1 it/s** | **585.3 it/s** | **568.1 it/s** |
+
+这些数字是独立 T2S AR 吞吐，不是完整管线 TTFP；它们说明 Aqua 的 CUDA Graph + FA2 路径在 8 GB、较低功耗的移动 Ada GPU 上仍能保持很好的实时对话吞吐。
 
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 

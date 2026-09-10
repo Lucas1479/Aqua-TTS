@@ -27,7 +27,7 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, FlashAttention2 when compatible, and an ABI-keyed BigVGAN CUDA extension cache. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **568–645 synchronized it/s** with FA2 and **477–519 it/s** through the automatic SDPA fallback. Warm model-side first-audio medians are **233 / 288 / 348 ms** for the short, medium, and long cases below. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead.
+Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, FlashAttention2 when compatible, and an ABI-keyed BigVGAN CUDA extension cache. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **568–645 synchronized it/s** with FA2 and **477–519 it/s** through the automatic SDPA fallback. An additional 8 GB RTX 4070 Laptop GPU validation sustained **542–585 synchronized it/s**, showing that the optimized AR path remains fast on a lower-power mobile GPU. Warm model-side first-audio medians are **233 / 288 / 348 ms** for the short, medium, and long cases below. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead.
 
 ## Highlights
 
@@ -55,6 +55,16 @@ Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voic
 
 *Benchmark environment: RTX 4070 Ti SUPER (16 GB), PyTorch 2.5.1+cu124, fp16, upstream `08d627c`. T2S throughput uses 15 warmups and seven synchronized repeats per fixed shape. TTFP uses the same Aqua text/SoVITS/BigVGAN pipeline for all three columns so the T2S execution mode is isolated; it uses two warmup utterances, five repeats, a matching cached BigVGAN CUDA extension, and 0.25 s chunks. The published v0.2.0 Aqua TTFP was ~257 / 301 / 404 ms; current FA2 medians are ~9% / 4% / 14% lower. FA2 is attempted automatically when importable and falls back to SDPA; set `AQUATTS_T2S_FLASH_ATTN=0` to force SDPA. One-time long-text frontend initialization produced a ~3 s first repeat, retained in the raw evidence but excluded by the median. See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for commands and methodology.*
 
+### 8 GB mobile GPU validation
+
+The same deterministic FA2 `valid` protocol was also run on an **RTX 4070 Laptop GPU (8 GB)** in the same Windows 11 host. The mobile GPU was not driving a display; Python, PyTorch, FlashAttention2, checkpoint, fixed shapes, 15 warmups, and seven synchronized repeats were unchanged.
+
+| GPU | Cold conversation | Short / 448 | Conversation / 512 | Long / 768 |
+|---|---:|---:|---:|---:|
+| RTX 4070 Laptop GPU (8 GB) | 313.4 it/s | **542.1 it/s** | **585.3 it/s** | **568.1 it/s** |
+
+These are isolated T2S AR throughput measurements, not full-pipeline TTFP. They demonstrate that Aqua's graph + FA2 execution path can retain strong conversational throughput on an 8 GB, lower-power mobile Ada GPU.
+
 https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 ## Features
@@ -71,7 +81,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 > **Scope notice** — Aqua-TTS is an optimization layer for upstream GPT-SoVITS **v3**. It loads the selected upstream `Text2SemanticDecoder`, validates the required contract, and patches only the direct `infer_panel()` path. Upstream batching and streaming entry points remain intact; incompatible upstream changes fail closed. GPT-SoVITS v4 is not currently supported.
 
-> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — numbers in this README are measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights and should not be treated as universal. Only GPT-SoVITS v3 is supported.
+> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — the headline TTFP numbers in this README were measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights, while the RTX 4070 Laptop result covers isolated T2S AR throughput only. Neither should be treated as universal. Only GPT-SoVITS v3 is supported.
 
 ## Supported Languages
 
