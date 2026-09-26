@@ -26,3 +26,12 @@ def test_latency_summary_retains_outlier_and_uses_median():
 def test_empty_latency_summary_is_not_a_successful_measurement():
     with pytest.raises(ValueError, match="empty"):
         _benchmark().summarize([])
+
+
+def test_steady_summary_p95_and_uninstrumented_semantic_time():
+    rows = [dict(first_audio_ms=value, total_ms=value + 1, audio_seconds=2,
+                 rtf=(value + 1) / 2000, semantic_ms=None) for value in range(20)]
+    result = _benchmark().summarize(rows)
+    assert result["median_first_audio_ms"] == 9.5
+    assert result["p95_first_audio_ms"] == 18
+    assert result["median_semantic_ms"] is None

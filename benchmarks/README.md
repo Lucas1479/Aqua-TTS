@@ -219,3 +219,27 @@ existing v3 and mobile-GPU measurements above. Model/voice weights differ across
 families; comparisons should be made between engines within one checkpoint pair.
 Floating-point backend differences can change sampled tokens even with paired
 seeds, so the report also includes semantic hashes and per-trial audio durations.
+
+### Fixed-seed steady-state retest
+
+Use `--steady` to separate each text's first use, five fixed-seed warmups, twenty
+fixed-seed measurements, and three diagnostic runs. The measured steady trials
+disable synchronized T2S timing and validate PCM after the timer stops; the
+diagnostic runs separately time text processing, T2S and v2 acoustic decoding.
+No measured steady trial may create another CUDA Graph. P95 uses the nearest
+rank of the recorded samples, and token hashes expose workload variation.
+
+```powershell
+python benchmarks/model_latency.py --config F:/local/v2Pro.json --engine flash `
+  --steady --seed 20260926 --warmup-per-case 5 --repeats 20 --diagnostic-repeats 3 `
+  --gpu-uuid GPU-YOUR-DEVICE-UUID --telemetry-output F:/local/gpu.csv `
+  --output F:/local/steady.json
+```
+
+`nvidia-smi -L` lists physical GPU UUIDs. The UUID selects CUDA device 0 inside
+this benchmark process and records that same GPU's utilization, clocks, memory,
+power and temperature every 500 ms. Three seconds of pre-load activity are
+recorded first. The tool does not close other applications or change GPU power
+settings; telemetry therefore describes the actual desktop environment, not an
+isolated GPU. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
+the previous measurements and documents the changed measurement protocol.

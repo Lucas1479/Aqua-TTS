@@ -111,6 +111,31 @@ output is chunked after each text segment is decoded. See the [new detailed
 report](benchmarks/results/v2-model-latency.md) for total time, RTF, method, raw
 repeats and checkpoint identities. Existing v3 and RTX 4070 Laptop figures are unchanged.
 
+### 2026-09-27 fixed-seed steady-state retest
+
+A separate retest uses the same local weights and GPU, five warmups per text and
+twenty fixed-seed measurements, with synchronized stage timing moved to separate
+diagnostic runs. No new CUDA Graphs were captured during the measured trials.
+The earlier tables above are retained; the changed protocol prevents treating
+the difference as an implementation speedup.
+
+| Model | T2S engine | Short p50 (ms) | Short p95 (ms) | Medium p50 (ms) | Long p50 (ms) |
+|---|---|---:|---:|---:|---:|
+| v2 | Upstream T2S | 255.7 | 293.6 | 519.5 | 1005.1 |
+| v2 | Graph + SDPA | 107.5 | 116.4 | 177.1 | 306.0 |
+| v2 | Graph + FA2 | 93.9 | 103.3 | 142.6 | 231.0 |
+| v2Pro | Upstream T2S | 272.7 | 303.7 | 547.4 | 965.4 |
+| v2Pro | Graph + SDPA | 110.9 | 122.5 | 183.4 | 293.0 |
+| v2Pro | Graph + FA2 | 96.4 | 110.3 | 143.1 | 221.4 |
+| v2ProPlus | Upstream T2S | 252.9 | 283.3 | 537.0 | 927.2 |
+| v2ProPlus | Graph + SDPA | 107.0 | 119.8 | 180.2 | 291.9 |
+| v2ProPlus | Graph + FA2 | 100.7 | 107.4 | 144.7 | 219.6 |
+
+V2 Pro/FA2 short-text minimum was **93.1 ms** (median **96.4 ms**, p95 **110.3 ms**).
+Desktop GPU activity remained present, and telemetry cannot isolate its contribution.
+See the [dated retest report](benchmarks/results/v2-model-retest-20260927.md) for
+first-use timings, total time/RTF, separate diagnostics and recorded GPU clocks/load.
+
 ## V2, V2 Pro, and V2 Pro Plus checkpoints
 
 Use a matching GPT/SoVITS checkpoint pair. Aqua reads the SoVITS header or
