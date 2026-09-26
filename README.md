@@ -29,6 +29,11 @@
 
 Aqua-TTS is a GPU-optimized inference runtime purpose-built for **real-time voice conversation** — specifically, low-latency streaming TTS with your own [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) v3 LoRA character voices. It does not replace model weights — it replaces the execution strategy: static KV cache buffers, bucketed CUDA Graph capture/replay, FlashAttention2 when compatible, and an ABI-keyed BigVGAN CUDA extension cache. On an RTX 4070 Ti SUPER, the current deterministic benchmark reaches **568–645 synchronized it/s** with FA2 and **477–519 it/s** through the automatic SDPA fallback. An additional 8 GB RTX 4070 Laptop GPU validation sustained **542–585 synchronized it/s**, showing that the optimized AR path remains fast on a lower-power mobile GPU. Warm model-side first-audio medians are **233 / 288 / 348 ms** for the short, medium, and long cases below. In the full streaming player pipeline, practical first-audio latency is usually **0.4–0.7 s** depending on chunk length, audio device startup, cache state, and scheduling overhead.
 
+**V2-family support:** Aqua-TTS also loads **v2, v2Pro, and v2ProPlus** checkpoints,
+including the Pro/Plus speaker encoder. See the [v2-family benchmarks](#additional-v2-family-benchmarks)
+and [checkpoint setup](#v2-v2-pro-and-v2-pro-plus-checkpoints) below. The original
+v3 and RTX 4070 Laptop measurements are preserved in Highlights.
+
 ## Highlights
 
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
@@ -86,38 +91,16 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 ## Additional v2-family benchmarks
 
-These **new measurements** use an RTX 4070 Ti SUPER, PyTorch 2.5.1+cu121 and
-upstream `08d627c`. They supplement the existing v3/mobile-GPU tables above.
-Two warmup utterances precede five paired-seed repeats per text; values are
-median model-side first-audio latency. All three engines share the same Aqua
-frontend, reference cache and SoVITS path for each checkpoint pair.
+**Latest measurement: 2026-09-27.** RTX 4070 Ti SUPER (16 GB), Windows,
+PyTorch 2.5.1+cu121, fp16, upstream `08d627c`. The table reports **warm model-side
+first-PCM latency**, excluding model loading and audio playback. Short, medium,
+and long inputs contain 3, 19, and 64 characters respectively.
 
-| Model | T2S execution | Short / 3 chars (ms) | Medium / 19 chars (ms) | Long / 64 chars (ms) |
-|---|---|---:|---:|---:|
-| v2 | Upstream T2S | 281.4 | 703.2 | 1172.5 |
-| v2 | Aqua Graph + SDPA | 194.1 | 280.3 | 406.4 |
-| v2 | Aqua Graph + FA2 | 171.9 | 223.1 | 283.1 |
-| v2Pro | Upstream T2S | 349.1 | 496.8 | 911.7 |
-| v2Pro | Aqua Graph + SDPA | 180.7 | 186.3 | 338.6 |
-| v2Pro | Aqua Graph + FA2 | 198.3 | 156.0 | 304.2 |
-| v2ProPlus | Upstream T2S | 290.5 | 546.0 | 1224.3 |
-| v2ProPlus | Aqua Graph + SDPA | 194.2 | 337.9 | 364.5 |
-| v2ProPlus | Aqua Graph + FA2 | 265.8 | 260.5 | 274.3 |
-
-v2 uses official base weights; Pro/Plus use the tested Kurisu fine-tunes. Compare
-engines within one checkpoint pair. FA2 can produce different sampled tokens;
-these are observed same-input latencies, not fixed-token speedup claims. V2-family
-output is chunked after each text segment is decoded. See the [new detailed
-report](benchmarks/results/v2-model-latency.md) for total time, RTF, method, raw
-repeats and checkpoint identities. Existing v3 and RTX 4070 Laptop figures are unchanged.
-
-### 2026-09-27 fixed-seed steady-state retest
-
-A separate retest uses the same local weights and GPU, five warmups per text and
-twenty fixed-seed measurements, with synchronized stage timing moved to separate
-diagnostic runs. No new CUDA Graphs were captured during the measured trials.
-The earlier tables above are retained; the changed protocol prevents treating
-the difference as an implementation speedup.
+Each model/engine/text combination uses five warmups followed by twenty requests,
+resetting seed `20260926` each time: **540 measured requests** in total. First use
+and synchronized stage diagnostics are recorded separately; no new CUDA Graphs
+were captured during measured requests. All three engines share the same Aqua
+frontend, reference cache, and SoVITS path for each checkpoint pair.
 
 | Model | T2S engine | Short p50 (ms) | Short p95 (ms) | Medium p50 (ms) | Long p50 (ms) |
 |---|---|---:|---:|---:|---:|
@@ -132,9 +115,20 @@ the difference as an implementation speedup.
 | v2ProPlus | Graph + FA2 | 100.7 | 107.4 | 144.7 | 219.6 |
 
 V2 Pro/FA2 short-text minimum was **93.1 ms** (median **96.4 ms**, p95 **110.3 ms**).
-Desktop GPU activity remained present, and telemetry cannot isolate its contribution.
-See the [dated retest report](benchmarks/results/v2-model-retest-20260927.md) for
-first-use timings, total time/RTF, separate diagnostics and recorded GPU clocks/load.
+v2 uses official base weights; Pro/Plus use the tested Kurisu fine-tunes. Compare
+engines within one checkpoint pair. FA2 can produce different sampled tokens,
+so these are observed same-input latencies, not fixed-token speedup claims.
+V2-family output is 32 kHz and is chunked after each text segment is decoded.
+Desktop GPU activity remained present during the measurements.
+
+The [full retest report](benchmarks/results/v2-model-retest-20260927.md),
+[raw trials](benchmarks/results/v2-model-retest-20260927.json), and
+[GPU telemetry](benchmarks/results/v2-model-retest-20260927-gpu.csv) include
+first-use timings, total time/RTF, checkpoint identities, and separate diagnostics.
+The [earlier paired-seed report](benchmarks/results/v2-model-latency.md) retains
+the original v2 measurements. Its different protocol prevents treating the
+difference as an implementation speedup. Existing v3 and RTX 4070 Laptop figures
+above remain unchanged and use their own documented workloads and environments.
 
 ## V2, V2 Pro, and V2 Pro Plus checkpoints
 
