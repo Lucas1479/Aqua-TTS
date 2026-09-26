@@ -2,8 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- v2/v2Pro/v2ProPlus checkpoint selection through upstream metadata, including
+  renamed weights; Pro/Plus reuse upstream ERes2Net with an explicit `sv_model_path`.
+- Speaker reference caching and paired multi-reference conditioning for both
+  inference APIs, without loading v3-only assets for v2-family models.
+- A real-weight smoke matrix for ordinary and streaming inference across dynamic,
+  static-KV, and CUDA Graph modes.
+
 ### Fixed
 
+- Return the actual sample rate in HTTP PCM streaming headers and propagate
+  synthesis errors instead of emitting a silent fallback block.
+- Include HTTP endpoint tests in model-free CI.
+- Keep documented inference language labels independent of the host UI locale,
+  and use the model's sample rate in playback examples.
 - Mask unused static/CUDA-Graph KV slots and keep graph-key alignment gaps out
   of SDPA and FlashAttention2 attention.
 - Preserve the complete prompt and generated context when a fixed KV bucket

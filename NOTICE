@@ -23,6 +23,13 @@ Runtime modifications applied in memory:
 - Added `apply_cuda_graph_patch()` entry point in aquatts.modeling
 - Added fallback-on-error path: CUDA Graph → static KV → dynamic torch.cat
 
+Pro/Plus integration: aquatts/inference/speaker.py adapts the feature and model
+loading contract of upstream GPT_SoVITS/sv.py (MIT, RVC-Boss, revision 08d627c).
+ERes2NetV2, its Kaldi feature helpers, and all weights are loaded from the external
+upstream checkout; they are not redistributed in Aqua's wheel. The upstream
+ERes2NetV2 source retains its 3D-Speaker Apache-2.0 notice. This integration does
+not copy Amadeus-owned runtime or application code.
+
 The namespace bridge files aquatts/_vendor/GPT_SoVITS/AR/__init__.py and
 aquatts/_vendor/GPT_SoVITS/AR/models/__init__.py use pkgutil.extend_path
 to merge with the selected upstream GPT-SoVITS package at import time. Aqua-TTS

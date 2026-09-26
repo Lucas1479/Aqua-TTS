@@ -3,6 +3,8 @@
 
 import numpy as np
 import pytest
+import io
+import wave
 from fastapi.testclient import TestClient
 
 from aquatts.server import _create_app
@@ -106,3 +108,46 @@ class TestTTSFile:
     def test_unknown_voice_returns_404(self, client):
         resp = client.post("/tts/file?text=Hello&voice=nobody")
         assert resp.status_code == 404
+
+
+@pytest.mark.parametrize("rate", [24000, 32000, 48000])
+@pytest.mark.parametrize("metadata_first", [True, False])
+def test_stream_rate_matches_pcm_and_keeps_first_audio(rate, metadata_first, registry):
+    class RateInferencer:
+        closed = False
+
+        def infer_stream(self, **kwargs):
+            try:
+                if metadata_first:
+                    yield rate, None, ""
+                yield rate, np.full(8, 0.25, dtype=np.float16), "first"
+                yield rate, np.full(4, -0.5, dtype=np.float32), "second"
+            finally:
+                self.closed = True
+
+    inferencer = RateInferencer()
+    client = TestClient(_create_app(inferencer, registry))
+    response = client.post("/tts?text=Hello&voice=alice")
+    assert response.status_code == 200
+    assert response.headers["x-sample-rate"] == str(rate)
+    assert response.headers["x-dtype"] == "float32"
+    np.testing.assert_array_equal(
+        np.frombuffer(response.content, dtype=np.float32), [0.25] * 8 + [-0.5] * 4
+    )
+    assert inferencer.closed
+    response = client.post("/tts/file?text=Hello&voice=alice")
+    with wave.open(io.BytesIO(response.content)) as audio:
+        assert audio.getframerate() == rate
+        assert audio.getnframes() == 12
+
+
+def test_stream_reports_initialization_error_before_sending_headers(registry):
+    class BrokenInferencer:
+        def infer_stream(self, **kwargs):
+            raise RuntimeError("missing speaker weights")
+            yield
+
+    client = TestClient(_create_app(BrokenInferencer(), registry))
+    response = client.post("/tts?text=Hello&voice=alice")
+    assert response.status_code == 500
+    assert "missing speaker weights" in response.json()["detail"]

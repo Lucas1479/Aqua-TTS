@@ -102,3 +102,22 @@ def upstream_t2s_model_path() -> Path | None:
     if home is None:
         return None
     return home / "GPT_SoVITS" / "AR" / "models" / "t2s_model.py"
+
+
+def configure_speaker_encoder() -> Path:
+    """Resolve the Pro encoder's upstream flat imports independently of CWD."""
+    home = configured_gpt_sovits_home()
+    if home is None:
+        raise GPTSoVITSConfigurationError("GPT_SOVITS_HOME is required for Pro inference")
+    directory = home / "GPT_SoVITS" / "eres2net"
+    for name in ("ERes2NetV2.py", "fusion.py", "pooling_layers.py", "kaldi.py"):
+        if not (directory / name).is_file():
+            raise GPTSoVITSConfigurationError(
+                f"GPT-SoVITS lacks the Pro speaker encoder ({directory / name}); "
+                "select an upstream checkout with v2Pro/v2ProPlus support"
+            )
+    # ERes2NetV2 uses flat imports for fusion and pooling_layers. Keep Aqua's
+    # namespace bridge first, just as configure_gpt_sovits does.
+    if str(directory) not in sys.path:
+        sys.path.append(str(directory))
+    return directory

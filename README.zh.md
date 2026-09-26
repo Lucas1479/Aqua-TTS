@@ -73,11 +73,54 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **HTTP 服务器** — 轻量 FastAPI 服务，支持流式 TTS 接口、角色管理和健康检查
 - **PyPI 安装** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **定位说明** — Aqua-TTS 是上游 GPT-SoVITS **v3** 的优化层。它加载所选上游的 `Text2SemanticDecoder`，验证兼容契约，并且只替换直接 `infer_panel()` 路径；上游 batching/streaming 入口保持原样。不兼容的上游变更会明确失败。当前不支持 GPT-SoVITS v4。
+> **定位说明** — Aqua-TTS 是上游 GPT-SoVITS **v2、v2Pro、v2ProPlus、v3** 的优化层（保留原有 v1 路径）。它加载所选上游的 `Text2SemanticDecoder`，验证兼容契约，并且只替换直接 `infer_panel()` 路径；上游 batching/streaming 入口保持原样。不兼容的上游变更会明确失败。当前不支持 GPT-SoVITS v4。
+
+## V2、V2 Pro 与 V2 Pro Plus 权重
+
+传入匹配的 GPT／SoVITS 权重组合即可。Aqua 根据 SoVITS 版本头或上游模型身份
+识别架构，不根据文件名猜测。Pro 与 Plus 还需要同一份 ERes2Net 说话人编码器：
+
+```python
+from aquatts import TTSInferencer
+
+tts = TTSInferencer(
+    gpt_path="/models/voice.ckpt",
+    sovits_path="/models/voice.pth",
+    sv_model_path="/models/pretrained_eres2netv2w24s4ep4.ckpt",  # 仅 Pro／Plus
+    language="zh_CN",
+)
+sr, audio = tts.infer(
+    text="今日はいい天気ですね。",
+    ref_audio_path="/voices/reference.wav",
+    prompt_text="与参考音频匹配的转写文本。",
+    text_language="日文", prompt_language="日文",
+)
+```
+
+`GPT_SOVITS_HOME` 需要指向包含 Pro 模型定义和 `GPT_SoVITS/eres2net/` 的上游版本
+（已验证 `08d627c`）。未传入 `sv_model_path` 时，从上游目录的
+`GPT_SoVITS/pretrained_models/sv/pretrained_eres2netv2w24s4ep4.ckpt` 加载。
+编码器权重由用户提供，仅 Pro／Plus 加载；普通 v2 无需此权重。v2 系列也不加载
+V3 底模或 BigVGAN，但仍需 BERT、CNHuBERT 和相应文本前端资源。
+
+`infer()` 和 `infer_stream()` 均支持这些模型。主参考音频的说话人特征按会话缓存，
+额外参考音频的频谱和说话人特征逐一配对。**v2 系列先解码完整文本段，再分块输出音频**；
+`chunk_size_seconds` 控制传输块大小，不代表句内增量生成。T2S 的 static KV、CUDA Graph
+及可选 FlashAttention 仍可使用；V3 的 CFM／BigVGAN 参数（例如 `sample_steps`）
+不会加速 v2 系列解码，首页的 V3 延迟数据也不代表 v2 系列性能。
+
+服务器命令 `python -m aquatts.server --gpt-model ... --sovits-model ...` 可增加
+`--sv-model /models/pretrained_eres2netv2w24s4ep4.ckpt`。`/tts` 返回单声道 float32 PCM，
+`X-Sample-Rate` 使用实际采样率；`/tts/file` 的 WAV 头使用相同采样率
+（v2 系列权重通常为 32 kHz，v3 为 24 kHz）。流式合成失败会向调用者报告，
+不再用静音音频块伪装成功。
+
+具体权重与验证范围见[模型验证报告](benchmarks/results/v2-model-support.md)。
+本次未加入 MPS／ROCm 支持。
 
 ## 语言支持
 
-Aqua-TTS 继承 GPT-SoVITS v3 的语言能力。通过 `text_language` / `prompt_language` 参数传入语言代码，参考音频和目标文本可使用不同语言。
+Aqua-TTS 使用所选 GPT-SoVITS 权重对应的文本前端。通过 `text_language` / `prompt_language` 参数传入语言代码，参考音频和目标文本可使用不同语言。
 
 | 语言 | 代码 |
 |---|---|

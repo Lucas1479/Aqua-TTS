@@ -30,6 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description="Aqua-TTS streaming inference")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--ref-audio", required=True)
     parser.add_argument("--ref-text", required=True)
     parser.add_argument("--text", required=True)
@@ -53,44 +54,44 @@ def main():
         device="cuda",
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
+        sv_model_path=args.sv_model,
     )
 
     p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paFloat32,
-        channels=1,
-        rate=24000,
-        output=True,
-    )
+    stream = None
+    audio_dur = 0.0
 
     print(f"Streaming: {args.text}")
     t_start = time.perf_counter()
-    total_samples = 0
 
-    for sr, chunk, text in tts.infer_stream(
-        text=args.text,
-        ref_audio_path=args.ref_audio,
-        prompt_text=args.ref_text,
-        text_language=args.text_lang,
-        prompt_language=args.ref_lang,
-        how_to_cut="不切",
-        top_k=5, top_p=1, temperature=0.6,
-        speed=1.1, sample_steps=4,
-        enable_cuda_graph=not args.no_cuda_graph,
-        enable_static_kv=True,
-    ):
-        if chunk is not None and len(chunk) > 0:
-            stream.write(chunk.tobytes())
-            total_samples += len(chunk)
+    try:
+        for sr, chunk, text in tts.infer_stream(
+            text=args.text,
+            ref_audio_path=args.ref_audio,
+            prompt_text=args.ref_text,
+            text_language=args.text_lang,
+            prompt_language=args.ref_lang,
+            how_to_cut="不切",
+            top_k=5, top_p=1, temperature=0.6,
+            speed=1.1, sample_steps=4,
+            enable_cuda_graph=not args.no_cuda_graph,
+            enable_static_kv=True,
+        ):
+            if chunk is not None and len(chunk) > 0:
+                if stream is None:
+                    stream = p.open(format=pyaudio.paFloat32, channels=1, rate=sr, output=True)
+                stream.write(chunk.tobytes())
+                audio_dur += len(chunk) / sr
 
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+    finally:
+        if stream is not None:
+            stream.stop_stream()
+            stream.close()
+        p.terminate()
 
     elapsed = time.perf_counter() - t_start
-    audio_dur = total_samples / 24000
     print(f"Done: {audio_dur:.1f}s audio in {elapsed:.1f}s "
-          f"(RTF: {elapsed / audio_dur:.2f}x)")
+          f"(RTF: {(elapsed / audio_dur if audio_dur else 0):.2f}x)")
 
 
 if __name__ == "__main__":

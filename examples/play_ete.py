@@ -191,6 +191,7 @@ def _parse_args():
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""))
     parser.add_argument("--gpt-model", default=os.environ.get("AQUA_GPT_MODEL"))
     parser.add_argument("--sovits-model", default=os.environ.get("AQUA_SOVITS_MODEL"))
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--ref-audio", default=os.environ.get("AQUA_REF_AUDIO"))
     parser.add_argument("--ref-text", default=os.environ.get("TTS_REF_TEXT_JA", KURISU_REF_TEXT))
     parser.add_argument("--text", action="append",
@@ -432,6 +433,7 @@ def main():
             device=args.device,
             gpt_path=gpt_model,
             sovits_path=sovits_model,
+            sv_model_path=args.sv_model,
         )
     print(f"[demo] Loaded in {time.perf_counter() - t0:.2f}s")
 
@@ -445,8 +447,9 @@ def main():
 
     try:
         if not args.cold_audio_stream:
-            output_stream = _open_output_stream(pa, pyaudio, args)
-            _prime_output_stream(output_stream)
+            rate = DEFAULT_SAMPLE_RATE if tts.model_version == "v3" else int(tts.hps.data.sampling_rate)
+            output_stream = _open_output_stream(pa, pyaudio, args, rate)
+            _prime_output_stream(output_stream, rate)
         for label, text in texts:
             play_utterance(tts, pa, pyaudio, args, ref_audio, label, text, save_dir,
                            output_stream=output_stream)

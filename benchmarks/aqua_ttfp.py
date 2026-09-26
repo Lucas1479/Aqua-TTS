@@ -46,6 +46,7 @@ def main():
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
     parser.add_argument("--sovits-pretrain")
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--bert-model")
     parser.add_argument("--cnhubert-model")
     parser.add_argument("--bigvgan-model")
@@ -59,7 +60,7 @@ def main():
     parser.add_argument("--no-bigvgan-kernel", action="store_true")
     parser.add_argument("--how-to-cut", default="按标点符号切")
     parser.add_argument("--chunk-size-seconds", type=float, default=0.25,
-                        help="Enable true streaming chunks; set <=0 to disable.")
+                        help="Audio output chunk size; v1/v2/Pro decode whole sentences first. Set <=0 to disable.")
     parser.add_argument("--measure-total", action="store_true",
                         help="Continue after first playable chunk to measure full generation time.")
     args = parser.parse_args()
@@ -101,13 +102,14 @@ def main():
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
         sovits_pretrain_path=args.sovits_pretrain,
+        sv_model_path=args.sv_model,
         bert_path=args.bert_model,
         cnhubert_path=args.cnhubert_model,
         bigvgan_path=args.bigvgan_model,
         fast_langdetect_path=args.fast_langdetect_model,
     )
     # BigVGAN kernel toggle (set before first inference)
-    if args.no_bigvgan_kernel and hasattr(inferencer, 'bigvgan_model'):
+    if args.no_bigvgan_kernel and inferencer.bigvgan_model is not None:
         inferencer.bigvgan_model.use_cuda_kernel = False
     print(f"[bench] Loaded in {time.perf_counter() - t0:.2f}s")
 

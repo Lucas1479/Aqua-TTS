@@ -80,13 +80,61 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 - **HTTP server** — lightweight FastAPI server with streaming TTS endpoint, voice management, and health check
 - **PyPI install** — `pip install "aqua-tts[runtime]"` → `from aquatts import TTSInferencer`
 
-> **Scope notice** — Aqua-TTS is an optimization layer for upstream GPT-SoVITS **v3**. It loads the selected upstream `Text2SemanticDecoder`, validates the required contract, and patches only the direct `infer_panel()` path. Upstream batching and streaming entry points remain intact; incompatible upstream changes fail closed. GPT-SoVITS v4 is not currently supported.
+> **Scope notice** — Aqua-TTS is an optimization layer for upstream GPT-SoVITS **v2, v2Pro, v2ProPlus, and v3** (with the existing v1 path retained). It loads the selected upstream `Text2SemanticDecoder`, validates the required contract, and patches only the direct `infer_panel()` path. Upstream batching and streaming entry points remain intact; incompatible upstream changes fail closed. GPT-SoVITS v4 is not currently supported.
 
-> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — the headline TTFP numbers in this README were measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights, while the RTX 4070 Laptop result covers isolated T2S AR throughput only. Neither should be treated as universal. Only GPT-SoVITS v3 is supported.
+> **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — the headline TTFP numbers in this README were measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights, while the RTX 4070 Laptop result covers isolated T2S AR throughput only. Neither should be treated as universal. V2-family checkpoints use their own SoVITS decoder; the v3 BigVGAN latency figures do not describe v2-family performance.
+
+## V2, V2 Pro, and V2 Pro Plus checkpoints
+
+Use a matching GPT/SoVITS checkpoint pair. Aqua reads the SoVITS header or
+upstream model identity, so renaming a checkpoint does not select its architecture.
+Pro and Plus additionally require the shared ERes2Net speaker encoder:
+
+```python
+from aquatts import TTSInferencer
+
+tts = TTSInferencer(
+    gpt_path="/models/voice.ckpt",
+    sovits_path="/models/voice.pth",
+    sv_model_path="/models/pretrained_eres2netv2w24s4ep4.ckpt",  # Pro/Plus only
+    language="zh_CN",  # optional UI locale; inference language labels stay stable
+)
+sr, audio = tts.infer(
+    text="今日はいい天気ですね。",
+    ref_audio_path="/voices/reference.wav",
+    prompt_text="Matching reference transcript.",
+    text_language="日文", prompt_language="日文",
+)
+```
+
+`GPT_SOVITS_HOME` must select an upstream checkout with Pro model definitions
+and `GPT_SoVITS/eres2net/` (validated against `08d627c`). If `sv_model_path` is
+omitted, Aqua uses `GPT_SOVITS_HOME/GPT_SoVITS/pretrained_models/sv/`
+`pretrained_eres2netv2w24s4ep4.ckpt`. The speaker weight remains external; Aqua
+loads it only for Pro/Plus. Plain v2 does not need it. V2-family inference does
+not load a v3 base model or BigVGAN. Existing BERT, CNHuBERT, and text frontend
+assets are still required.
+
+Both `infer()` and `infer_stream()` accept these models. The main reference's
+speaker embedding is cached per session; additional references receive matched
+spectra and speaker embeddings. V2-family streaming decodes each text segment
+before splitting its audio into output chunks. `chunk_size_seconds` controls
+transport chunks, not incremental semantic or acoustic decoding. T2S static KV,
+CUDA Graph, and optional FlashAttention remain available; v3 CFM/BigVGAN options
+such as `sample_steps` do not accelerate v2-family decoding.
+
+For the server, add `--sv-model /models/pretrained_eres2netv2w24s4ep4.ckpt` to
+`python -m aquatts.server --gpt-model ... --sovits-model ...`. `/tts` returns mono
+float32 PCM with the actual `X-Sample-Rate`; `/tts/file` records that same rate in
+the WAV header (normally 32 kHz for v2-family weights, 24 kHz for v3). Streaming
+failures propagate instead of being replaced with a silent audio block.
+
+See [the model validation report](benchmarks/results/v2-model-support.md) for
+exact tested weights and limits. This change adds no MPS or ROCm support.
 
 ## Supported Languages
 
-Aqua-TTS inherits GPT-SoVITS v3's language support. Pass the code to `text_language` / `prompt_language` — reference audio and target text can use different languages.
+Aqua-TTS uses the selected GPT-SoVITS checkpoint's text frontend. Pass the code to `text_language` / `prompt_language` — reference audio and target text can use different languages.
 
 | Language | Code |
 |---|---|

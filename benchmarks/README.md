@@ -149,3 +149,47 @@ python benchmarks/bigvgan_raw_bench.py
 The raw benchmark measures only the fp16 BigVGAN forward pass. Warm each mel
 shape first, synchronize immediately around measured calls, and report medians
 for mel lengths representative of first chunks and full utterances.
+
+## Real-weight model compatibility
+
+`model_smoke.py` checks actual checkpoint loading, non-streaming output, and
+18 streaming trials (three Japanese/English texts × two seeds × dynamic/static/
+CUDA Graph). It rejects silent/error fallback, checks output rate and finite
+PCM, verifies actual graph replay, and verifies that Pro's main speaker reference
+is encoded only once. `--flash` additionally requires active FlashAttention.
+Use one process per model; weights and references are not included.
+
+Create a local JSON config (absolute paths recommended):
+
+```json
+{
+  "expected_version": "v2ProPlus",
+  "inferencer": {
+    "device": "cuda",
+    "gpt_path": "/models/voice.ckpt",
+    "sovits_path": "/models/voice.pth",
+    "sv_model_path": "/models/pretrained_eres2netv2w24s4ep4.ckpt",
+    "bert_path": "/models/chinese-roberta-wwm-ext-large",
+    "cnhubert_path": "/models/chinese-hubert-base",
+    "fast_langdetect_path": "/models/fast_langdetect"
+  },
+  "reference": {
+    "ref_audio_path": "/voices/reference.wav",
+    "prompt_text": "Matching reference transcript.",
+    "prompt_language": "日文"
+  }
+}
+```
+
+```bash
+GPT_SOVITS_HOME=/path/to/GPT-SoVITS python benchmarks/model_smoke.py \
+  --config /path/to/local-config.json --output /path/to/local-results
+```
+
+The optional `texts` config field accepts a list of `text`/`text_language`
+objects, for example to test Chinese using already-installed upstream G2PW
+assets. Documented language labels are accepted independently of the UI locale.
+V3 needs its BigVGAN directory and, for LoRA weights, its base SoVITS checkpoint.
+Reports include checkpoint SHA-256 identities and timing observations, not a
+controlled performance or perceptual-quality comparison. Keep audio and configs
+local. See [the recorded validation](results/v2-model-support.md).

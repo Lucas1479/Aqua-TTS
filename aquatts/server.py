@@ -8,7 +8,7 @@ Usage / 用法::
 Endpoints / 端点
 ---------
 GET  /health           — model load status / 模型加载状态
-POST /tts              — text to speech (streaming audio/wav response) / 文本转语音（流式音频/wav 响应）
+POST /tts              — text to speech (float32 PCM stream) / 文本转语音（float32 PCM 流）
 POST /tts/file         — text to speech (downloadable .wav file) / 文本转语音（可下载 .wav 文件）
 GET  /presets          — list available generation presets / 列出可用的生成预设
 GET  /voices           — list registered voices / 列出已注册的声音
@@ -182,12 +182,12 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
         prompt_language: str = Query("日文"),
         preset: Optional[str] = Query(None, description="Quality preset: fast, balanced, quality / 质量预设：快速、均衡、高质量"),
     ):
-        """Streaming TTS — returns audio/wav chunks as they are generated.
-        / 流式 TTS — 在生成音频/wav 块的同时实时返回。
+        """Streaming TTS — returns mono float32 PCM with its actual sample rate.
+        / 流式 TTS — 返回单声道 float32 PCM，并在响应头中提供实际采样率。
 
-        Yields PCM audio chunks as multipart stream. Low TTFP (time-to-first-packet)
+        Yields raw PCM audio chunks. Low TTFP (time-to-first-packet)
         due to Aqua CUDA Graph + static KV cache optimizations.
-        / 以多部分流的形式生成 PCM 音频块。利用 Aqua CUDA Graph + 静态 KV 缓存优化，
+        / 流式生成原始 PCM 音频块。利用 Aqua CUDA Graph + 静态 KV 缓存优化，
         实现低首包延迟 (TTFP)。
         """
         _check_auth(request)
@@ -204,17 +204,36 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
         if not resolved_path or not resolved_path.strip():
             raise HTTPException(400, "ref_audio_path or voice is required")
 
+        from starlette.concurrency import run_in_threadpool
+        from starlette.background import BackgroundTask
+
+        stream = iter(inferencer.infer_stream(
+            text=text,
+            ref_audio_path=resolved_path,
+            prompt_text=resolved_prompt_text,
+            text_language=text_language,
+            prompt_language=resolved_prompt_lang,
+            preset=preset,
+            how_to_cut="不切",
+        ))
+        try:
+            # Aqua yields rate metadata before synthesis. Also support callers
+            # whose first event already contains audio, without discarding it.
+            first = await run_in_threadpool(next, stream, None)
+            if first is None:
+                raise ValueError("No audio generated")
+            sample_rate = int(first[0])
+        except Exception as exc:
+            stream.close()
+            raise HTTPException(500, str(exc)) from exc
+
         def _generate():
+            from itertools import chain
+
             try:
-                for sr, chunk, _text in inferencer.infer_stream(
-                    text=text,
-                    ref_audio_path=resolved_path,
-                    prompt_text=resolved_prompt_text,
-                    text_language=text_language,
-                    prompt_language=resolved_prompt_lang,
-                    preset=preset,
-                    how_to_cut="不切",
-                ):
+                for sr, chunk, _text in chain((first,), stream):
+                    if sr != sample_rate:
+                        raise ValueError("Sample rate changed during a PCM stream")
                     if chunk is not None and len(chunk) > 0:
                         yield (
                             chunk.astype(np.float32).tobytes()
@@ -224,15 +243,18 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
             except Exception as exc:
                 logger.error(f"TTS stream error: {exc}")
                 raise
+            finally:
+                stream.close()
 
         return StreamingResponse(
             _generate(),
             media_type="application/octet-stream",
             headers={
-                "X-Sample-Rate": "24000",
+                "X-Sample-Rate": str(sample_rate),
                 "X-Channels": "1",
                 "X-Dtype": "float32",
             },
+            background=BackgroundTask(stream.close),
         )
 
     @app.post("/tts/file")
@@ -345,6 +367,7 @@ def _main():
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--gpt-model", required=True, help="Path to GPT T2S checkpoint (.ckpt)")
     parser.add_argument("--sovits-model", required=True, help="Path to SoVITS checkpoint (.pth)")
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--cuda-graph-preset", default="full",
                         choices=["full", "minimal", "lazy", "off"],
                         help="CUDA Graph capture strategy")
@@ -376,6 +399,7 @@ def _main():
         device=args.device,
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
+        sv_model_path=args.sv_model,
         cuda_graph_preset=args.cuda_graph_preset,
     )
     logger.info("TTS pipeline ready.")
