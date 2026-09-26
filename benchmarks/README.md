@@ -193,3 +193,29 @@ V3 needs its BigVGAN directory and, for LoRA weights, its base SoVITS checkpoint
 Reports include checkpoint SHA-256 identities and timing observations, not a
 controlled performance or perceptual-quality comparison. Keep audio and configs
 local. See [the recorded validation](results/v2-model-support.md).
+
+## Additional v2-family latency benchmarks
+
+`model_latency.py` uses the same local config as `model_smoke.py` and the existing
+short/medium/long TTFP texts. Run each engine in a fresh process:
+
+```powershell
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine upstream --output F:\local\upstream.json
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine sdpa --output F:\local\sdpa.json
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine flash --output F:\local\flash.json
+```
+
+The upstream variant leaves native T2S unpatched but shares Aqua's frontend,
+reference cache, semantic guard and SoVITS decoder. The other variants use CUDA
+Graph with SDPA or FA2 `valid`; the FA2 benchmark fails on kernel fallback.
+Two warmup utterances precede five seeded repeats per text. Results retain all
+repeats, including first-shape initialization, and report median first audio,
+total generation time, audio duration and RTF. The configured segmentation is
+`按标点符号切`, output chunks are 0.25 s, and inter-segment pauses are 0.3 s.
+This is model-side latency, excluding sound-device playback.
+
+The [additional v2-family results](results/v2-model-latency.md) supplement the
+existing v3 and mobile-GPU measurements above. Model/voice weights differ across
+families; comparisons should be made between engines within one checkpoint pair.
+Floating-point backend differences can change sampled tokens even with paired
+seeds, so the report also includes semantic hashes and per-trial audio durations.

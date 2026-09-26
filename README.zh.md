@@ -75,6 +75,29 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 > **定位说明** — Aqua-TTS 是上游 GPT-SoVITS **v2、v2Pro、v2ProPlus、v3** 的优化层（保留原有 v1 路径）。它加载所选上游的 `Text2SemanticDecoder`，验证兼容契约，并且只替换直接 `infer_panel()` 路径；上游 batching/streaming 入口保持原样。不兼容的上游变更会明确失败。当前不支持 GPT-SoVITS v4。
 
+## 新增：v2 系列性能基准
+
+以下为**新增测量**：RTX 4070 Ti SUPER、PyTorch 2.5.1+cu121、上游 `08d627c`。
+在两条文本预热后，每个场景使用配对随机种子测量五次，表中为模型侧首音延迟中位数。
+每组权重的三个执行方式共用相同的 Aqua 文本前端、参考缓存和 SoVITS 解码路径。
+
+| 模型 | T2S 执行方式 | 短句 / 3 字符（ms） | 中句 / 19 字符（ms） | 长句 / 64 字符（ms） |
+|---|---|---:|---:|---:|
+| v2 | Upstream T2S | 281.4 | 703.2 | 1172.5 |
+| v2 | Aqua Graph + SDPA | 194.1 | 280.3 | 406.4 |
+| v2 | Aqua Graph + FA2 | 171.9 | 223.1 | 283.1 |
+| v2Pro | Upstream T2S | 349.1 | 496.8 | 911.7 |
+| v2Pro | Aqua Graph + SDPA | 180.7 | 186.3 | 338.6 |
+| v2Pro | Aqua Graph + FA2 | 198.3 | 156.0 | 304.2 |
+| v2ProPlus | Upstream T2S | 290.5 | 546.0 | 1224.3 |
+| v2ProPlus | Aqua Graph + SDPA | 194.2 | 337.9 | 364.5 |
+| v2ProPlus | Aqua Graph + FA2 | 265.8 | 260.5 | 274.3 |
+
+v2 使用官方底模，Pro／Plus 使用本次测试的 Kurisu 微调权重；请在同一组权重内比较执行方式。
+FA2 的浮点差异可能改变采样 token，因此表中是同输入下的实测延迟，不代表固定 token 数的纯计算加速。
+v2 系列仍是按文本段解码后分块输出。[新增详细报告](benchmarks/results/v2-model-latency.md)
+提供总耗时、RTF、测量方法、原始重复值和权重身份。原有 V3／4070 Laptop 指标与表格保持不变。
+
 ## V2、V2 Pro 与 V2 Pro Plus 权重
 
 传入匹配的 GPT／SoVITS 权重组合即可。Aqua 根据 SoVITS 版本头或上游模型身份

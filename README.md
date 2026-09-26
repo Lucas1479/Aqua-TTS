@@ -84,6 +84,33 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 > **Known limitations** — Windows + CUDA is the primary tested path. Linux passes unit tests but GPU-dependent paths (CUDA Graph, BigVGAN kernel) have not been validated on Linux hardware. macOS is not supported. TTFP varies with GPU model, audio device, chunk size, and model weights — the headline TTFP numbers in this README were measured on an RTX 4070 Ti SUPER with specific v3 LoRA weights, while the RTX 4070 Laptop result covers isolated T2S AR throughput only. Neither should be treated as universal. V2-family checkpoints use their own SoVITS decoder; the v3 BigVGAN latency figures do not describe v2-family performance.
 
+## Additional v2-family benchmarks
+
+These **new measurements** use an RTX 4070 Ti SUPER, PyTorch 2.5.1+cu121 and
+upstream `08d627c`. They supplement the existing v3/mobile-GPU tables above.
+Two warmup utterances precede five paired-seed repeats per text; values are
+median model-side first-audio latency. All three engines share the same Aqua
+frontend, reference cache and SoVITS path for each checkpoint pair.
+
+| Model | T2S execution | Short / 3 chars (ms) | Medium / 19 chars (ms) | Long / 64 chars (ms) |
+|---|---|---:|---:|---:|
+| v2 | Upstream T2S | 281.4 | 703.2 | 1172.5 |
+| v2 | Aqua Graph + SDPA | 194.1 | 280.3 | 406.4 |
+| v2 | Aqua Graph + FA2 | 171.9 | 223.1 | 283.1 |
+| v2Pro | Upstream T2S | 349.1 | 496.8 | 911.7 |
+| v2Pro | Aqua Graph + SDPA | 180.7 | 186.3 | 338.6 |
+| v2Pro | Aqua Graph + FA2 | 198.3 | 156.0 | 304.2 |
+| v2ProPlus | Upstream T2S | 290.5 | 546.0 | 1224.3 |
+| v2ProPlus | Aqua Graph + SDPA | 194.2 | 337.9 | 364.5 |
+| v2ProPlus | Aqua Graph + FA2 | 265.8 | 260.5 | 274.3 |
+
+v2 uses official base weights; Pro/Plus use the tested Kurisu fine-tunes. Compare
+engines within one checkpoint pair. FA2 can produce different sampled tokens;
+these are observed same-input latencies, not fixed-token speedup claims. V2-family
+output is chunked after each text segment is decoded. See the [new detailed
+report](benchmarks/results/v2-model-latency.md) for total time, RTF, method, raw
+repeats and checkpoint identities. Existing v3 and RTX 4070 Laptop figures are unchanged.
+
 ## V2, V2 Pro, and V2 Pro Plus checkpoints
 
 Use a matching GPT/SoVITS checkpoint pair. Aqua reads the SoVITS header or

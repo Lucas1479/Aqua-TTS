@@ -1,0 +1,3269 @@
+{
+  "date": "2026-09-26",
+  "runtime_commit": "25c5b52381b3f2ec6b9bacee864b07113d4558f4",
+  "upstream_commit": "08d627c3338173c3229286d8787060d6559fe0f8",
+  "measured_trials": 135,
+  "warmup_utterances": 18,
+  "paired_semantics": [
+    {
+      "model": "v2",
+      "engine": "sdpa",
+      "matched_semantic_trials": 15,
+      "total": 15
+    },
+    {
+      "model": "v2",
+      "engine": "flash",
+      "matched_semantic_trials": 10,
+      "total": 15
+    },
+    {
+      "model": "v2Pro",
+      "engine": "sdpa",
+      "matched_semantic_trials": 15,
+      "total": 15
+    },
+    {
+      "model": "v2Pro",
+      "engine": "flash",
+      "matched_semantic_trials": 13,
+      "total": 15
+    },
+    {
+      "model": "v2ProPlus",
+      "engine": "sdpa",
+      "matched_semantic_trials": 15,
+      "total": 15
+    },
+    {
+      "model": "v2ProPlus",
+      "engine": "flash",
+      "matched_semantic_trials": 12,
+      "total": 15
+    }
+  ],
+  "results": {
+    "v2": {
+      "upstream": {
+        "model": "v2",
+        "engine": "upstream",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sovits_checkpoint": "s2G2333k.pth",
+        "model_load_seconds": 1.9565381000029447,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3135.339499996917,
+            "total_ms": 3135.5401999971946,
+            "audio_seconds": 1.76,
+            "rtf": 1.7815569318165878,
+            "sample_rate": 32000,
+            "semantic_ms": 416.34200000044075,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "45eaf8d549db1f8b89ed0c2b096f07145fffe674af3820ad36ed87a12034e377"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 685.4485000003478,
+            "total_ms": 2398.631000000023,
+            "audio_seconds": 4.04,
+            "rtf": 0.5937205445544611,
+            "sample_rate": 32000,
+            "semantic_ms": 1659.7624000023643,
+            "semantic_tokens": 94,
+            "semantic_hashes": [
+              "cfcb9c91899569ad70d01a681d634194e1cd15d90cf2d24c3e4a95f71ddbddd9",
+              "6336d72db86e93251ae7c0dc6539092f990773658dadc0056cf415bc1029d26b"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 281.4423000017996,
+              "median_total_ms": 281.69469999920693,
+              "median_audio_seconds": 1.04,
+              "median_rtf": 0.28133373015739455,
+              "median_semantic_ms": 161.76220000124886,
+              "min_first_audio_ms": 266.2499999969441,
+              "max_first_audio_ms": 421.07209999812767
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 354.316299999482,
+                "total_ms": 354.4804999983171,
+                "audio_seconds": 1.26,
+                "rtf": 0.28133373015739455,
+                "sample_rate": 32000,
+                "semantic_ms": 211.57020000100601,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "3a6a6080eeea70b61d3c6fd8b3b28a2c6438fc7a2a4120bb1e0f3561285fb749"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 421.07209999812767,
+                "total_ms": 421.24669999975595,
+                "audio_seconds": 1.62,
+                "rtf": 0.26002882716034315,
+                "sample_rate": 32000,
+                "semantic_ms": 295.9966999987955,
+                "semantic_tokens": 36,
+                "semantic_hashes": [
+                  "ce70b243c5d929e3c774442db73fca7c00b31337449ad9412fb50ed4d9f56466"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 280.259200000728,
+                "total_ms": 280.52480000042124,
+                "audio_seconds": 1.04,
+                "rtf": 0.26973538461578966,
+                "sample_rate": 32000,
+                "semantic_ms": 158.97939999922528,
+                "semantic_tokens": 20,
+                "semantic_hashes": [
+                  "568df50c6677b14e062f92a15a3eb993959769d7dd911ef9627ef8cfa2bc2843"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 266.2499999969441,
+                "total_ms": 266.48539999951026,
+                "audio_seconds": 0.9,
+                "rtf": 0.29609488888834473,
+                "sample_rate": 32000,
+                "semantic_ms": 135.53170000159298,
+                "semantic_tokens": 16,
+                "semantic_hashes": [
+                  "16966c29a12eace3874136484b63da42a1df92d44c8c22faaf94a556e62a0c1b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 281.4423000017996,
+                "total_ms": 281.69469999920693,
+                "audio_seconds": 1.0,
+                "rtf": 0.28169469999920693,
+                "sample_rate": 32000,
+                "semantic_ms": 161.76220000124886,
+                "semantic_tokens": 19,
+                "semantic_hashes": [
+                  "063b6c26df58236af2bbc02b3c7aca7c578e7abb592cca00400cda6a026a386b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 703.2340000005206,
+              "median_total_ms": 1085.267099999328,
+              "median_audio_seconds": 4.22,
+              "median_rtf": 0.260790785123691,
+              "median_semantic_ms": 845.6346999955713,
+              "min_first_audio_ms": 493.9410000006319,
+              "max_first_audio_ms": 752.6642999982869
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 703.2340000005206,
+                "total_ms": 1085.267099999328,
+                "audio_seconds": 3.96,
+                "rtf": 0.2740573484846788,
+                "sample_rate": 32000,
+                "semantic_ms": 845.6346999955713,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "eea961c59c7d5daba0f371635ff36095c670766005bbeecb17c6678c84fa653d",
+                  "abcc365c895dd48ca4401af3d5040eac1003a1dc8ea0c55ee8a1b2bf8fc1253a"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 591.1868000002869,
+                "total_ms": 946.0284000015236,
+                "audio_seconds": 4.22,
+                "rtf": 0.224177345971925,
+                "sample_rate": 32000,
+                "semantic_ms": 778.6668999979156,
+                "semantic_tokens": 99,
+                "semantic_hashes": [
+                  "36d374b4fc77f5cefdce56e9d5361e5d7f35d1481d16b14fb11a33c5a6bc4222",
+                  "17d78910d3b5be3fffbcd7fad27fb9c5cfc0237bd1aa80bdb855af8bcfbb0f3c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 493.9410000006319,
+                "total_ms": 875.1703000016278,
+                "audio_seconds": 3.74,
+                "rtf": 0.2340027540111304,
+                "sample_rate": 32000,
+                "semantic_ms": 680.1568000009866,
+                "semantic_tokens": 86,
+                "semantic_hashes": [
+                  "53a7054179f591299e2e6217ee3375bef968bc23e8590ce674e7e0f48368d4e3",
+                  "465c03a2c899b8bd173d1a8de0529d02a35715287efffa0d003f8517151a8c4d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 752.6642999982869,
+                "total_ms": 1254.1407999997318,
+                "audio_seconds": 4.7,
+                "rtf": 0.2668384680850493,
+                "sample_rate": 32000,
+                "semantic_ms": 969.4010999992315,
+                "semantic_tokens": 112,
+                "semantic_hashes": [
+                  "1a196cc3c7de779a64ce0cf9c75de51b021e90fc23025793750ed64cf026c82d",
+                  "2e556511e4e30ce5c6d4f6bf7cbc0cf1361957e230d73993a984a84cd8209b4d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 707.9728999997315,
+                "total_ms": 1262.2273999986646,
+                "audio_seconds": 4.84,
+                "rtf": 0.260790785123691,
+                "sample_rate": 32000,
+                "semantic_ms": 959.0545999999449,
+                "semantic_tokens": 116,
+                "semantic_hashes": [
+                  "f8312d4624f8deff77de295005220211a8167d8bdc89d2f778e40fe8dd39bcbd",
+                  "9b17b0ec2ad78841488f53fc5d0d0c930aef7ba09db9d2a7fd91705225e4820d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 1172.505700000329,
+              "median_total_ms": 2484.9764999999024,
+              "median_audio_seconds": 9.82,
+              "median_rtf": 0.25825371767221694,
+              "median_semantic_ms": 2193.4211000007053,
+              "min_first_audio_ms": 1164.3057000001136,
+              "max_first_audio_ms": 1371.3331000035396
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 1371.3331000035396,
+                "total_ms": 2652.4985000032757,
+                "audio_seconds": 9.86,
+                "rtf": 0.2690160750510422,
+                "sample_rate": 32000,
+                "semantic_ms": 2323.572500001319,
+                "semantic_tokens": 254,
+                "semantic_hashes": [
+                  "536d62bacfc65c986908c08a2a68f43f2d65e399ef5a2a4117cb10cd3e6ea24b",
+                  "82d71e797f87f20c6a932621b1a8c14f8e160ec89c42add54b639ef456f9c760"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 1164.3057000001136,
+                "total_ms": 2360.446899998351,
+                "audio_seconds": 9.92,
+                "rtf": 0.2379482762095112,
+                "sample_rate": 32000,
+                "semantic_ms": 2181.7038000008324,
+                "semantic_tokens": 256,
+                "semantic_hashes": [
+                  "36f29effd26a8cb97d9330e4038c5f2a79746db75afe0d3115ca1a7a468fe687",
+                  "bacb2b545abff2c53e1675515a2d193b2d2df71d1aa0a3625900746581151146"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 1172.505700000329,
+                "total_ms": 2484.9764999999024,
+                "audio_seconds": 9.68,
+                "rtf": 0.2567124483470974,
+                "sample_rate": 32000,
+                "semantic_ms": 2193.4211000007053,
+                "semantic_tokens": 249,
+                "semantic_hashes": [
+                  "25c34c40fb2fb41aaebaaf413899a411bc6e5b09b9e7e1217141ed0bb7454fa2",
+                  "d302b061dd09e1ddef173ae0be7c1a8095c86e7764e34557af241817815a7a95"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 1166.0430999982054,
+                "total_ms": 2396.594499998173,
+                "audio_seconds": 9.28,
+                "rtf": 0.25825371767221694,
+                "sample_rate": 32000,
+                "semantic_ms": 2150.7718000029854,
+                "semantic_tokens": 238,
+                "semantic_hashes": [
+                  "8a315fa0fd9e50d01fe1c603b37f40a1ffddfe305f68233af83765c0d15d6e11",
+                  "8ed134307c88eaee7ec30eb7d17c218fda0f62c782620e1a376862674a205123"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 1368.866299999354,
+                "total_ms": 2803.6560000000463,
+                "audio_seconds": 9.82,
+                "rtf": 0.28550468431772363,
+                "sample_rate": 32000,
+                "semantic_ms": 2430.172300002596,
+                "semantic_tokens": 253,
+                "semantic_hashes": [
+                  "ad50c0cd449389537f80a3d6697e3c225a513c93c1461b78f2d9ad0b33c7a643",
+                  "fdbf2adf1598a830cd961b22a5330b66abdb37e2a3d91708014f571cf2fcfdae"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "sdpa": {
+        "model": "v2",
+        "engine": "sdpa",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sovits_checkpoint": "s2G2333k.pth",
+        "model_load_seconds": 2.0465029000006325,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3144.039899998461,
+            "total_ms": 3144.2669999996724,
+            "audio_seconds": 1.76,
+            "rtf": 1.7865153409089047,
+            "sample_rate": 32000,
+            "semantic_ms": 576.461399999971,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "45eaf8d549db1f8b89ed0c2b096f07145fffe674af3820ad36ed87a12034e377"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 386.5738999993482,
+            "total_ms": 903.5216000011133,
+            "audio_seconds": 4.04,
+            "rtf": 0.22364396039631515,
+            "sample_rate": 32000,
+            "semantic_ms": 241.14060000283644,
+            "semantic_tokens": 94,
+            "semantic_hashes": [
+              "cfcb9c91899569ad70d01a681d634194e1cd15d90cf2d24c3e4a95f71ddbddd9",
+              "6336d72db86e93251ae7c0dc6539092f990773658dadc0056cf415bc1029d26b"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 194.0753000017139,
+              "median_total_ms": 194.25980000232812,
+              "median_audio_seconds": 1.04,
+              "median_rtf": 0.19425980000232812,
+              "median_semantic_ms": 59.05910000001313,
+              "min_first_audio_ms": 190.70819999978994,
+              "max_first_audio_ms": 504.37220000094385
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 504.37220000094385,
+                "total_ms": 504.54610000087996,
+                "audio_seconds": 1.26,
+                "rtf": 0.4004334126991111,
+                "sample_rate": 32000,
+                "semantic_ms": 385.281800001394,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "3a6a6080eeea70b61d3c6fd8b3b28a2c6438fc7a2a4120bb1e0f3561285fb749"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 207.78960000097868,
+                "total_ms": 208.01740000024438,
+                "audio_seconds": 1.62,
+                "rtf": 0.12840580246928665,
+                "sample_rate": 32000,
+                "semantic_ms": 86.41789999819594,
+                "semantic_tokens": 36,
+                "semantic_hashes": [
+                  "ce70b243c5d929e3c774442db73fca7c00b31337449ad9412fb50ed4d9f56466"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 190.70819999978994,
+                "total_ms": 190.8893999971042,
+                "audio_seconds": 1.04,
+                "rtf": 0.18354749999721556,
+                "sample_rate": 32000,
+                "semantic_ms": 53.46060000010766,
+                "semantic_tokens": 20,
+                "semantic_hashes": [
+                  "568df50c6677b14e062f92a15a3eb993959769d7dd911ef9627ef8cfa2bc2843"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 193.83270000253106,
+                "total_ms": 194.04910000230302,
+                "audio_seconds": 0.9,
+                "rtf": 0.21561011111367,
+                "sample_rate": 32000,
+                "semantic_ms": 48.071899997012224,
+                "semantic_tokens": 16,
+                "semantic_hashes": [
+                  "16966c29a12eace3874136484b63da42a1df92d44c8c22faaf94a556e62a0c1b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 194.0753000017139,
+                "total_ms": 194.25980000232812,
+                "audio_seconds": 1.0,
+                "rtf": 0.19425980000232812,
+                "sample_rate": 32000,
+                "semantic_ms": 59.05910000001313,
+                "semantic_tokens": 19,
+                "semantic_hashes": [
+                  "063b6c26df58236af2bbc02b3c7aca7c578e7abb592cca00400cda6a026a386b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 280.25309999793535,
+              "median_total_ms": 472.49530000044615,
+              "median_audio_seconds": 4.22,
+              "median_rtf": 0.11181862559238498,
+              "median_semantic_ms": 250.26519999664742,
+              "min_first_audio_ms": 179.65190000177245,
+              "max_first_audio_ms": 301.3262000022223
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 287.52910000184784,
+                "total_ms": 518.1462000000465,
+                "audio_seconds": 3.96,
+                "rtf": 0.13084500000001176,
+                "sample_rate": 32000,
+                "semantic_ms": 240.6974999976228,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "eea961c59c7d5daba0f371635ff36095c670766005bbeecb17c6678c84fa653d",
+                  "abcc365c895dd48ca4401af3d5040eac1003a1dc8ea0c55ee8a1b2bf8fc1253a"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 280.25309999793535,
+                "total_ms": 471.8745999998646,
+                "audio_seconds": 4.22,
+                "rtf": 0.11181862559238498,
+                "sample_rate": 32000,
+                "semantic_ms": 279.8737999983132,
+                "semantic_tokens": 99,
+                "semantic_hashes": [
+                  "36d374b4fc77f5cefdce56e9d5361e5d7f35d1481d16b14fb11a33c5a6bc4222",
+                  "17d78910d3b5be3fffbcd7fad27fb9c5cfc0237bd1aa80bdb855af8bcfbb0f3c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 179.65190000177245,
+                "total_ms": 381.61300000138,
+                "audio_seconds": 3.74,
+                "rtf": 0.10203556149769517,
+                "sample_rate": 32000,
+                "semantic_ms": 201.50699999794597,
+                "semantic_tokens": 86,
+                "semantic_hashes": [
+                  "53a7054179f591299e2e6217ee3375bef968bc23e8590ce674e7e0f48368d4e3",
+                  "465c03a2c899b8bd173d1a8de0529d02a35715287efffa0d003f8517151a8c4d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 261.295299998892,
+                "total_ms": 472.49530000044615,
+                "audio_seconds": 4.7,
+                "rtf": 0.10053091489371194,
+                "sample_rate": 32000,
+                "semantic_ms": 250.26519999664742,
+                "semantic_tokens": 112,
+                "semantic_hashes": [
+                  "1a196cc3c7de779a64ce0cf9c75de51b021e90fc23025793750ed64cf026c82d",
+                  "2e556511e4e30ce5c6d4f6bf7cbc0cf1361957e230d73993a984a84cd8209b4d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 301.3262000022223,
+                "total_ms": 621.8257000000449,
+                "audio_seconds": 4.84,
+                "rtf": 0.12847638429752994,
+                "sample_rate": 32000,
+                "semantic_ms": 276.347099999839,
+                "semantic_tokens": 116,
+                "semantic_hashes": [
+                  "f8312d4624f8deff77de295005220211a8167d8bdc89d2f778e40fe8dd39bcbd",
+                  "9b17b0ec2ad78841488f53fc5d0d0c930aef7ba09db9d2a7fd91705225e4820d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 406.43179999824497,
+              "median_total_ms": 899.13610000076,
+              "median_audio_seconds": 9.82,
+              "median_rtf": 0.09409948275858902,
+              "median_semantic_ms": 612.2586999990745,
+              "min_first_audio_ms": 401.0543999975198,
+              "max_first_audio_ms": 845.4961999996158
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 845.4961999996158,
+                "total_ms": 1632.842700000765,
+                "audio_seconds": 9.86,
+                "rtf": 0.1656027079108281,
+                "sample_rate": 32000,
+                "semantic_ms": 1371.0828000002948,
+                "semantic_tokens": 254,
+                "semantic_hashes": [
+                  "536d62bacfc65c986908c08a2a68f43f2d65e399ef5a2a4117cb10cd3e6ea24b",
+                  "82d71e797f87f20c6a932621b1a8c14f8e160ec89c42add54b639ef456f9c760"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 403.56120000069495,
+                "total_ms": 790.4017000000749,
+                "audio_seconds": 9.92,
+                "rtf": 0.079677590725814,
+                "sample_rate": 32000,
+                "semantic_ms": 612.2586999990745,
+                "semantic_tokens": 256,
+                "semantic_hashes": [
+                  "36f29effd26a8cb97d9330e4038c5f2a79746db75afe0d3115ca1a7a468fe687",
+                  "bacb2b545abff2c53e1675515a2d193b2d2df71d1aa0a3625900746581151146"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 414.43340000114404,
+                "total_ms": 934.8207000002731,
+                "audio_seconds": 9.68,
+                "rtf": 0.09657238636366458,
+                "sample_rate": 32000,
+                "semantic_ms": 609.5415000017965,
+                "semantic_tokens": 249,
+                "semantic_hashes": [
+                  "25c34c40fb2fb41aaebaaf413899a411bc6e5b09b9e7e1217141ed0bb7454fa2",
+                  "d302b061dd09e1ddef173ae0be7c1a8095c86e7764e34557af241817815a7a95"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 401.0543999975198,
+                "total_ms": 873.2431999997061,
+                "audio_seconds": 9.28,
+                "rtf": 0.09409948275858902,
+                "sample_rate": 32000,
+                "semantic_ms": 570.7817000002251,
+                "semantic_tokens": 238,
+                "semantic_hashes": [
+                  "8a315fa0fd9e50d01fe1c603b37f40a1ffddfe305f68233af83765c0d15d6e11",
+                  "8ed134307c88eaee7ec30eb7d17c218fda0f62c782620e1a376862674a205123"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 406.43179999824497,
+                "total_ms": 899.13610000076,
+                "audio_seconds": 9.82,
+                "rtf": 0.09156172097767414,
+                "sample_rate": 32000,
+                "semantic_ms": 623.0872999985877,
+                "semantic_tokens": 253,
+                "semantic_hashes": [
+                  "ad50c0cd449389537f80a3d6697e3c225a513c93c1461b78f2d9ad0b33c7a643",
+                  "fdbf2adf1598a830cd961b22a5330b66abdb37e2a3d91708014f571cf2fcfdae"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "flash": {
+        "model": "v2",
+        "engine": "flash",
+        "flash_fallback_forbidden": true,
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sovits_checkpoint": "s2G2333k.pth",
+        "model_load_seconds": 1.778697400000965,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 2766.1781999995583,
+            "total_ms": 2766.431799998827,
+            "audio_seconds": 1.76,
+            "rtf": 1.5718362499993335,
+            "sample_rate": 32000,
+            "semantic_ms": 465.74099999998,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "45eaf8d549db1f8b89ed0c2b096f07145fffe674af3820ad36ed87a12034e377"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 316.0500000012689,
+            "total_ms": 789.0588999980537,
+            "audio_seconds": 4.04,
+            "rtf": 0.19531160891040933,
+            "sample_rate": 32000,
+            "semantic_ms": 188.77609999617562,
+            "semantic_tokens": 94,
+            "semantic_hashes": [
+              "cfcb9c91899569ad70d01a681d634194e1cd15d90cf2d24c3e4a95f71ddbddd9",
+              "6336d72db86e93251ae7c0dc6539092f990773658dadc0056cf415bc1029d26b"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 171.91539999839733,
+              "median_total_ms": 172.14139999850886,
+              "median_audio_seconds": 1.04,
+              "median_rtf": 0.16698461538278653,
+              "median_semantic_ms": 52.97910000081174,
+              "min_first_audio_ms": 156.74700000090525,
+              "max_first_audio_ms": 436.57140000141226
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 436.57140000141226,
+                "total_ms": 436.78709999949206,
+                "audio_seconds": 1.26,
+                "rtf": 0.34665642857102547,
+                "sample_rate": 32000,
+                "semantic_ms": 334.50960000118357,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "3a6a6080eeea70b61d3c6fd8b3b28a2c6438fc7a2a4120bb1e0f3561285fb749"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 171.91539999839733,
+                "total_ms": 172.14139999850886,
+                "audio_seconds": 1.62,
+                "rtf": 0.10626012345586966,
+                "sample_rate": 32000,
+                "semantic_ms": 64.51349999770173,
+                "semantic_tokens": 36,
+                "semantic_hashes": [
+                  "ce70b243c5d929e3c774442db73fca7c00b31337449ad9412fb50ed4d9f56466"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 173.43569999866304,
+                "total_ms": 173.663999998098,
+                "audio_seconds": 1.04,
+                "rtf": 0.16698461538278653,
+                "sample_rate": 32000,
+                "semantic_ms": 52.97910000081174,
+                "semantic_tokens": 20,
+                "semantic_hashes": [
+                  "568df50c6677b14e062f92a15a3eb993959769d7dd911ef9627ef8cfa2bc2843"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 156.74700000090525,
+                "total_ms": 156.94160000202828,
+                "audio_seconds": 0.9,
+                "rtf": 0.1743795555578092,
+                "sample_rate": 32000,
+                "semantic_ms": 38.00559999945108,
+                "semantic_tokens": 16,
+                "semantic_hashes": [
+                  "16966c29a12eace3874136484b63da42a1df92d44c8c22faaf94a556e62a0c1b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 162.77639999680105,
+                "total_ms": 163.0089999998745,
+                "audio_seconds": 1.0,
+                "rtf": 0.1630089999998745,
+                "sample_rate": 32000,
+                "semantic_ms": 45.46180000033928,
+                "semantic_tokens": 19,
+                "semantic_hashes": [
+                  "063b6c26df58236af2bbc02b3c7aca7c578e7abb592cca00400cda6a026a386b"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 223.11479999916628,
+              "median_total_ms": 384.56629999927827,
+              "median_audio_seconds": 4.22,
+              "median_rtf": 0.0919462127661818,
+              "median_semantic_ms": 172.5479999986419,
+              "min_first_audio_ms": 146.96620000177063,
+              "max_first_audio_ms": 247.964399997727
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 223.11479999916628,
+                "total_ms": 384.56629999927827,
+                "audio_seconds": 3.96,
+                "rtf": 0.09711270202001977,
+                "sample_rate": 32000,
+                "semantic_ms": 163.22129999753088,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "eea961c59c7d5daba0f371635ff36095c670766005bbeecb17c6678c84fa653d",
+                  "abcc365c895dd48ca4401af3d5040eac1003a1dc8ea0c55ee8a1b2bf8fc1253a"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 216.78700000120443,
+                "total_ms": 327.42420000067796,
+                "audio_seconds": 4.22,
+                "rtf": 0.07758867298594264,
+                "sample_rate": 32000,
+                "semantic_ms": 172.5479999986419,
+                "semantic_tokens": 99,
+                "semantic_hashes": [
+                  "36d374b4fc77f5cefdce56e9d5361e5d7f35d1481d16b14fb11a33c5a6bc4222",
+                  "17d78910d3b5be3fffbcd7fad27fb9c5cfc0237bd1aa80bdb855af8bcfbb0f3c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 146.96620000177063,
+                "total_ms": 333.3859000013035,
+                "audio_seconds": 4.1,
+                "rtf": 0.0813136341466594,
+                "sample_rate": 32000,
+                "semantic_ms": 160.39470000032452,
+                "semantic_tokens": 96,
+                "semantic_hashes": [
+                  "53a7054179f591299e2e6217ee3375bef968bc23e8590ce674e7e0f48368d4e3",
+                  "4d41e598b37286fc3d59a0bb377c839ab2ca9c3fd66a9c3900f21fb930800c84"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 230.51480000140145,
+                "total_ms": 432.14720000105444,
+                "audio_seconds": 4.7,
+                "rtf": 0.0919462127661818,
+                "sample_rate": 32000,
+                "semantic_ms": 186.68969999998808,
+                "semantic_tokens": 112,
+                "semantic_hashes": [
+                  "1a196cc3c7de779a64ce0cf9c75de51b021e90fc23025793750ed64cf026c82d",
+                  "2e556511e4e30ce5c6d4f6bf7cbc0cf1361957e230d73993a984a84cd8209b4d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 247.964399997727,
+                "total_ms": 472.63789999851724,
+                "audio_seconds": 4.84,
+                "rtf": 0.0976524586773796,
+                "sample_rate": 32000,
+                "semantic_ms": 219.05550000155927,
+                "semantic_tokens": 116,
+                "semantic_hashes": [
+                  "f8312d4624f8deff77de295005220211a8167d8bdc89d2f778e40fe8dd39bcbd",
+                  "9b17b0ec2ad78841488f53fc5d0d0c930aef7ba09db9d2a7fd91705225e4820d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 283.1375999994634,
+              "median_total_ms": 582.2724000026938,
+              "median_audio_seconds": 9.82,
+              "median_rtf": 0.05893445344156819,
+              "median_semantic_ms": 376.21710000166786,
+              "min_first_audio_ms": 271.52529999875696,
+              "max_first_audio_ms": 635.2875000011409
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 635.2875000011409,
+                "total_ms": 1220.7524000004923,
+                "audio_seconds": 9.86,
+                "rtf": 0.12380855983777814,
+                "sample_rate": 32000,
+                "semantic_ms": 1003.05550000121,
+                "semantic_tokens": 254,
+                "semantic_hashes": [
+                  "536d62bacfc65c986908c08a2a68f43f2d65e399ef5a2a4117cb10cd3e6ea24b",
+                  "82d71e797f87f20c6a932621b1a8c14f8e160ec89c42add54b639ef456f9c760"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 286.40380000069854,
+                "total_ms": 582.2724000026938,
+                "audio_seconds": 9.88,
+                "rtf": 0.05893445344156819,
+                "sample_rate": 32000,
+                "semantic_ms": 376.21710000166786,
+                "semantic_tokens": 255,
+                "semantic_hashes": [
+                  "36f29effd26a8cb97d9330e4038c5f2a79746db75afe0d3115ca1a7a468fe687",
+                  "00c11258aefc1b313871582c810f5c27239df1e69408d6872eca106306574813"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 283.1375999994634,
+                "total_ms": 599.2420000002312,
+                "audio_seconds": 9.68,
+                "rtf": 0.061905165289280084,
+                "sample_rate": 32000,
+                "semantic_ms": 383.5514000020339,
+                "semantic_tokens": 249,
+                "semantic_hashes": [
+                  "25c34c40fb2fb41aaebaaf413899a411bc6e5b09b9e7e1217141ed0bb7454fa2",
+                  "441c3ba1726363556286b4286dfde3cf03f2d02af9108dd40f1df9e6b933839a"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 274.4860000020708,
+                "total_ms": 508.75640000231215,
+                "audio_seconds": 9.46,
+                "rtf": 0.05377974630045582,
+                "sample_rate": 32000,
+                "semantic_ms": 362.75300000124844,
+                "semantic_tokens": 243,
+                "semantic_hashes": [
+                  "8a315fa0fd9e50d01fe1c603b37f40a1ffddfe305f68233af83765c0d15d6e11",
+                  "ae24df47c16130243d0135d509642f04343a98c84d18a7c9bec84ea8a7eec4fc"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 271.52529999875696,
+                "total_ms": 566.7520999995759,
+                "audio_seconds": 9.82,
+                "rtf": 0.05771406313641302,
+                "sample_rate": 32000,
+                "semantic_ms": 367.5796999996237,
+                "semantic_tokens": 253,
+                "semantic_hashes": [
+                  "a0ecac5b853acb029b2b01bf76b52cc161b398b9c2d419bc5b0c933f25e126a7",
+                  "f4a29c4909c89cfd2dd1aec808919afc4619ed408010e5bab5be1f79b7175a0d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "v2Pro": {
+      "upstream": {
+        "model": "v2Pro",
+        "engine": "upstream",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_v2pro-e15.ckpt",
+        "sovits_checkpoint": "kurisu_v2pro.pth",
+        "model_load_seconds": 2.387369600000966,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3259.414000000106,
+            "total_ms": 3259.6174999998766,
+            "audio_seconds": 1.76,
+            "rtf": 1.8520553977272025,
+            "sample_rate": 32000,
+            "semantic_ms": 382.21580000026734,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "f247fed234ee819cd9712206a94b4c61fdfa53e181e3a7508bcef7c27032d366"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 709.0280000011262,
+            "total_ms": 1468.2849000018905,
+            "audio_seconds": 4.0,
+            "rtf": 0.3670712250004726,
+            "sample_rate": 32000,
+            "semantic_ms": 745.7096999969508,
+            "semantic_tokens": 93,
+            "semantic_hashes": [
+              "34c94215a19fd14dc15b488dc0d4a9ddbb2db0e36a5f7fe9b6704f727b023d96",
+              "f842a7ecb03ab5aa2ccb4f43a1ab7a24557552778f03212aeb473d1a66a9ec65"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 349.11989999818616,
+              "median_total_ms": 349.3071999982931,
+              "median_audio_seconds": 1.32,
+              "median_rtf": 0.24606090163779598,
+              "median_semantic_ms": 255.23919999977807,
+              "min_first_audio_ms": 300.01849999825936,
+              "max_first_audio_ms": 399.7404000001552
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 349.11989999818616,
+                "total_ms": 349.3071999982931,
+                "audio_seconds": 1.32,
+                "rtf": 0.26462666666537354,
+                "sample_rate": 32000,
+                "semantic_ms": 235.39949999758392,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "94f8addd4ba7f6e1851eebf4c6167bb5ddd2edf3b2f1f2c77fdc8a45904a8be8"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 399.7404000001552,
+                "total_ms": 399.9241000019538,
+                "audio_seconds": 1.66,
+                "rtf": 0.24091813253129746,
+                "sample_rate": 32000,
+                "semantic_ms": 284.4282999976713,
+                "semantic_tokens": 37,
+                "semantic_hashes": [
+                  "a14666723f08a7a30904fc4a66c0142cc76c2e2eac271f70002eb7f4fab59372"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 302.22260000300594,
+                "total_ms": 302.45100000320235,
+                "audio_seconds": 1.32,
+                "rtf": 0.22912954545697148,
+                "sample_rate": 32000,
+                "semantic_ms": 255.23919999977807,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "bac20770e303b4a11aba8e9dcbfb21a3a4f1ea314d1a34ba432317e711f2ee5c"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 300.01849999825936,
+                "total_ms": 300.1942999981111,
+                "audio_seconds": 1.22,
+                "rtf": 0.24606090163779598,
+                "sample_rate": 32000,
+                "semantic_ms": 194.5311000017682,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "0849b0f558b375b04e7ec0302cacb66a67d668a9922d996572a4e7ac74427130"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 376.3441999981296,
+                "total_ms": 376.52800000068964,
+                "audio_seconds": 1.5,
+                "rtf": 0.2510186666671264,
+                "sample_rate": 32000,
+                "semantic_ms": 270.57179999974323,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "f6987371312df9521d5e5386db0b5d46858aa9d61acc72249bcbb22fdd246fc9"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 496.78440000207047,
+              "median_total_ms": 856.6620000019611,
+              "median_audio_seconds": 4.0,
+              "median_rtf": 0.20692318840627083,
+              "median_semantic_ms": 701.4149999995425,
+              "min_first_audio_ms": 482.78920000302605,
+              "max_first_audio_ms": 637.9473999986658
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 496.78440000207047,
+                "total_ms": 856.6620000019611,
+                "audio_seconds": 4.14,
+                "rtf": 0.20692318840627083,
+                "sample_rate": 32000,
+                "semantic_ms": 709.3697000018437,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "cde209103916010f6ab1d25bdf295e12403e325e0112f2278a032c2993d8aaad",
+                  "6f23d568a6bf111730f7ca1e0a4b6bb5000148c11bddc96e79e046a97bf7c532"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 492.13479999889387,
+                "total_ms": 730.3603000000294,
+                "audio_seconds": 3.92,
+                "rtf": 0.18631640306123198,
+                "sample_rate": 32000,
+                "semantic_ms": 641.638499997498,
+                "semantic_tokens": 91,
+                "semantic_hashes": [
+                  "ddb4341d0e955a16098e00eb5a6acf36153d0c00dca597220effa7e40568026e",
+                  "2aba12242f22a19c3f7ab812699cc6eb676480357d029f1416c33018da5bce02"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 637.9473999986658,
+                "total_ms": 982.2741999996651,
+                "audio_seconds": 4.0,
+                "rtf": 0.24556854999991629,
+                "sample_rate": 32000,
+                "semantic_ms": 729.9386000013328,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "5e9e87811e32ae028331e287e65b9d9c5491d07dbce7de2b06058b67fb4404dc",
+                  "4310244c27d5e3d8e5169f71e54fdaf270f86956e68a73c70accba8a7a5daa95"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 543.6859999972512,
+                "total_ms": 914.4266999974207,
+                "audio_seconds": 4.0,
+                "rtf": 0.22860667499935516,
+                "sample_rate": 32000,
+                "semantic_ms": 701.4149999995425,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "6407b4c4eea7e5d0efe6056a1ad65b2d986e37801113611201e10e280144a61a",
+                  "98bc93e55e24625fc4625bf6ea792747c02b060b81fc71689472e5e3da95b2c5"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 482.78920000302605,
+                "total_ms": 769.2108000010194,
+                "audio_seconds": 4.04,
+                "rtf": 0.19039871287153945,
+                "sample_rate": 32000,
+                "semantic_ms": 676.3357999989239,
+                "semantic_tokens": 94,
+                "semantic_hashes": [
+                  "baa09811980dd77601998bb1544de8c4a53bbd3cbd664bd867ab6049fb19a547",
+                  "ea5cf3746c552d2e0bcb627a0147efc3e3aedcdfb2d811a87e2bf501a6887312"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 911.6658999992069,
+              "median_total_ms": 1888.2188000025053,
+              "median_audio_seconds": 9.54,
+              "median_rtf": 0.19397109406927038,
+              "median_semantic_ms": 1683.7449999984528,
+              "min_first_audio_ms": 869.3542999972124,
+              "max_first_audio_ms": 1230.2827999992587
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 944.7082000006048,
+                "total_ms": 1888.2188000025053,
+                "audio_seconds": 9.46,
+                "rtf": 0.1996002959833515,
+                "sample_rate": 32000,
+                "semantic_ms": 1683.7449999984528,
+                "semantic_tokens": 243,
+                "semantic_hashes": [
+                  "96d8be3309fdf13fff06bfc37737d1402b56e4dc1a2f336b8807bc5fc72f8134",
+                  "70a3308f5992421a26e8094d194fc11d57e2afd22f9eeac5673d9f8aa35673da"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 911.6658999992069,
+                "total_ms": 1897.0372999974643,
+                "audio_seconds": 9.78,
+                "rtf": 0.19397109406927038,
+                "sample_rate": 32000,
+                "semantic_ms": 1684.0975000013714,
+                "semantic_tokens": 252,
+                "semantic_hashes": [
+                  "8f012540492bf32d464e5d33e8b24311f09fc3777870d75186787f66a032746a",
+                  "413bfd6525a3023c58c2dae4372b99e56b8c87d1f8d885a53ff1f5a095d9a53d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 1230.2827999992587,
+                "total_ms": 2118.0500999980723,
+                "audio_seconds": 9.54,
+                "rtf": 0.2220178301884772,
+                "sample_rate": 32000,
+                "semantic_ms": 1961.2741999990249,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "365e448cf08cd82f26bcbfac1e2de9402401d3c53e651339d5f4a9b05bbf1a9d",
+                  "ea94de90946656fbe2031ccebc86d42b0a406f1073cd500ce9c95bb28632a344"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 869.3542999972124,
+                "total_ms": 1827.837199998612,
+                "audio_seconds": 9.6,
+                "rtf": 0.19039970833318876,
+                "sample_rate": 32000,
+                "semantic_ms": 1666.1633000003349,
+                "semantic_tokens": 247,
+                "semantic_hashes": [
+                  "092ef776edd2bd9d479d020451b1c9001f55d86c64f56f174c44f3a2a6364d71",
+                  "b7eba6923b13ea8b9e729b0b47d046cd6396d58944b5576a78526f1deb0eb747"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 876.8142000008083,
+                "total_ms": 1768.651400001545,
+                "audio_seconds": 9.4,
+                "rtf": 0.1881544042554835,
+                "sample_rate": 32000,
+                "semantic_ms": 1672.753200000443,
+                "semantic_tokens": 242,
+                "semantic_hashes": [
+                  "c14bff38c316fbdfc02b34e5311f0838b1d2c617f6cd929336db7367bcacfdfa",
+                  "b0351d8de94ccc88c47e4fca90f5ebc2e1df72d6bf0b0d0d08a413133bb76576"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "sdpa": {
+        "model": "v2Pro",
+        "engine": "sdpa",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_v2pro-e15.ckpt",
+        "sovits_checkpoint": "kurisu_v2pro.pth",
+        "model_load_seconds": 2.5026574000003166,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 2599.045999999362,
+            "total_ms": 2599.2618999989645,
+            "audio_seconds": 1.76,
+            "rtf": 1.476853352272139,
+            "sample_rate": 32000,
+            "semantic_ms": 450.52450000002864,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "f247fed234ee819cd9712206a94b4c61fdfa53e181e3a7508bcef7c27032d366"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 356.2378999995417,
+            "total_ms": 815.5933000016375,
+            "audio_seconds": 4.0,
+            "rtf": 0.20389832500040939,
+            "sample_rate": 32000,
+            "semantic_ms": 220.97110000322573,
+            "semantic_tokens": 93,
+            "semantic_hashes": [
+              "34c94215a19fd14dc15b488dc0d4a9ddbb2db0e36a5f7fe9b6704f727b023d96",
+              "f842a7ecb03ab5aa2ccb4f43a1ab7a24557552778f03212aeb473d1a66a9ec65"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 180.70129999978235,
+              "median_total_ms": 180.9161999990465,
+              "median_audio_seconds": 1.32,
+              "median_rtf": 0.12257192771051133,
+              "median_semantic_ms": 72.46890000169515,
+              "min_first_audio_ms": 114.32299999796669,
+              "max_first_audio_ms": 449.6815999991668
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 449.6815999991668,
+                "total_ms": 449.85889999952633,
+                "audio_seconds": 1.32,
+                "rtf": 0.3408021969693381,
+                "sample_rate": 32000,
+                "semantic_ms": 350.27049999916926,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "94f8addd4ba7f6e1851eebf4c6167bb5ddd2edf3b2f1f2c77fdc8a45904a8be8"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 203.196399997978,
+                "total_ms": 203.4693999994488,
+                "audio_seconds": 1.66,
+                "rtf": 0.12257192771051133,
+                "sample_rate": 32000,
+                "semantic_ms": 85.89199999914854,
+                "semantic_tokens": 37,
+                "semantic_hashes": [
+                  "a14666723f08a7a30904fc4a66c0142cc76c2e2eac271f70002eb7f4fab59372"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 114.32299999796669,
+                "total_ms": 114.49329999959446,
+                "audio_seconds": 1.32,
+                "rtf": 0.08673734848454125,
+                "sample_rate": 32000,
+                "semantic_ms": 70.5164999999397,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "bac20770e303b4a11aba8e9dcbfb21a3a4f1ea314d1a34ba432317e711f2ee5c"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 151.4376999984961,
+                "total_ms": 151.62749999944936,
+                "audio_seconds": 1.22,
+                "rtf": 0.12428483606512243,
+                "sample_rate": 32000,
+                "semantic_ms": 56.96459999671788,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "0849b0f558b375b04e7ec0302cacb66a67d668a9922d996572a4e7ac74427130"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 180.70129999978235,
+                "total_ms": 180.9161999990465,
+                "audio_seconds": 1.5,
+                "rtf": 0.12061079999936435,
+                "sample_rate": 32000,
+                "semantic_ms": 72.46890000169515,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "f6987371312df9521d5e5386db0b5d46858aa9d61acc72249bcbb22fdd246fc9"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 186.32729999808362,
+              "median_total_ms": 360.58369999955175,
+              "median_audio_seconds": 4.0,
+              "median_rtf": 0.08709751207718643,
+              "median_semantic_ms": 210.10070000193082,
+              "min_first_audio_ms": 170.75050000130432,
+              "max_first_audio_ms": 243.02780000289204
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 180.18490000031306,
+                "total_ms": 360.58369999955175,
+                "audio_seconds": 4.14,
+                "rtf": 0.08709751207718643,
+                "sample_rate": 32000,
+                "semantic_ms": 214.1561999997066,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "cde209103916010f6ab1d25bdf295e12403e325e0112f2278a032c2993d8aaad",
+                  "6f23d568a6bf111730f7ca1e0a4b6bb5000148c11bddc96e79e046a97bf7c532"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 170.75050000130432,
+                "total_ms": 284.97040000002016,
+                "audio_seconds": 3.92,
+                "rtf": 0.07269653061225004,
+                "sample_rate": 32000,
+                "semantic_ms": 195.70419999945443,
+                "semantic_tokens": 91,
+                "semantic_hashes": [
+                  "ddb4341d0e955a16098e00eb5a6acf36153d0c00dca597220effa7e40568026e",
+                  "2aba12242f22a19c3f7ab812699cc6eb676480357d029f1416c33018da5bce02"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 237.80380000243895,
+                "total_ms": 423.42740000094636,
+                "audio_seconds": 4.0,
+                "rtf": 0.10585685000023659,
+                "sample_rate": 32000,
+                "semantic_ms": 210.10070000193082,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "5e9e87811e32ae028331e287e65b9d9c5491d07dbce7de2b06058b67fb4404dc",
+                  "4310244c27d5e3d8e5169f71e54fdaf270f86956e68a73c70accba8a7a5daa95"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 243.02780000289204,
+                "total_ms": 429.9301999999443,
+                "audio_seconds": 4.0,
+                "rtf": 0.10748254999998608,
+                "sample_rate": 32000,
+                "semantic_ms": 208.24960000027204,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "6407b4c4eea7e5d0efe6056a1ad65b2d986e37801113611201e10e280144a61a",
+                  "98bc93e55e24625fc4625bf6ea792747c02b060b81fc71689472e5e3da95b2c5"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 186.32729999808362,
+                "total_ms": 316.3691999980074,
+                "audio_seconds": 4.04,
+                "rtf": 0.07830920792029886,
+                "sample_rate": 32000,
+                "semantic_ms": 217.3438999998325,
+                "semantic_tokens": 94,
+                "semantic_hashes": [
+                  "baa09811980dd77601998bb1544de8c4a53bbd3cbd664bd867ab6049fb19a547",
+                  "ea5cf3746c552d2e0bcb627a0147efc3e3aedcdfb2d811a87e2bf501a6887312"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 338.5729999972682,
+              "median_total_ms": 680.9327000009944,
+              "median_audio_seconds": 9.54,
+              "median_rtf": 0.07093048958343692,
+              "median_semantic_ms": 536.0379000012472,
+              "min_first_audio_ms": 283.64850000070874,
+              "max_first_audio_ms": 670.9735000004002
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 670.9735000004002,
+                "total_ms": 1358.8695000034932,
+                "audio_seconds": 9.46,
+                "rtf": 0.14364371035977727,
+                "sample_rate": 32000,
+                "semantic_ms": 1158.7496000029205,
+                "semantic_tokens": 243,
+                "semantic_hashes": [
+                  "96d8be3309fdf13fff06bfc37737d1402b56e4dc1a2f336b8807bc5fc72f8134",
+                  "70a3308f5992421a26e8094d194fc11d57e2afd22f9eeac5673d9f8aa35673da"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 355.54599999886705,
+                "total_ms": 780.554500001017,
+                "audio_seconds": 9.78,
+                "rtf": 0.07981129856861115,
+                "sample_rate": 32000,
+                "semantic_ms": 583.8147999966168,
+                "semantic_tokens": 252,
+                "semantic_hashes": [
+                  "8f012540492bf32d464e5d33e8b24311f09fc3777870d75186787f66a032746a",
+                  "413bfd6525a3023c58c2dae4372b99e56b8c87d1f8d885a53ff1f5a095d9a53d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 338.5729999972682,
+                "total_ms": 649.5950999997149,
+                "audio_seconds": 9.54,
+                "rtf": 0.06809172955971855,
+                "sample_rate": 32000,
+                "semantic_ms": 516.0280000018247,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "365e448cf08cd82f26bcbfac1e2de9402401d3c53e651339d5f4a9b05bbf1a9d",
+                  "ea94de90946656fbe2031ccebc86d42b0a406f1073cd500ce9c95bb28632a344"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 283.64850000070874,
+                "total_ms": 680.9327000009944,
+                "audio_seconds": 9.6,
+                "rtf": 0.07093048958343692,
+                "sample_rate": 32000,
+                "semantic_ms": 536.0379000012472,
+                "semantic_tokens": 247,
+                "semantic_hashes": [
+                  "092ef776edd2bd9d479d020451b1c9001f55d86c64f56f174c44f3a2a6364d71",
+                  "b7eba6923b13ea8b9e729b0b47d046cd6396d58944b5576a78526f1deb0eb747"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 295.5658000028052,
+                "total_ms": 610.5272000022524,
+                "audio_seconds": 9.4,
+                "rtf": 0.06494970212789919,
+                "sample_rate": 32000,
+                "semantic_ms": 523.9232999992964,
+                "semantic_tokens": 242,
+                "semantic_hashes": [
+                  "c14bff38c316fbdfc02b34e5311f0838b1d2c617f6cd929336db7367bcacfdfa",
+                  "b0351d8de94ccc88c47e4fca90f5ebc2e1df72d6bf0b0d0d08a413133bb76576"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "flash": {
+        "model": "v2Pro",
+        "engine": "flash",
+        "flash_fallback_forbidden": true,
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_v2pro-e15.ckpt",
+        "sovits_checkpoint": "kurisu_v2pro.pth",
+        "model_load_seconds": 2.6837418000031903,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 2687.1610000016517,
+            "total_ms": 2687.4214000017673,
+            "audio_seconds": 1.76,
+            "rtf": 1.5269439772737314,
+            "sample_rate": 32000,
+            "semantic_ms": 454.3200000007346,
+            "semantic_tokens": 40,
+            "semantic_hashes": [
+              "f247fed234ee819cd9712206a94b4c61fdfa53e181e3a7508bcef7c27032d366"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 341.1868000002869,
+            "total_ms": 848.5756000009133,
+            "audio_seconds": 4.0,
+            "rtf": 0.2121439000002283,
+            "sample_rate": 32000,
+            "semantic_ms": 173.70650000157184,
+            "semantic_tokens": 93,
+            "semantic_hashes": [
+              "34c94215a19fd14dc15b488dc0d4a9ddbb2db0e36a5f7fe9b6704f727b023d96",
+              "f842a7ecb03ab5aa2ccb4f43a1ab7a24557552778f03212aeb473d1a66a9ec65"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 198.29899999967893,
+              "median_total_ms": 198.51779999953578,
+              "median_audio_seconds": 1.32,
+              "median_rtf": 0.13083900000007512,
+              "median_semantic_ms": 66.16650000069058,
+              "min_first_audio_ms": 112.10099999880185,
+              "max_first_audio_ms": 463.5694999997213
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 463.5694999997213,
+                "total_ms": 463.7631000005058,
+                "audio_seconds": 1.32,
+                "rtf": 0.351335681818565,
+                "sample_rate": 32000,
+                "semantic_ms": 357.02279999895836,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "94f8addd4ba7f6e1851eebf4c6167bb5ddd2edf3b2f1f2c77fdc8a45904a8be8"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 198.7489999992249,
+                "total_ms": 198.926199998823,
+                "audio_seconds": 1.66,
+                "rtf": 0.11983506024025482,
+                "sample_rate": 32000,
+                "semantic_ms": 71.98220000282163,
+                "semantic_tokens": 37,
+                "semantic_hashes": [
+                  "a14666723f08a7a30904fc4a66c0142cc76c2e2eac271f70002eb7f4fab59372"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 112.10099999880185,
+                "total_ms": 112.27850000068429,
+                "audio_seconds": 1.32,
+                "rtf": 0.0850594696974881,
+                "sample_rate": 32000,
+                "semantic_ms": 66.16650000069058,
+                "semantic_tokens": 28,
+                "semantic_hashes": [
+                  "bac20770e303b4a11aba8e9dcbfb21a3a4f1ea314d1a34ba432317e711f2ee5c"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 198.29899999967893,
+                "total_ms": 198.51779999953578,
+                "audio_seconds": 1.22,
+                "rtf": 0.16271950819634082,
+                "sample_rate": 32000,
+                "semantic_ms": 60.20820000048843,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "0849b0f558b375b04e7ec0302cacb66a67d668a9922d996572a4e7ac74427130"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 196.08399999924586,
+                "total_ms": 196.2585000001127,
+                "audio_seconds": 1.5,
+                "rtf": 0.13083900000007512,
+                "sample_rate": 32000,
+                "semantic_ms": 63.473400001385016,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "f6987371312df9521d5e5386db0b5d46858aa9d61acc72249bcbb22fdd246fc9"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 156.0392999999749,
+              "median_total_ms": 343.65080000134185,
+              "median_audio_seconds": 4.0,
+              "median_rtf": 0.0830074396138507,
+              "median_semantic_ms": 164.94470000179717,
+              "min_first_audio_ms": 146.84950000082608,
+              "max_first_audio_ms": 292.2969999999623
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 156.0392999999749,
+                "total_ms": 343.65080000134185,
+                "audio_seconds": 4.14,
+                "rtf": 0.0830074396138507,
+                "sample_rate": 32000,
+                "semantic_ms": 173.62209999919287,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "cde209103916010f6ab1d25bdf295e12403e325e0112f2278a032c2993d8aaad",
+                  "6f23d568a6bf111730f7ca1e0a4b6bb5000148c11bddc96e79e046a97bf7c532"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 146.84950000082608,
+                "total_ms": 265.0580000008631,
+                "audio_seconds": 3.92,
+                "rtf": 0.06761683673491406,
+                "sample_rate": 32000,
+                "semantic_ms": 158.16470000208938,
+                "semantic_tokens": 91,
+                "semantic_hashes": [
+                  "ddb4341d0e955a16098e00eb5a6acf36153d0c00dca597220effa7e40568026e",
+                  "2aba12242f22a19c3f7ab812699cc6eb676480357d029f1416c33018da5bce02"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 261.30539999940083,
+                "total_ms": 490.03369999991264,
+                "audio_seconds": 4.0,
+                "rtf": 0.12250842499997816,
+                "sample_rate": 32000,
+                "semantic_ms": 170.7721999991918,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "5e9e87811e32ae028331e287e65b9d9c5491d07dbce7de2b06058b67fb4404dc",
+                  "4310244c27d5e3d8e5169f71e54fdaf270f86956e68a73c70accba8a7a5daa95"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 292.2969999999623,
+                "total_ms": 481.1224000004586,
+                "audio_seconds": 4.0,
+                "rtf": 0.12028060000011465,
+                "sample_rate": 32000,
+                "semantic_ms": 164.94470000179717,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "6407b4c4eea7e5d0efe6056a1ad65b2d986e37801113611201e10e280144a61a",
+                  "98bc93e55e24625fc4625bf6ea792747c02b060b81fc71689472e5e3da95b2c5"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 154.50199999759207,
+                "total_ms": 263.5584999989078,
+                "audio_seconds": 4.04,
+                "rtf": 0.06523725247497718,
+                "sample_rate": 32000,
+                "semantic_ms": 163.71040000376524,
+                "semantic_tokens": 94,
+                "semantic_hashes": [
+                  "baa09811980dd77601998bb1544de8c4a53bbd3cbd664bd867ab6049fb19a547",
+                  "ea5cf3746c552d2e0bcb627a0147efc3e3aedcdfb2d811a87e2bf501a6887312"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 304.2184999976598,
+              "median_total_ms": 631.935399997019,
+              "median_audio_seconds": 9.76,
+              "median_rtf": 0.06435187372678401,
+              "median_semantic_ms": 430.3675999981351,
+              "min_first_audio_ms": 259.7558999987086,
+              "max_first_audio_ms": 630.4886999969312
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 630.4886999969312,
+                "total_ms": 1280.2850999978546,
+                "audio_seconds": 9.76,
+                "rtf": 0.1311767520489605,
+                "sample_rate": 32000,
+                "semantic_ms": 1046.1944000016956,
+                "semantic_tokens": 251,
+                "semantic_hashes": [
+                  "96d8be3309fdf13fff06bfc37737d1402b56e4dc1a2f336b8807bc5fc72f8134",
+                  "d1b7f4abbf6e4e53f7f73babe41931a93657ec2cf6955e8d4ce76c4da1bdcb01"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 304.2184999976598,
+                "total_ms": 554.9699999974109,
+                "audio_seconds": 9.78,
+                "rtf": 0.05674539877274141,
+                "sample_rate": 32000,
+                "semantic_ms": 392.0686999990721,
+                "semantic_tokens": 252,
+                "semantic_hashes": [
+                  "8f012540492bf32d464e5d33e8b24311f09fc3777870d75186787f66a032746a",
+                  "413bfd6525a3023c58c2dae4372b99e56b8c87d1f8d885a53ff1f5a095d9a53d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 428.7832000009075,
+                "total_ms": 716.3713000009011,
+                "audio_seconds": 9.54,
+                "rtf": 0.07509133123699174,
+                "sample_rate": 32000,
+                "semantic_ms": 432.19200000021374,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "365e448cf08cd82f26bcbfac1e2de9402401d3c53e651339d5f4a9b05bbf1a9d",
+                  "ea94de90946656fbe2031ccebc86d42b0a406f1073cd500ce9c95bb28632a344"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 259.7558999987086,
+                "total_ms": 631.935399997019,
+                "audio_seconds": 9.82,
+                "rtf": 0.06435187372678401,
+                "sample_rate": 32000,
+                "semantic_ms": 430.3675999981351,
+                "semantic_tokens": 253,
+                "semantic_hashes": [
+                  "092ef776edd2bd9d479d020451b1c9001f55d86c64f56f174c44f3a2a6364d71",
+                  "11a6fc960ee3d565f842764d04ef6f6c15490a9c450a3e81667687e8bd2ea69d"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 290.8086999996158,
+                "total_ms": 536.5756999999576,
+                "audio_seconds": 9.4,
+                "rtf": 0.057082521276591226,
+                "sample_rate": 32000,
+                "semantic_ms": 422.5174999992305,
+                "semantic_tokens": 242,
+                "semantic_hashes": [
+                  "c14bff38c316fbdfc02b34e5311f0838b1d2c617f6cd929336db7367bcacfdfa",
+                  "b0351d8de94ccc88c47e4fca90f5ebc2e1df72d6bf0b0d0d08a413133bb76576"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "v2ProPlus": {
+      "upstream": {
+        "model": "v2ProPlus",
+        "engine": "upstream",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_crs_gpt-e100.ckpt",
+        "sovits_checkpoint": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "model_load_seconds": 2.852671399999963,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3000.6953999982215,
+            "total_ms": 3000.977599996986,
+            "audio_seconds": 2.06,
+            "rtf": 1.4567852427169834,
+            "sample_rate": 32000,
+            "semantic_ms": 432.05350000062026,
+            "semantic_tokens": 48,
+            "semantic_hashes": [
+              "939151adc8702579bbcce119a8cd5017e0db795c5587350c1f3efdb00d8395f3"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 647.5500999986252,
+            "total_ms": 1243.2640999977593,
+            "audio_seconds": 4.14,
+            "rtf": 0.30030533816371,
+            "sample_rate": 32000,
+            "semantic_ms": 676.4378000007127,
+            "semantic_tokens": 97,
+            "semantic_hashes": [
+              "9cbd54d0a810fdb89834ff34a9bbbcf10306eb9dcc2de63cedbdacd733413c77",
+              "6c42b2f686649af07289a31d17c9599f7bf6a25ca326b7a9fc461fed0d2a2e7f"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 290.4846000019461,
+              "median_total_ms": 290.73690000222996,
+              "median_audio_seconds": 1.26,
+              "median_rtf": 0.22473226666625123,
+              "median_semantic_ms": 190.5709000020579,
+              "min_first_audio_ms": 224.26410000116448,
+              "max_first_audio_ms": 336.87170000121114
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 290.4846000019461,
+                "total_ms": 290.73690000222996,
+                "audio_seconds": 1.22,
+                "rtf": 0.23830893442805734,
+                "sample_rate": 32000,
+                "semantic_ms": 187.68830000044545,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "fc0b72d27932a7da8defd8f7b28e685fcfb0dc2099213a301c6e7c23f0d9f9b5"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 327.22280000234605,
+                "total_ms": 327.3845000003348,
+                "audio_seconds": 1.26,
+                "rtf": 0.25982896825423396,
+                "sample_rate": 32000,
+                "semantic_ms": 229.88790000090376,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "abd9544d9146e08fa9b42f337d97be57ef7930e9b586eccf28d11e37b46e35b3"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 224.26410000116448,
+                "total_ms": 224.42289999889908,
+                "audio_seconds": 1.22,
+                "rtf": 0.18395319672040908,
+                "sample_rate": 32000,
+                "semantic_ms": 181.26199999824166,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "3e6bbb9ec7f1a7000b4e7a16550e0a558eb388e958180d44949dfe33ba284552"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 232.74939999828348,
+                "total_ms": 232.91470000185654,
+                "audio_seconds": 1.26,
+                "rtf": 0.18485293650940995,
+                "sample_rate": 32000,
+                "semantic_ms": 190.5709000020579,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "5df55bc1c69d2a3f2057aadde3b0a30a11dc944e6d0e3cd0af2919b94ef5ae20"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 336.87170000121114,
+                "total_ms": 337.09839999937685,
+                "audio_seconds": 1.5,
+                "rtf": 0.22473226666625123,
+                "sample_rate": 32000,
+                "semantic_ms": 240.11279999831459,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "8f83932b6db7d6195c3abbc67c94543f830a041d57ccc3f6b357c863767cf990"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 546.0161000009975,
+              "median_total_ms": 860.7381999972858,
+              "median_audio_seconds": 4.04,
+              "median_rtf": 0.21305400990031828,
+              "median_semantic_ms": 735.645900003874,
+              "min_first_audio_ms": 517.7604999989853,
+              "max_first_audio_ms": 677.3400000020047
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 517.7604999989853,
+                "total_ms": 860.7381999972858,
+                "audio_seconds": 4.04,
+                "rtf": 0.21305400990031828,
+                "sample_rate": 32000,
+                "semantic_ms": 659.8054000023694,
+                "semantic_tokens": 94,
+                "semantic_hashes": [
+                  "275d100b0887fc717f49ea9aaf5d390c39d5faf28e2a6c0274de5c997c284d99",
+                  "4e821093cd5b541badb46e7fbc75668d4204181349e5f060b6fd5abca5eca0c3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 677.3400000020047,
+                "total_ms": 997.8688000010152,
+                "audio_seconds": 4.06,
+                "rtf": 0.2457804926110875,
+                "sample_rate": 32000,
+                "semantic_ms": 798.1628000015917,
+                "semantic_tokens": 95,
+                "semantic_hashes": [
+                  "d87d78e3462acc0f28f22900ddd7eb617c1619025e661ed7e1a898ed81645231",
+                  "7ac7cd5ed923a10ad739ff9d7a2819d225f2c82781ac7d896799cfb12a9bbf18"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 546.809100000246,
+                "total_ms": 896.2181999995664,
+                "audio_seconds": 4.16,
+                "rtf": 0.21543706730758808,
+                "sample_rate": 32000,
+                "semantic_ms": 681.1960000013642,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "68ce5f490d379187932a9673e63e079ae66212d0eae19bdf1ca74ce9d02a4277",
+                  "6d05c8727252a650b04925182e7e7464bb1570da4b9ab424a8bf9e386a5b441c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 534.1516999978921,
+                "total_ms": 839.6208999984083,
+                "audio_seconds": 3.96,
+                "rtf": 0.21202547979757785,
+                "sample_rate": 32000,
+                "semantic_ms": 735.645900003874,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "659a800243d6963745ea1e48c74627fef22c72e639f3532a376d588a21600fbb",
+                  "a05097c270c984dc2eeceae6167aefbf8c9e8b5793bb4f01ae810a1c0f8e7a43"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 546.0161000009975,
+                "total_ms": 846.2629999994533,
+                "audio_seconds": 4.0,
+                "rtf": 0.21156574999986333,
+                "sample_rate": 32000,
+                "semantic_ms": 739.7606999984419,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "371a15bea36f537d92583afab53c7f460a9f7fd1e643853b56d5df414f20758e",
+                  "77d8f80aa84706f428846567de5883250cb09296f3105025a3013496964c4c79"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 1224.294399999053,
+              "median_total_ms": 2526.122999999643,
+              "median_audio_seconds": 9.56,
+              "median_rtf": 0.254649495967706,
+              "median_semantic_ms": 2254.1314999980386,
+              "min_first_audio_ms": 982.6481999989483,
+              "max_first_audio_ms": 1315.63350000215
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 982.6481999989483,
+                "total_ms": 2069.2569999991974,
+                "audio_seconds": 9.56,
+                "rtf": 0.21644947698736375,
+                "sample_rate": 32000,
+                "semantic_ms": 1816.2386000003607,
+                "semantic_tokens": 246,
+                "semantic_hashes": [
+                  "008605046e5bdf9a5d2f949c49f4369a90a6d97287479030619de5b8f7825bce",
+                  "a44bfb56fc4cff736aac29a90aacf7b7bc34887df99867b7dc5cd7c37e2ee7b4"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 1315.63350000215,
+                "total_ms": 2596.496100002696,
+                "audio_seconds": 10.04,
+                "rtf": 0.258615149402659,
+                "sample_rate": 32000,
+                "semantic_ms": 2321.969100001297,
+                "semantic_tokens": 259,
+                "semantic_hashes": [
+                  "7a4ba05651bf6df3891a503c952a9fe1f648e829e45c16cf1d5a6fd97b1fc3d2",
+                  "d2420f91cc785f9bab361d2a3fef46a964bdcd7f7a7237f1eb2ccd7300e989eb"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 1296.9152000005124,
+                "total_ms": 2676.2544000011985,
+                "audio_seconds": 9.52,
+                "rtf": 0.2811191596639915,
+                "sample_rate": 32000,
+                "semantic_ms": 2375.8534000007785,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "a929e1bf9efd03523d0e9f65dc3480fb184dcb0ce04c0c8ccc81917f6e8be9f1",
+                  "d543bb563665ddd502eb04f40d27a78829c92353e4d230a72e738810b49d4af3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 1224.294399999053,
+                "total_ms": 2526.122999999643,
+                "audio_seconds": 9.92,
+                "rtf": 0.254649495967706,
+                "sample_rate": 32000,
+                "semantic_ms": 2254.1314999980386,
+                "semantic_tokens": 256,
+                "semantic_hashes": [
+                  "da878bf3d90ffe2ba5dbb4a48a11ccebdc2b698eed8930abf607c906c87c4fe6",
+                  "798817399485bc5e93562dc405ea41587cbed3d9cc254c9f137e275be2e6a7ff"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 1139.5311999986006,
+                "total_ms": 2298.007500001404,
+                "audio_seconds": 9.32,
+                "rtf": 0.24656732832633088,
+                "sample_rate": 32000,
+                "semantic_ms": 2026.5749999998661,
+                "semantic_tokens": 239,
+                "semantic_hashes": [
+                  "677c2a6812fd74f49f5a24ef437c9a6530b68b3587c867ea483fac0d5269fc85",
+                  "810c3d98eb432896e0777863197b5d076a70f5784b90dbf6e5c136371b631baf"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "sdpa": {
+        "model": "v2ProPlus",
+        "engine": "sdpa",
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_crs_gpt-e100.ckpt",
+        "sovits_checkpoint": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "model_load_seconds": 3.1212830000004033,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3824.8325000022305,
+            "total_ms": 3825.1247000007425,
+            "audio_seconds": 2.06,
+            "rtf": 1.8568566504857973,
+            "sample_rate": 32000,
+            "semantic_ms": 518.3943999982148,
+            "semantic_tokens": 48,
+            "semantic_hashes": [
+              "939151adc8702579bbcce119a8cd5017e0db795c5587350c1f3efdb00d8395f3"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 461.2416999989364,
+            "total_ms": 1080.1623000006657,
+            "audio_seconds": 4.14,
+            "rtf": 0.26090876811610286,
+            "sample_rate": 32000,
+            "semantic_ms": 286.5769999989425,
+            "semantic_tokens": 97,
+            "semantic_hashes": [
+              "9cbd54d0a810fdb89834ff34a9bbbcf10306eb9dcc2de63cedbdacd733413c77",
+              "6c42b2f686649af07289a31d17c9599f7bf6a25ca326b7a9fc461fed0d2a2e7f"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 194.19230000130483,
+              "median_total_ms": 194.4614999993064,
+              "median_audio_seconds": 1.26,
+              "median_rtf": 0.14383526666642865,
+              "median_semantic_ms": 67.86519999877783,
+              "min_first_audio_ms": 125.52960000175517,
+              "max_first_audio_ms": 531.2793999983114
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 531.2793999983114,
+                "total_ms": 531.4529999996012,
+                "audio_seconds": 1.22,
+                "rtf": 0.4356172131144272,
+                "sample_rate": 32000,
+                "semantic_ms": 391.9836999994004,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "fc0b72d27932a7da8defd8f7b28e685fcfb0dc2099213a301c6e7c23f0d9f9b5"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 194.19230000130483,
+                "total_ms": 194.4614999993064,
+                "audio_seconds": 1.26,
+                "rtf": 0.15433452380897333,
+                "sample_rate": 32000,
+                "semantic_ms": 66.49610000022221,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "abd9544d9146e08fa9b42f337d97be57ef7930e9b586eccf28d11e37b46e35b3"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 125.52960000175517,
+                "total_ms": 125.73500000144122,
+                "audio_seconds": 1.22,
+                "rtf": 0.1030614754110174,
+                "sample_rate": 32000,
+                "semantic_ms": 67.86519999877783,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "3e6bbb9ec7f1a7000b4e7a16550e0a558eb388e958180d44949dfe33ba284552"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 126.23340000209282,
+                "total_ms": 126.44310000177938,
+                "audio_seconds": 1.26,
+                "rtf": 0.10035166666807888,
+                "sample_rate": 32000,
+                "semantic_ms": 67.03679999918677,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "5df55bc1c69d2a3f2057aadde3b0a30a11dc944e6d0e3cd0af2919b94ef5ae20"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 215.55200000148034,
+                "total_ms": 215.75289999964298,
+                "audio_seconds": 1.5,
+                "rtf": 0.14383526666642865,
+                "sample_rate": 32000,
+                "semantic_ms": 77.13370000055875,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "8f83932b6db7d6195c3abbc67c94543f830a041d57ccc3f6b357c863767cf990"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 337.9208000005747,
+              "median_total_ms": 569.9069000002055,
+              "median_audio_seconds": 4.04,
+              "median_rtf": 0.14391588383843573,
+              "median_semantic_ms": 386.5974999971513,
+              "min_first_audio_ms": 236.21260000072652,
+              "max_first_audio_ms": 400.6508999991638
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 313.43940000078874,
+                "total_ms": 507.0592000010947,
+                "audio_seconds": 4.04,
+                "rtf": 0.125509702970568,
+                "sample_rate": 32000,
+                "semantic_ms": 272.8298000038194,
+                "semantic_tokens": 94,
+                "semantic_hashes": [
+                  "275d100b0887fc717f49ea9aaf5d390c39d5faf28e2a6c0274de5c997c284d99",
+                  "4e821093cd5b541badb46e7fbc75668d4204181349e5f060b6fd5abca5eca0c3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 343.5891000008269,
+                "total_ms": 690.2638999999908,
+                "audio_seconds": 4.06,
+                "rtf": 0.1700157389162539,
+                "sample_rate": 32000,
+                "semantic_ms": 235.4315000011411,
+                "semantic_tokens": 95,
+                "semantic_hashes": [
+                  "d87d78e3462acc0f28f22900ddd7eb617c1619025e661ed7e1a898ed81645231",
+                  "7ac7cd5ed923a10ad739ff9d7a2819d225f2c82781ac7d896799cfb12a9bbf18"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 400.6508999991638,
+                "total_ms": 909.3026000009559,
+                "audio_seconds": 4.16,
+                "rtf": 0.21858235576946053,
+                "sample_rate": 32000,
+                "semantic_ms": 440.9728999999061,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "68ce5f490d379187932a9673e63e079ae66212d0eae19bdf1ca74ce9d02a4277",
+                  "6d05c8727252a650b04925182e7e7464bb1570da4b9ab424a8bf9e386a5b441c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 337.9208000005747,
+                "total_ms": 569.9069000002055,
+                "audio_seconds": 3.96,
+                "rtf": 0.14391588383843573,
+                "sample_rate": 32000,
+                "semantic_ms": 404.7214000020176,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "659a800243d6963745ea1e48c74627fef22c72e639f3532a376d588a21600fbb",
+                  "a05097c270c984dc2eeceae6167aefbf8c9e8b5793bb4f01ae810a1c0f8e7a43"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 236.21260000072652,
+                "total_ms": 523.3542999994825,
+                "audio_seconds": 4.0,
+                "rtf": 0.13083857499987062,
+                "sample_rate": 32000,
+                "semantic_ms": 386.5974999971513,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "371a15bea36f537d92583afab53c7f460a9f7fd1e643853b56d5df414f20758e",
+                  "77d8f80aa84706f428846567de5883250cb09296f3105025a3013496964c4c79"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 364.5146000017121,
+              "median_total_ms": 754.2089000016858,
+              "median_audio_seconds": 9.56,
+              "median_rtf": 0.0773913745020597,
+              "median_semantic_ms": 544.9469999985013,
+              "min_first_audio_ms": 338.0642000010994,
+              "max_first_audio_ms": 756.1870999998064
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 756.1870999998064,
+                "total_ms": 1493.5131999991427,
+                "audio_seconds": 9.56,
+                "rtf": 0.15622523012543332,
+                "sample_rate": 32000,
+                "semantic_ms": 1271.222499995929,
+                "semantic_tokens": 246,
+                "semantic_hashes": [
+                  "008605046e5bdf9a5d2f949c49f4369a90a6d97287479030619de5b8f7825bce",
+                  "a44bfb56fc4cff736aac29a90aacf7b7bc34887df99867b7dc5cd7c37e2ee7b4"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 387.97020000129123,
+                "total_ms": 777.0094000006793,
+                "audio_seconds": 10.04,
+                "rtf": 0.0773913745020597,
+                "sample_rate": 32000,
+                "semantic_ms": 576.1649000050966,
+                "semantic_tokens": 259,
+                "semantic_hashes": [
+                  "7a4ba05651bf6df3891a503c952a9fe1f648e829e45c16cf1d5a6fd97b1fc3d2",
+                  "d2420f91cc785f9bab361d2a3fef46a964bdcd7f7a7237f1eb2ccd7300e989eb"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 338.9695000005304,
+                "total_ms": 730.5754999979399,
+                "audio_seconds": 9.52,
+                "rtf": 0.07674112394936344,
+                "sample_rate": 32000,
+                "semantic_ms": 537.3408999985259,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "a929e1bf9efd03523d0e9f65dc3480fb184dcb0ce04c0c8ccc81917f6e8be9f1",
+                  "d543bb563665ddd502eb04f40d27a78829c92353e4d230a72e738810b49d4af3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 338.0642000010994,
+                "total_ms": 735.3695000019798,
+                "audio_seconds": 9.92,
+                "rtf": 0.07412998991955441,
+                "sample_rate": 32000,
+                "semantic_ms": 544.9469999985013,
+                "semantic_tokens": 256,
+                "semantic_hashes": [
+                  "da878bf3d90ffe2ba5dbb4a48a11ccebdc2b698eed8930abf607c906c87c4fe6",
+                  "798817399485bc5e93562dc405ea41587cbed3d9cc254c9f137e275be2e6a7ff"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 364.5146000017121,
+                "total_ms": 754.2089000016858,
+                "audio_seconds": 9.32,
+                "rtf": 0.08092370171691908,
+                "sample_rate": 32000,
+                "semantic_ms": 518.6779999967257,
+                "semantic_tokens": 239,
+                "semantic_hashes": [
+                  "677c2a6812fd74f49f5a24ef437c9a6530b68b3587c867ea483fac0d5269fc85",
+                  "810c3d98eb432896e0777863197b5d076a70f5784b90dbf6e5c136371b631baf"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "flash": {
+        "model": "v2ProPlus",
+        "engine": "flash",
+        "flash_fallback_forbidden": true,
+        "torch": "2.5.1+cu121",
+        "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "gpt_checkpoint": "kurisu_crs_gpt-e100.ckpt",
+        "sovits_checkpoint": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "model_load_seconds": 2.893376400003035,
+        "warmup": [
+          {
+            "seed": 20260925,
+            "first_audio_ms": 3441.2663000002794,
+            "total_ms": 3441.4722000001348,
+            "audio_seconds": 2.06,
+            "rtf": 1.6706175728155994,
+            "sample_rate": 32000,
+            "semantic_ms": 1211.1860000004526,
+            "semantic_tokens": 48,
+            "semantic_hashes": [
+              "939151adc8702579bbcce119a8cd5017e0db795c5587350c1f3efdb00d8395f3"
+            ],
+            "semantic_attempts": [
+              1
+            ]
+          },
+          {
+            "seed": 20260924,
+            "first_audio_ms": 342.5371000012092,
+            "total_ms": 840.0204000026861,
+            "audio_seconds": 4.14,
+            "rtf": 0.2029034782615184,
+            "sample_rate": 32000,
+            "semantic_ms": 175.7273000002897,
+            "semantic_tokens": 97,
+            "semantic_hashes": [
+              "9cbd54d0a810fdb89834ff34a9bbbcf10306eb9dcc2de63cedbdacd733413c77",
+              "6c42b2f686649af07289a31d17c9599f7bf6a25ca326b7a9fc461fed0d2a2e7f"
+            ],
+            "semantic_attempts": [
+              1,
+              1
+            ]
+          }
+        ],
+        "repeats": 5,
+        "chunk_seconds": 0.25,
+        "pause_seconds": 0.3,
+        "speed": 1.1,
+        "segmentation": "按标点符号切",
+        "cases": {
+          "short": {
+            "text": "実験？",
+            "characters": 3,
+            "summary": {
+              "median_first_audio_ms": 265.79750000018976,
+              "median_total_ms": 265.98329999978887,
+              "median_audio_seconds": 1.26,
+              "median_rtf": 0.1815815999992386,
+              "median_semantic_ms": 77.0568000007188,
+              "min_first_audio_ms": 137.271999999939,
+              "max_first_audio_ms": 558.917800000927
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 558.917800000927,
+                "total_ms": 559.1019000021333,
+                "audio_seconds": 1.22,
+                "rtf": 0.458280245903388,
+                "sample_rate": 32000,
+                "semantic_ms": 402.8714999985823,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "fc0b72d27932a7da8defd8f7b28e685fcfb0dc2099213a301c6e7c23f0d9f9b5"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 265.79750000018976,
+                "total_ms": 265.98329999978887,
+                "audio_seconds": 1.26,
+                "rtf": 0.21109785714268958,
+                "sample_rate": 32000,
+                "semantic_ms": 77.0568000007188,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "abd9544d9146e08fa9b42f337d97be57ef7930e9b586eccf28d11e37b46e35b3"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 137.271999999939,
+                "total_ms": 137.55120000132592,
+                "audio_seconds": 1.22,
+                "rtf": 0.11274688524698846,
+                "sample_rate": 32000,
+                "semantic_ms": 73.76259999728063,
+                "semantic_tokens": 25,
+                "semantic_hashes": [
+                  "3e6bbb9ec7f1a7000b4e7a16550e0a558eb388e958180d44949dfe33ba284552"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 145.76650000162772,
+                "total_ms": 145.99340000131633,
+                "audio_seconds": 1.26,
+                "rtf": 0.11586777777882248,
+                "sample_rate": 32000,
+                "semantic_ms": 74.49450000058278,
+                "semantic_tokens": 26,
+                "semantic_hashes": [
+                  "5df55bc1c69d2a3f2057aadde3b0a30a11dc944e6d0e3cd0af2919b94ef5ae20"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 272.1425999989151,
+                "total_ms": 272.3723999988579,
+                "audio_seconds": 1.5,
+                "rtf": 0.1815815999992386,
+                "sample_rate": 32000,
+                "semantic_ms": 84.52309999847785,
+                "semantic_tokens": 33,
+                "semantic_hashes": [
+                  "8f83932b6db7d6195c3abbc67c94543f830a041d57ccc3f6b357c863767cf990"
+                ],
+                "semantic_attempts": [
+                  1
+                ]
+              }
+            ]
+          },
+          "medium": {
+            "text": "何の実験だか気になるけど、まあいいわ。",
+            "characters": 19,
+            "summary": {
+              "median_first_audio_ms": 260.48879999871133,
+              "median_total_ms": 463.36670000164304,
+              "median_audio_seconds": 4.0,
+              "median_rtf": 0.11412972906444412,
+              "median_semantic_ms": 181.68180000429857,
+              "min_first_audio_ms": 160.48800000135088,
+              "max_first_audio_ms": 344.92840000166325
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 329.6773000001849,
+                "total_ms": 609.4680999995035,
+                "audio_seconds": 3.96,
+                "rtf": 0.15390608585846047,
+                "sample_rate": 32000,
+                "semantic_ms": 244.52239999664016,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "275d100b0887fc717f49ea9aaf5d390c39d5faf28e2a6c0274de5c997c284d99",
+                  "8debb1d03825700f1079e01757f10aec285454738675bab3ccf45b35c39b10c7"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 344.92840000166325,
+                "total_ms": 463.36670000164304,
+                "audio_seconds": 4.06,
+                "rtf": 0.11412972906444412,
+                "sample_rate": 32000,
+                "semantic_ms": 276.66259999750764,
+                "semantic_tokens": 95,
+                "semantic_hashes": [
+                  "d87d78e3462acc0f28f22900ddd7eb617c1619025e661ed7e1a898ed81645231",
+                  "7ac7cd5ed923a10ad739ff9d7a2819d225f2c82781ac7d896799cfb12a9bbf18"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 260.48879999871133,
+                "total_ms": 478.6636999997427,
+                "audio_seconds": 4.16,
+                "rtf": 0.11506338942301506,
+                "sample_rate": 32000,
+                "semantic_ms": 181.68180000429857,
+                "semantic_tokens": 97,
+                "semantic_hashes": [
+                  "68ce5f490d379187932a9673e63e079ae66212d0eae19bdf1ca74ce9d02a4277",
+                  "6d05c8727252a650b04925182e7e7464bb1570da4b9ab424a8bf9e386a5b441c"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 160.48800000135088,
+                "total_ms": 277.5842000010016,
+                "audio_seconds": 3.96,
+                "rtf": 0.07009702020227312,
+                "sample_rate": 32000,
+                "semantic_ms": 160.1146000029985,
+                "semantic_tokens": 92,
+                "semantic_hashes": [
+                  "659a800243d6963745ea1e48c74627fef22c72e639f3532a376d588a21600fbb",
+                  "1394c06b711f51b4396cd675807b364a7667d976bbb891040c8c83f7fa99cef1"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 162.53019999930984,
+                "total_ms": 277.14670000204933,
+                "audio_seconds": 4.0,
+                "rtf": 0.06928667500051233,
+                "sample_rate": 32000,
+                "semantic_ms": 164.69750000032946,
+                "semantic_tokens": 93,
+                "semantic_hashes": [
+                  "371a15bea36f537d92583afab53c7f460a9f7fd1e643853b56d5df414f20758e",
+                  "77d8f80aa84706f428846567de5883250cb09296f3105025a3013496964c4c79"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          },
+          "long": {
+            "text": "Paxosが提案ベースでメッセージフローが複雑なのに対して、Raftは明確なリーダー選出とログ複製のフェーズに分けられているわ。",
+            "characters": 64,
+            "summary": {
+              "median_first_audio_ms": 274.33550000205287,
+              "median_total_ms": 556.2759000022197,
+              "median_audio_seconds": 9.7,
+              "median_rtf": 0.05784157725320099,
+              "median_semantic_ms": 367.71890000090934,
+              "min_first_audio_ms": 263.9175000003888,
+              "max_first_audio_ms": 598.2709000018076
+            },
+            "trials": [
+              {
+                "seed": 20260926,
+                "first_audio_ms": 598.2709000018076,
+                "total_ms": 1277.7177000025404,
+                "audio_seconds": 9.7,
+                "rtf": 0.13172347422706604,
+                "sample_rate": 32000,
+                "semantic_ms": 1046.039100001508,
+                "semantic_tokens": 250,
+                "semantic_hashes": [
+                  "008605046e5bdf9a5d2f949c49f4369a90a6d97287479030619de5b8f7825bce",
+                  "c263f215b26c689090c35196c8532d958827f0a40a2dc6b857949ad7ffd2dbc3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260927,
+                "first_audio_ms": 274.33550000205287,
+                "total_ms": 556.2759000022197,
+                "audio_seconds": 10.04,
+                "rtf": 0.05540596613567926,
+                "sample_rate": 32000,
+                "semantic_ms": 417.0114000044123,
+                "semantic_tokens": 259,
+                "semantic_hashes": [
+                  "7a4ba05651bf6df3891a503c952a9fe1f648e829e45c16cf1d5a6fd97b1fc3d2",
+                  "d2420f91cc785f9bab361d2a3fef46a964bdcd7f7a7237f1eb2ccd7300e989eb"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260928,
+                "first_audio_ms": 277.33470000021043,
+                "total_ms": 558.7465999997221,
+                "audio_seconds": 9.52,
+                "rtf": 0.05869186974786997,
+                "sample_rate": 32000,
+                "semantic_ms": 360.11169999983395,
+                "semantic_tokens": 245,
+                "semantic_hashes": [
+                  "a929e1bf9efd03523d0e9f65dc3480fb184dcb0ce04c0c8ccc81917f6e8be9f1",
+                  "d543bb563665ddd502eb04f40d27a78829c92353e4d230a72e738810b49d4af3"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260929,
+                "first_audio_ms": 263.9175000003888,
+                "total_ms": 553.3056999993278,
+                "audio_seconds": 9.92,
+                "rtf": 0.05577678427412578,
+                "sample_rate": 32000,
+                "semantic_ms": 367.71890000090934,
+                "semantic_tokens": 256,
+                "semantic_hashes": [
+                  "da878bf3d90ffe2ba5dbb4a48a11ccebdc2b698eed8930abf607c906c87c4fe6",
+                  "798817399485bc5e93562dc405ea41587cbed3d9cc254c9f137e275be2e6a7ff"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "seed": 20260930,
+                "first_audio_ms": 265.2352000004612,
+                "total_ms": 539.0834999998333,
+                "audio_seconds": 9.32,
+                "rtf": 0.05784157725320099,
+                "sample_rate": 32000,
+                "semantic_ms": 345.7349000018439,
+                "semantic_tokens": 239,
+                "semantic_hashes": [
+                  "677c2a6812fd74f49f5a24ef437c9a6530b68b3587c867ea483fac0d5269fc85",
+                  "810c3d98eb432896e0777863197b5d076a70f5784b90dbf6e5c136371b631baf"
+                ],
+                "semantic_attempts": [
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

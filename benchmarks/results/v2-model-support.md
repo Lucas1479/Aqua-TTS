@@ -8,9 +8,9 @@ comparison. No MPS or ROCm validation or implementation is included.
 
 ## Results
 
-- Full local suite with the configured upstream/runtime: **145 passed, 1 skipped**.
+- Full local suite with the configured upstream/runtime: **147 passed, 1 skipped**.
   The skip is the inverse, unconfigured-upstream import test.
-- Separate environment without Torch/upstream: **91 passed, 8 skipped** using the
+- Separate environment without Torch/upstream: **93 passed, 8 skipped** using the
   model-free CI command (including HTTP and playback sample-rate tests).
 - Ruff, `git diff --check`, wheel/sdist build, and `twine check`: passed.
 - Installed wheel: imports and adapter contents checked; no checkpoints, audio,
