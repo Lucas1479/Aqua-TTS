@@ -70,6 +70,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 ## Features
 
 - **Static KV cache** — pre-allocated scatter buffers eliminate per-step `torch.cat` overhead
+- **Semantic stability guard** — rejects repeated-token collapse before the vocoder and retries once
 - **Bucketed CUDA Graph** — 15 common graph keys pre-captured across 6 configured bucket sizes, with lazy capture for uncommon shapes
 - **Cached BigVGAN CUDA extension** — NVIDIA kernel cached by GPU/Python/Torch/CUDA ABI, with torch fallback
 - **Adaptive FlashAttention2 KV cache** — `flash_attn_with_kvcache` `valid` mode is preferred automatically, with SDPA fallback
@@ -113,6 +114,7 @@ aqua-tts/
 │   │   └── torch/                 # Pure-PyTorch fallback (resample, filter, act)
 │   ├── inference/
 │   │   ├── streaming.py           # Audio post-processing (fade, chunk finalization)
+│   │   ├── semantic_stability.py  # Pre-vocoder semantic collapse admission checks
 │   │   ├── params.py              # SoVITS parameter presets
 │   │   └── presets.py             # Named presets (generation + CUDA Graph)
 │   └── _vendor/

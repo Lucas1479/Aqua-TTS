@@ -43,8 +43,15 @@ k_cache.scatter_(1, pos_idx, k)  # shape stays [B, bucket_size, hidden]
 
 - Buffer size is fixed at capture time (one of 6 bucket sizes).
 - `pos_idx` is a persistent GPU tensor updated via `fill_()` outside the graph.
-- Attention sees the full bucket — unwritten positions are 0, yielding near-zero softmax weight.
-- If generation hits the bucket boundary, a sliding window keeps the most recent tokens.
+- A persistent validity mask excludes every unwritten slot and Graph-alignment
+  gap. Zero KV is not padding: its zero logit would still receive softmax
+  weight.
+- Without Graph, SDPA slices directly to the known contiguous valid prefix.
+- FlashAttention2 `valid` and `bucket` update modes both expose only the real
+  contiguous prefix; the latter keeps its explicit scatter mechanism but no
+  longer attends the padded allocation.
+- If generation fills a bucket, Aqua preserves the complete prompt/history and
+  continues with dynamically allocated KV instead of dropping conditioning.
 
 ## Bucketed CUDA Graph
 
@@ -55,6 +62,11 @@ A CUDA Graph captures a specific tensor shape. Different prompt lengths produce 
 1. Round up the prompt KV length to the nearest stride (32) boundary.
 2. Select the smallest bucket that fits `aligned_kv + 96 generation slots`.
 3. Capture one graph per `(bucket_size, initial_len)` pair.
+
+The aligned `initial_len` is a graph-cache key only. Persistent `pos_idx` and
+the validity mask are reset from the real prompt length for each sentence.
+Warmup/capture tensors use fixed non-zero constants so graph creation does not
+advance the caller's sampling RNG.
 
 ### Bucket Design
 
@@ -257,9 +269,10 @@ This prevents the common "first request penalty" where CUDA lazy initialization,
 | `ENABLE_CUDA_GRAPH` | `1` | Enable CUDA Graph for T2S decode steps |
 | `ENABLE_CUDA_GRAPH_PRECAPTURE` | `1` | Pre-capture all bucket graphs at model load |
 | `CUDA_GRAPH_PRECAPTURE_BUCKETS` | (all) | Comma-separated bucket sizes to pre-capture |
+| `AQUATTS_SEMANTIC_GUARD` | `1` | Reject collapsed semantic candidates and retry once before vocoder work |
 | `TTS_STREAM_SYNC_TIMING` | `0` | Enable per-step CFM timing (adds GPU sync overhead) |
 | `CUDA_GRAPH_REPLAY_SYNC` | `0` | Force a device sync after each graph replay for diagnostics |
 | `AQUATTS_T2S_FLASH_ATTN` | `auto` / unset | `0` forces SDPA; `1` explicitly requests FA2; `auto`, empty, or unset prefers FA2 when importable |
-| `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FA2 reads the true KV length; `bucket` preserves padded-bucket attention |
+| `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FA2 reads the true KV length; `bucket` uses explicit scatter with the same safe valid prefix |
 | `BIGVGAN_CACHE_ROOT` | package CUDA directory | Product-owned root for ABI-keyed compiled BigVGAN extensions |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |

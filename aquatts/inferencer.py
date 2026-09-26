@@ -11,6 +11,10 @@ from string import punctuation
 import torch
 import numpy as np
 
+from aquatts.inference.semantic_stability import (
+    SemanticGenerationError,
+    assess_semantic_candidate,
+)
 from aquatts.upstream import (
     configured_gpt_sovits_home,
     upstream_t2s_model_path,
@@ -179,7 +183,8 @@ class TTSInferencer:
             use_flash_attn: Optional FlashAttention2 KV-cache decode path for T2S.
                 None means read AQUATTS_T2S_FLASH_ATTN / TTS_T2S_FLASH_ATTN,
                 then auto-enable when FlashAttention2 is available.
-            flash_attn_mode: "valid" (true KV length) or "bucket" (zero-padded bucket).
+            flash_attn_mode: "valid" (fused KV update) or "bucket" (explicit
+                scatter); both attend only the true contiguous KV prefix.
         """
         self._cuda_graph_preset = cuda_graph_preset
         self._use_flash_attn = use_flash_attn
@@ -321,6 +326,107 @@ class TTSInferencer:
             f"speed={stat['tokens_per_sec']:.0f} it/s"
         )
         return stat
+
+    @staticmethod
+    def _semantic_guard_enabled() -> bool:
+        raw = os.environ.get(
+            "AQUATTS_SEMANTIC_GUARD",
+            os.environ.get("TTS_SEMANTIC_GUARD", "1"),
+        )
+        return raw.strip().lower() not in {"0", "false", "off", "no"}
+
+    def _infer_semantic_with_guard(
+        self,
+        *,
+        text_item: str,
+        target_phone_count: int,
+        all_phoneme_ids,
+        all_phoneme_len,
+        prompt,
+        bert,
+        top_k,
+        top_p,
+        temperature,
+        effective_max_sec: float,
+        enable_cuda_graph: bool,
+        enable_static_kv: bool,
+    ):
+        """Generate one admissible semantic candidate before vocoder work."""
+
+        max_generation_tokens = int(self.hz * effective_max_sec)
+        guard_enabled = self._semantic_guard_enabled()
+        penalties = (1.35, 1.5) if guard_enabled else (1.35,)
+        last_assessment = None
+
+        for attempt, repetition_penalty in enumerate(penalties, start=1):
+            prediction, idx = self.t2s_model.model.infer_panel(
+                all_phoneme_ids,
+                all_phoneme_len,
+                prompt,
+                bert,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+                repetition_penalty=repetition_penalty,
+                early_stop_num=max_generation_tokens,
+                enable_cuda_graph=enable_cuda_graph,
+                enable_static_kv=enable_static_kv,
+            )
+            reported_count = max(0, int(idx))
+            # Upstream uses idx=0 as a ref-free sentinel even though
+            # ``prediction`` contains the complete generated sequence.
+            generated_count = (
+                reported_count
+                if reported_count
+                else int(prediction.shape[-1])
+            )
+            candidate = (
+                prediction[:, -generated_count:]
+                if generated_count
+                else prediction[:, :0]
+            )
+
+            if not guard_enabled:
+                return candidate.unsqueeze(0), generated_count, attempt
+
+            assessment = assess_semantic_candidate(
+                candidate.detach().reshape(-1).cpu().long().tolist(),
+                target_phone_count=target_phone_count,
+                max_generation_tokens=max_generation_tokens,
+            )
+            last_assessment = assessment
+            if assessment.accepted:
+                if attempt > 1:
+                    logger.info(
+                        "[semantic-guard] retry recovered text=%r tokens=%d "
+                        "penalty=%.2f",
+                        text_item[:80],
+                        assessment.token_count,
+                        repetition_penalty,
+                    )
+                return candidate.unsqueeze(0), generated_count, attempt
+
+            logger.warning(
+                "[semantic-guard] rejected attempt=%d/%d text=%r reasons=%s "
+                "tokens=%d budget=%d equal_run=%d periodic_run=%d "
+                "top_ratio=%.3f",
+                attempt,
+                len(penalties),
+                text_item[:80],
+                ",".join(assessment.reasons),
+                assessment.token_count,
+                assessment.soft_token_budget,
+                assessment.longest_equal_run,
+                assessment.longest_periodic_run,
+                assessment.top_token_ratio,
+            )
+
+        detail = "unknown"
+        if last_assessment is not None:
+            detail = ",".join(last_assessment.reasons) or "rejected"
+        raise SemanticGenerationError(
+            f"semantic generation collapsed after {len(penalties)} attempts: {detail}"
+        )
 
     def _init_language_dict(self):
         """Initialize language dictionary mappings.
@@ -1183,19 +1289,20 @@ class TTSInferencer:
                     # GPT推理
                     logger.info("执行GPT推理...")
                     with torch.no_grad():
-                        pred_semantic, idx = self.t2s_model.model.infer_panel(
-                            all_phoneme_ids,
-                            all_phoneme_len,
-                            None if ref_free else prompt,
-                            bert,
+                        pred_semantic, idx, _semantic_attempts = self._infer_semantic_with_guard(
+                            text_item=text_item,
+                            target_phone_count=len(phones2),
+                            all_phoneme_ids=all_phoneme_ids,
+                            all_phoneme_len=all_phoneme_len,
+                            prompt=None if ref_free else prompt,
+                            bert=bert,
                             top_k=top_k,
                             top_p=top_p,
                             temperature=temperature,
-                            early_stop_num=int(self.hz * effective_max_sec),
+                            effective_max_sec=effective_max_sec,
                             enable_cuda_graph=enable_cuda_graph,
                             enable_static_kv=enable_static_kv,
                         )
-                        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                         cache[i_text] = pred_semantic
 
                 # Run SoVITS decoding
@@ -1670,22 +1777,23 @@ class TTSInferencer:
                         if collect_t2s_stats:
                             self._sync_t2s_timing()
                             t2s_start = time.perf_counter()
-                        pred_semantic, idx = self.t2s_model.model.infer_panel(
-                            all_phoneme_ids,
-                            all_phoneme_len,
-                            None if ref_free else prompt,
-                            bert,
+                        pred_semantic, idx, _semantic_attempts = self._infer_semantic_with_guard(
+                            text_item=text_item,
+                            target_phone_count=len(phones2),
+                            all_phoneme_ids=all_phoneme_ids,
+                            all_phoneme_len=all_phoneme_len,
+                            prompt=None if ref_free else prompt,
+                            bert=bert,
                             top_k=top_k,
                             top_p=top_p,
                             temperature=temperature,
-                            early_stop_num=int(self.hz * effective_max_sec),
+                            effective_max_sec=effective_max_sec,
                             enable_cuda_graph=enable_cuda_graph,
                             enable_static_kv=enable_static_kv,
                         )
                         if collect_t2s_stats:
                             self._sync_t2s_timing()
                             self._record_t2s_stat(text_item, idx, time.perf_counter() - t2s_start)
-                        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
                         cache[i_text] = pred_semantic
 
                 # Run SoVITS decoding
