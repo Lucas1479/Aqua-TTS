@@ -149,3 +149,97 @@ python benchmarks/bigvgan_raw_bench.py
 The raw benchmark measures only the fp16 BigVGAN forward pass. Warm each mel
 shape first, synchronize immediately around measured calls, and report medians
 for mel lengths representative of first chunks and full utterances.
+
+## Real-weight model compatibility
+
+`model_smoke.py` checks actual checkpoint loading, non-streaming output, and
+18 streaming trials (three Japanese/English texts × two seeds × dynamic/static/
+CUDA Graph). It rejects silent/error fallback, checks output rate and finite
+PCM, verifies actual graph replay, and verifies that Pro's main speaker reference
+is encoded only once. `--flash` additionally requires active FlashAttention.
+Use one process per model; weights and references are not included.
+
+Create a local JSON config (absolute paths recommended):
+
+```json
+{
+  "expected_version": "v2ProPlus",
+  "inferencer": {
+    "device": "cuda",
+    "gpt_path": "/models/voice.ckpt",
+    "sovits_path": "/models/voice.pth",
+    "sv_model_path": "/models/pretrained_eres2netv2w24s4ep4.ckpt",
+    "bert_path": "/models/chinese-roberta-wwm-ext-large",
+    "cnhubert_path": "/models/chinese-hubert-base",
+    "fast_langdetect_path": "/models/fast_langdetect"
+  },
+  "reference": {
+    "ref_audio_path": "/voices/reference.wav",
+    "prompt_text": "Matching reference transcript.",
+    "prompt_language": "日文"
+  }
+}
+```
+
+```bash
+GPT_SOVITS_HOME=/path/to/GPT-SoVITS python benchmarks/model_smoke.py \
+  --config /path/to/local-config.json --output /path/to/local-results
+```
+
+The optional `texts` config field accepts a list of `text`/`text_language`
+objects, for example to test Chinese using already-installed upstream G2PW
+assets. Documented language labels are accepted independently of the UI locale.
+V3 needs its BigVGAN directory and, for LoRA weights, its base SoVITS checkpoint.
+Reports include checkpoint SHA-256 identities and timing observations, not a
+controlled performance or perceptual-quality comparison. Keep audio and configs
+local. See [the recorded validation](results/v2-model-support.md).
+
+## Additional v2-family latency benchmarks
+
+`model_latency.py` uses the same local config as `model_smoke.py` and the existing
+short/medium/long TTFP texts. Run each engine in a fresh process:
+
+```powershell
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine upstream --output F:\local\upstream.json
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine sdpa --output F:\local\sdpa.json
+python benchmarks/model_latency.py --config F:\local\v2ProPlus.json --engine flash --output F:\local\flash.json
+```
+
+The upstream variant leaves native T2S unpatched but shares Aqua's frontend,
+reference cache, semantic guard and SoVITS decoder. The other variants use CUDA
+Graph with SDPA or FA2 `valid`; the FA2 benchmark fails on kernel fallback.
+Two warmup utterances precede five seeded repeats per text. Results retain all
+repeats, including first-shape initialization, and report median first audio,
+total generation time, audio duration and RTF. The configured segmentation is
+`按标点符号切`, output chunks are 0.25 s, and inter-segment pauses are 0.3 s.
+This is model-side latency, excluding sound-device playback.
+
+The [additional v2-family results](results/v2-model-latency.md) supplement the
+existing v3 and mobile-GPU measurements above. Model/voice weights differ across
+families; comparisons should be made between engines within one checkpoint pair.
+Floating-point backend differences can change sampled tokens even with paired
+seeds, so the report also includes semantic hashes and per-trial audio durations.
+
+### Fixed-seed steady-state retest
+
+Use `--steady` to separate each text's first use, five fixed-seed warmups, twenty
+fixed-seed measurements, and three diagnostic runs. The measured steady trials
+disable synchronized T2S timing and validate PCM after the timer stops; the
+diagnostic runs separately time text processing, T2S and v2 acoustic decoding.
+No measured steady trial may create another CUDA Graph. P95 uses the nearest
+rank of the recorded samples, and token hashes expose workload variation.
+
+```powershell
+python benchmarks/model_latency.py --config F:/local/v2Pro.json --engine flash `
+  --steady --seed 20260926 --warmup-per-case 5 --repeats 20 --diagnostic-repeats 3 `
+  --gpu-uuid GPU-YOUR-DEVICE-UUID --telemetry-output F:/local/gpu.csv `
+  --output F:/local/steady.json
+```
+
+`nvidia-smi -L` lists physical GPU UUIDs. The UUID selects CUDA device 0 inside
+this benchmark process and records that same GPU's utilization, clocks, memory,
+power and temperature every 500 ms. Three seconds of pre-load activity are
+recorded first. The tool does not close other applications or change GPU power
+settings; telemetry therefore describes the actual desktop environment, not an
+isolated GPU. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
+the previous measurements and documents the changed measurement protocol.

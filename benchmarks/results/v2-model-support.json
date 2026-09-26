@@ -1,0 +1,2097 @@
+{
+  "date": "2026-09-26",
+  "aqua_base": "ebf45da64f6791f2f6b92d92899c8cccee44d798",
+  "upstream": "08d627c3338173c3229286d8787060d6559fe0f8",
+  "nonstream_runs": 12,
+  "stream_trials": 180,
+  "runs": [
+    {
+      "version": "v2",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 1.852763299997605,
+      "speaker_encodes": 0,
+      "graph_count": 3,
+      "last_graph_replay_steps": 119,
+      "flash_requested": false,
+      "flash_mode": null,
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.6595182999990357,
+          "total_seconds": 0.6596566999978677,
+          "chunks": 10
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 2.665396399999736,
+          "total_seconds": 2.6655697999995027,
+          "chunks": 33
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 4.653495999998995,
+          "total_seconds": 4.653528099999676,
+          "chunks": 19
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.4468151000000944,
+          "total_seconds": 0.4468562000001839,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.4945145999990928,
+          "total_seconds": 1.4945867999995244,
+          "chunks": 28
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.9786174000000756,
+          "total_seconds": 0.9787123999994947,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.5207327999996778,
+          "total_seconds": 0.5207760999983293,
+          "chunks": 10
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 1.564793200002896,
+          "total_seconds": 1.5648766000012984,
+          "chunks": 33
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.9376295000001846,
+          "total_seconds": 0.9377070000009553,
+          "chunks": 19
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.42572999999902095,
+          "total_seconds": 0.4257718000008026,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.3320779999994556,
+          "total_seconds": 1.3321615000022575,
+          "chunks": 28
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.8940298999987135,
+          "total_seconds": 0.8941097999995691,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.586651300000085,
+          "total_seconds": 0.586697800001275,
+          "chunks": 10
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 0.9500613999989582,
+          "total_seconds": 0.9501315999987128,
+          "chunks": 33
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.6603544999998121,
+          "total_seconds": 0.660405599999649,
+          "chunks": 19
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.15021659999911208,
+          "total_seconds": 0.15027529999861144,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 0.44722380000166595,
+          "total_seconds": 0.44729840000218246,
+          "chunks": 28
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.29757969999991474,
+          "total_seconds": 0.29762969999865163,
+          "chunks": 20
+        }
+      ],
+      "gpt": {
+        "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f"
+      },
+      "sovits": {
+        "name": "s2G2333k.pth",
+        "sha256": "924fdccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695"
+      },
+      "case": "v2-verified"
+    },
+    {
+      "version": "v2Pro",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.437586399999418,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 98,
+      "flash_requested": false,
+      "flash_mode": null,
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.4312237999984063,
+          "total_seconds": 0.43127259999891976,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 1.3526414999978442,
+          "total_seconds": 1.3527198000010685,
+          "chunks": 25
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 3.750031700001273,
+          "total_seconds": 3.750073999999586,
+          "chunks": 18
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.47256889999698615,
+          "total_seconds": 0.47261189999699127,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.4,
+          "first_chunk_seconds": 1.36580529999992,
+          "total_seconds": 1.365869900000689,
+          "chunks": 26
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.8003449999996519,
+          "total_seconds": 0.8003963999981352,
+          "chunks": 16
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.4587725000019418,
+          "total_seconds": 0.45881500000177766,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 1.151590199999191,
+          "total_seconds": 1.1516572000000451,
+          "chunks": 25
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 0.8384848999994574,
+          "total_seconds": 0.8385558999980276,
+          "chunks": 18
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.41915180000069086,
+          "total_seconds": 0.41919659999985015,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.4,
+          "first_chunk_seconds": 1.0978266000020085,
+          "total_seconds": 1.0978901000016776,
+          "chunks": 26
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.7825616999980411,
+          "total_seconds": 0.7826115999996546,
+          "chunks": 16
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.5670124999996915,
+          "total_seconds": 0.5670585999978357,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 0.8661234999999579,
+          "total_seconds": 0.8661901999985275,
+          "chunks": 25
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 0.6598029000015231,
+          "total_seconds": 0.6598569000016141,
+          "chunks": 18
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.16425359999993816,
+          "total_seconds": 0.16429559999960475,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.4,
+          "first_chunk_seconds": 0.4051782999995339,
+          "total_seconds": 0.4052443000000494,
+          "chunks": 26
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.2422538999999233,
+          "total_seconds": 0.2423242000004393,
+          "chunks": 16
+        }
+      ],
+      "gpt": {
+        "name": "kurisu_v2pro-e15.ckpt",
+        "sha256": "43b33267a84853056ab1df047d747b6e2c774ca10e4d95809d05c1fe7540d478"
+      },
+      "sovits": {
+        "name": "kurisu_v2pro.pth",
+        "sha256": "6d97085ec9373dacf0aa6a35656e264466cbc31bc891dbb51e6e585c9093a21c"
+      },
+      "case": "v2Pro-verified"
+    },
+    {
+      "version": "v2ProPlus",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.8072475000008126,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 119,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "kurisu_crs_gpt-e100.ckpt",
+        "sha256": "c0888c026c6d0dde3e57d2541c5361701d99079d692fb88f413b7628156418fa"
+      },
+      "sovits": {
+        "name": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "sha256": "035a0e9bba90559839c6a99a2ae1b5fa7e599a1e9b048964fc920a3de3f257a5"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.4216550000019197,
+          "total_seconds": 0.42169860000285553,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.4522476000020106,
+          "total_seconds": 1.4523131000023568,
+          "chunks": 29
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 3.6869071000000986,
+          "total_seconds": 3.686940700001287,
+          "chunks": 20
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.4455045999966387,
+          "total_seconds": 0.4455517999995209,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.2252300000000105,
+          "total_seconds": 1.2252917000005255,
+          "chunks": 29
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.7942294999993464,
+          "total_seconds": 0.7942851000007067,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.39537840000048163,
+          "total_seconds": 0.3954167000010784,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.2194278999995731,
+          "total_seconds": 1.2194968000003428,
+          "chunks": 29
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.8259628000014345,
+          "total_seconds": 0.8260140000020328,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.43390130000261706,
+          "total_seconds": 0.4339428000021144,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.1698713999976462,
+          "total_seconds": 1.16993039999943,
+          "chunks": 29
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.789778499998647,
+          "total_seconds": 0.7898280000008526,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.49711000000024796,
+          "total_seconds": 0.49716869999974733,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 0.8030173000006471,
+          "total_seconds": 0.8030882999992173,
+          "chunks": 29
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.6775822999989032,
+          "total_seconds": 0.6776628999978129,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.19532210000033956,
+          "total_seconds": 0.19537549999949988,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 0.5319287999991502,
+          "total_seconds": 0.5321059999987483,
+          "chunks": 29
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.35833629999979166,
+          "total_seconds": 0.3584287999983644,
+          "chunks": 20
+        }
+      ],
+      "case": "v2ProPlus-local"
+    },
+    {
+      "version": "v2Pro",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.2134650999978476,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 119,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f"
+      },
+      "sovits": {
+        "name": "s2Gv2Pro.pth",
+        "sha256": "0f8ead815234365edf045c6d86370ed6e4f440e8195be77ff0ea72684ad406a5"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.43587720000141417,
+          "total_seconds": 0.43595600000116974,
+          "chunks": 10
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 1.5270941999988281,
+          "total_seconds": 1.5271699000004446,
+          "chunks": 33
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 3.4469757999977446,
+          "total_seconds": 3.447015599998849,
+          "chunks": 19
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.37957920000189915,
+          "total_seconds": 0.37962700000207406,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.1639705000015965,
+          "total_seconds": 1.1640437000023667,
+          "chunks": 28
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.8662686999996367,
+          "total_seconds": 0.8663267000010819,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.40606860000116285,
+          "total_seconds": 0.4061130999980378,
+          "chunks": 10
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 1.2911872000004223,
+          "total_seconds": 1.2912536000003456,
+          "chunks": 33
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.7957833000000392,
+          "total_seconds": 0.7958372000030067,
+          "chunks": 19
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.3441908999993757,
+          "total_seconds": 0.34423709999828134,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.1586950999990222,
+          "total_seconds": 1.1587650000001304,
+          "chunks": 28
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.8100104999975883,
+          "total_seconds": 0.8100694999993721,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.5355807000014465,
+          "total_seconds": 0.5356257999992522,
+          "chunks": 10
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 0.8352703000018664,
+          "total_seconds": 0.8353485000006913,
+          "chunks": 33
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.6053489000005357,
+          "total_seconds": 0.6054100000001199,
+          "chunks": 19
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.14075429999866174,
+          "total_seconds": 0.1407995999979903,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 0.4275415999982215,
+          "total_seconds": 0.427609799997299,
+          "chunks": 28
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.2779389999996056,
+          "total_seconds": 0.2780064999969909,
+          "chunks": 20
+        }
+      ],
+      "case": "v2Pro-base-local"
+    },
+    {
+      "version": "v2ProPlus",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.5190250999985437,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 119,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f"
+      },
+      "sovits": {
+        "name": "s2Gv2ProPlus.pth",
+        "sha256": "d42a22bbbf65fb2bbdd45ad6a66841156977db45c7aabe0a6992ff378d9c7d3b"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.464795600000798,
+          "total_seconds": 0.4648508000027505,
+          "chunks": 10
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 2.2702143999995315,
+          "total_seconds": 2.2702776999976777,
+          "chunks": 33
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 3.354552299999341,
+          "total_seconds": 3.354592200001207,
+          "chunks": 19
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.43313190000117174,
+          "total_seconds": 0.4331721999988076,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.1544132999988506,
+          "total_seconds": 1.154479499997251,
+          "chunks": 28
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.8259103999989748,
+          "total_seconds": 0.8259614999988116,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.4165456000009726,
+          "total_seconds": 0.41659470000013243,
+          "chunks": 10
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 1.33491960000174,
+          "total_seconds": 1.3350113000014971,
+          "chunks": 33
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.8171622000008938,
+          "total_seconds": 0.8172205000009853,
+          "chunks": 19
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.36882519999926444,
+          "total_seconds": 0.3688670999981696,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.1811894999991637,
+          "total_seconds": 1.181277499999851,
+          "chunks": 28
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.7625980000011623,
+          "total_seconds": 0.7626706000010017,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.5062251000017568,
+          "total_seconds": 0.5062743999988015,
+          "chunks": 10
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 0.8588549999985844,
+          "total_seconds": 0.8589323999985936,
+          "chunks": 33
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.6231997000031697,
+          "total_seconds": 0.6232596000008925,
+          "chunks": 19
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.14493059999949764,
+          "total_seconds": 0.1449721999997564,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 0.4328043000023172,
+          "total_seconds": 0.43286820000139414,
+          "chunks": 28
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.2837484999981825,
+          "total_seconds": 0.283803700000135,
+          "chunks": 20
+        }
+      ],
+      "case": "v2ProPlus-base-local"
+    },
+    {
+      "version": "v3",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 24000,
+      "model_load_seconds": 113.42795660000047,
+      "speaker_encodes": 0,
+      "graph_count": 3,
+      "last_graph_replay_steps": 114,
+      "flash_requested": false,
+      "flash_mode": null,
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.1333333333333333,
+          "first_chunk_seconds": 0.5868200000004435,
+          "total_seconds": 1.7674062000005506,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 7.296,
+          "first_chunk_seconds": 1.8344980999972904,
+          "total_seconds": 6.0251637999972445,
+          "chunks": 30
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.736,
+          "first_chunk_seconds": 4.015962800000125,
+          "total_seconds": 7.400067599999602,
+          "chunks": 20
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.0906666666666665,
+          "first_chunk_seconds": 0.6397722000001522,
+          "total_seconds": 1.896001699999033,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 8.064,
+          "first_chunk_seconds": 1.711433099997521,
+          "total_seconds": 6.864014700000553,
+          "chunks": 33
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.864,
+          "first_chunk_seconds": 1.406090899999981,
+          "total_seconds": 5.067938600001071,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.1333333333333333,
+          "first_chunk_seconds": 0.7502571000004536,
+          "total_seconds": 2.242198500000086,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 7.296,
+          "first_chunk_seconds": 2.0911372999980813,
+          "total_seconds": 6.9627750999970885,
+          "chunks": 30
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.736,
+          "first_chunk_seconds": 1.3335765999981959,
+          "total_seconds": 4.547061199999007,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.0906666666666665,
+          "first_chunk_seconds": 0.6761509999996633,
+          "total_seconds": 2.031163399999059,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 8.064,
+          "first_chunk_seconds": 1.9735079999991285,
+          "total_seconds": 6.62289569999848,
+          "chunks": 33
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.864,
+          "first_chunk_seconds": 0.9689667999991798,
+          "total_seconds": 3.48510030000034,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.1333333333333333,
+          "first_chunk_seconds": 0.6672397000002093,
+          "total_seconds": 1.7957746000029147,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 7.296,
+          "first_chunk_seconds": 0.945634900002915,
+          "total_seconds": 4.624347100001614,
+          "chunks": 30
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.736,
+          "first_chunk_seconds": 0.7297271999996156,
+          "total_seconds": 3.0906700999985333,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 24000,
+          "duration": 2.0906666666666665,
+          "first_chunk_seconds": 0.2501486000001023,
+          "total_seconds": 1.206392300002335,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 24000,
+          "duration": 8.064,
+          "first_chunk_seconds": 0.5881626999980654,
+          "total_seconds": 4.377435799997329,
+          "chunks": 33
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 24000,
+          "duration": 4.864,
+          "first_chunk_seconds": 0.3692427000023599,
+          "total_seconds": 2.650236400000722,
+          "chunks": 20
+        }
+      ],
+      "gpt": {
+        "name": "xxx-e15.ckpt",
+        "sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36"
+      },
+      "sovits": {
+        "name": "xxx_e2_s174_l32.pth",
+        "sha256": "8f979cfe86f8193ba03c767bb8905b44b3b78858bf3225b71c03c56e69b31916"
+      },
+      "case": "v3-verified"
+    },
+    {
+      "version": "v2",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 1.8282497000000149,
+      "speaker_encodes": 0,
+      "graph_count": 1,
+      "last_graph_replay_steps": 104,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f"
+      },
+      "sovits": {
+        "name": "s2G2333k.pth",
+        "sha256": "924fdccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.2,
+          "first_chunk_seconds": 0.8282230000004347,
+          "total_seconds": 0.8282945000028121,
+          "chunks": 17
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.16,
+          "first_chunk_seconds": 1.0270755000019562,
+          "total_seconds": 1.027130300000863,
+          "chunks": 17
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.2,
+          "first_chunk_seconds": 0.921959399998741,
+          "total_seconds": 0.9220251999977336,
+          "chunks": 17
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.16,
+          "first_chunk_seconds": 0.9807588000003307,
+          "total_seconds": 0.9808287000014388,
+          "chunks": 17
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.2,
+          "first_chunk_seconds": 0.7432565000017348,
+          "total_seconds": 0.7433219000013196,
+          "chunks": 17
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.16,
+          "first_chunk_seconds": 0.31711600000198814,
+          "total_seconds": 0.31718240000191145,
+          "chunks": 17
+        }
+      ],
+      "case": "v2-zh-local"
+    },
+    {
+      "version": "v2Pro",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.455133900002693,
+      "speaker_encodes": 1,
+      "graph_count": 1,
+      "last_graph_replay_steps": 107,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "kurisu_v2pro-e15.ckpt",
+        "sha256": "43b33267a84853056ab1df047d747b6e2c774ca10e4d95809d05c1fe7540d478"
+      },
+      "sovits": {
+        "name": "kurisu_v2pro.pth",
+        "sha256": "6d97085ec9373dacf0aa6a35656e264466cbc31bc891dbb51e6e585c9093a21c"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.0,
+          "first_chunk_seconds": 0.8983786999997392,
+          "total_seconds": 0.8984595999972953,
+          "chunks": 16
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.28,
+          "first_chunk_seconds": 1.037673899998481,
+          "total_seconds": 1.037739800001873,
+          "chunks": 18
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.0,
+          "first_chunk_seconds": 0.8164445000002161,
+          "total_seconds": 0.816503099998954,
+          "chunks": 16
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.28,
+          "first_chunk_seconds": 0.8912496000011743,
+          "total_seconds": 0.8913267000025371,
+          "chunks": 18
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.0,
+          "first_chunk_seconds": 0.6612925000008545,
+          "total_seconds": 0.6613617000002705,
+          "chunks": 16
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.28,
+          "first_chunk_seconds": 0.3149981000024127,
+          "total_seconds": 0.3150494000001345,
+          "chunks": 18
+        }
+      ],
+      "case": "v2Pro-zh-local"
+    },
+    {
+      "version": "v2ProPlus",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 3.3147548000015377,
+      "speaker_encodes": 1,
+      "graph_count": 1,
+      "last_graph_replay_steps": 109,
+      "flash_requested": false,
+      "flash_mode": null,
+      "gpt": {
+        "name": "kurisu_crs_gpt-e100.ckpt",
+        "sha256": "c0888c026c6d0dde3e57d2541c5361701d99079d692fb88f413b7628156418fa"
+      },
+      "sovits": {
+        "name": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "sha256": "035a0e9bba90559839c6a99a2ae1b5fa7e599a1e9b048964fc920a3de3f257a5"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.4,
+          "first_chunk_seconds": 0.8836282000011124,
+          "total_seconds": 0.8836843999997654,
+          "chunks": 18
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.36,
+          "first_chunk_seconds": 1.1438630000011472,
+          "total_seconds": 1.1439215000027616,
+          "chunks": 18
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.4,
+          "first_chunk_seconds": 1.1647263999984716,
+          "total_seconds": 1.164818400000513,
+          "chunks": 18
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.36,
+          "first_chunk_seconds": 1.4198791000017081,
+          "total_seconds": 1.4200144999995246,
+          "chunks": 18
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.4,
+          "first_chunk_seconds": 0.8251185999979498,
+          "total_seconds": 0.8252800999980536,
+          "chunks": 18
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 4.36,
+          "first_chunk_seconds": 0.3221058000017365,
+          "total_seconds": 0.3221668000005593,
+          "chunks": 18
+        }
+      ],
+      "case": "v2ProPlus-zh-local"
+    },
+    {
+      "version": "v2",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 1.903905900002428,
+      "speaker_encodes": 0,
+      "graph_count": 3,
+      "last_graph_replay_steps": 119,
+      "flash_requested": true,
+      "flash_mode": "valid",
+      "gpt": {
+        "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+        "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f"
+      },
+      "sovits": {
+        "name": "s2G2333k.pth",
+        "sha256": "924fdccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.28,
+          "first_chunk_seconds": 0.7156990999974369,
+          "total_seconds": 0.7157439000002341,
+          "chunks": 10
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 2.4110139999975218,
+          "total_seconds": 2.4111338000002434,
+          "chunks": 33
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 4.0951572000012675,
+          "total_seconds": 4.095206800000597,
+          "chunks": 19
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.5989246000026469,
+          "total_seconds": 0.5990937000024132,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 2.1186013000005914,
+          "total_seconds": 2.1187741000030655,
+          "chunks": 28
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 1.415121399997588,
+          "total_seconds": 1.415220999999292,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.24,
+          "first_chunk_seconds": 0.6584958999992523,
+          "total_seconds": 0.6585847999995167,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 2.035143400000379,
+          "total_seconds": 2.035270500000479,
+          "chunks": 33
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 1.0030222999994294,
+          "total_seconds": 1.0030851999981678,
+          "chunks": 19
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.4040794000029564,
+          "total_seconds": 0.4041346000012709,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 1.2853142999992997,
+          "total_seconds": 1.2853824000012537,
+          "chunks": 28
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.9208743999988656,
+          "total_seconds": 0.9209647999996378,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.24,
+          "first_chunk_seconds": 0.5410474999989674,
+          "total_seconds": 0.5410888000005798,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 8.12,
+          "first_chunk_seconds": 0.7876720000022033,
+          "total_seconds": 0.787745100002212,
+          "chunks": 33
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.56,
+          "first_chunk_seconds": 0.5857661000009102,
+          "total_seconds": 0.5858765000011772,
+          "chunks": 19
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 1.8,
+          "first_chunk_seconds": 0.1415586999974039,
+          "total_seconds": 0.14161999999851105,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.84,
+          "first_chunk_seconds": 0.3208283999993,
+          "total_seconds": 0.320884600001591,
+          "chunks": 28
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.25545890000285,
+          "total_seconds": 0.2556107000018528,
+          "chunks": 20
+        }
+      ],
+      "case": "v2-flash"
+    },
+    {
+      "version": "v2Pro",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.405459699999483,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 98,
+      "flash_requested": true,
+      "flash_mode": "valid",
+      "gpt": {
+        "name": "kurisu_v2pro-e15.ckpt",
+        "sha256": "43b33267a84853056ab1df047d747b6e2c774ca10e4d95809d05c1fe7540d478"
+      },
+      "sovits": {
+        "name": "kurisu_v2pro.pth",
+        "sha256": "6d97085ec9373dacf0aa6a35656e264466cbc31bc891dbb51e6e585c9093a21c"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.4559688000008464,
+          "total_seconds": 0.4560176999984833,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 1.38687199999913,
+          "total_seconds": 1.3869342999969376,
+          "chunks": 25
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 3.875705599999492,
+          "total_seconds": 3.8757581999998365,
+          "chunks": 18
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.4464375999996264,
+          "total_seconds": 0.4465009000014106,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.4,
+          "first_chunk_seconds": 1.3702281999976549,
+          "total_seconds": 1.3703361000007135,
+          "chunks": 26
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.8125322999985656,
+          "total_seconds": 0.8125905999986571,
+          "chunks": 16
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.4316002999985358,
+          "total_seconds": 0.43164510000133305,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 1.2734653000006801,
+          "total_seconds": 1.2735288000003493,
+          "chunks": 25
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 0.8825472999997146,
+          "total_seconds": 0.8825999000000593,
+          "chunks": 18
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.45578200000090874,
+          "total_seconds": 0.45582780000040657,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.36,
+          "first_chunk_seconds": 1.3222271999984514,
+          "total_seconds": 1.3223416000000725,
+          "chunks": 26
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.8429699000007531,
+          "total_seconds": 0.8430399999997462,
+          "chunks": 16
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.52150790000087,
+          "total_seconds": 0.5215605000012147,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.2,
+          "first_chunk_seconds": 0.7622577000001911,
+          "total_seconds": 0.7623266000009608,
+          "chunks": 25
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.32,
+          "first_chunk_seconds": 0.5971538000012515,
+          "total_seconds": 0.5972263000003295,
+          "chunks": 18
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.08,
+          "first_chunk_seconds": 0.15728669999953127,
+          "total_seconds": 0.15732890000072075,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 6.36,
+          "first_chunk_seconds": 0.32828089999748045,
+          "total_seconds": 0.3283568999977433,
+          "chunks": 26
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 3.92,
+          "first_chunk_seconds": 0.2182662999985041,
+          "total_seconds": 0.21832229999927222,
+          "chunks": 16
+        }
+      ],
+      "case": "v2Pro-flash"
+    },
+    {
+      "version": "v2ProPlus",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "sample_rate": 32000,
+      "model_load_seconds": 2.948210900001868,
+      "speaker_encodes": 1,
+      "graph_count": 3,
+      "last_graph_replay_steps": 124,
+      "flash_requested": true,
+      "flash_mode": "valid",
+      "gpt": {
+        "name": "kurisu_crs_gpt-e100.ckpt",
+        "sha256": "c0888c026c6d0dde3e57d2541c5361701d99079d692fb88f413b7628156418fa"
+      },
+      "sovits": {
+        "name": "kurisu_crs_s2-e12_v2ProPlus.pth",
+        "sha256": "035a0e9bba90559839c6a99a2ae1b5fa7e599a1e9b048964fc920a3de3f257a5"
+      },
+      "nonstream_passed": true,
+      "stream_trials": [
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.41260029999830294,
+          "total_seconds": 0.4126548999993247,
+          "chunks": 8
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.4989137999982631,
+          "total_seconds": 1.4989903999994567,
+          "chunks": 29
+        },
+        {
+          "mode": "dynamic",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 3.9212144000011904,
+          "total_seconds": 3.921266500001366,
+          "chunks": 20
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.5014413999997487,
+          "total_seconds": 0.5014865000011923,
+          "chunks": 9
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.3684485999983735,
+          "total_seconds": 1.3685496999969473,
+          "chunks": 29
+        },
+        {
+          "mode": "dynamic",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.9289804000000004,
+          "total_seconds": 0.9290652000017872,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.43592720000015106,
+          "total_seconds": 0.436005200001091,
+          "chunks": 8
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 1.3754016999992018,
+          "total_seconds": 1.3755509999973583,
+          "chunks": 29
+        },
+        {
+          "mode": "static",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 1.028525499998068,
+          "total_seconds": 1.0286385999970662,
+          "chunks": 20
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.5436998000004678,
+          "total_seconds": 0.5437410000013188,
+          "chunks": 9
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.2,
+          "first_chunk_seconds": 1.5032380000011472,
+          "total_seconds": 1.5033143000000564,
+          "chunks": 29
+        },
+        {
+          "mode": "static",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.96,
+          "first_chunk_seconds": 1.056177899998147,
+          "total_seconds": 1.0562268999965454,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.0,
+          "first_chunk_seconds": 0.5629743999998027,
+          "total_seconds": 0.5630534000010812,
+          "chunks": 8
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.24,
+          "first_chunk_seconds": 0.8232142999986536,
+          "total_seconds": 0.8233698000003642,
+          "chunks": 29
+        },
+        {
+          "mode": "graph",
+          "seed": 7,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.76,
+          "first_chunk_seconds": 0.6430153000001155,
+          "total_seconds": 0.6430890999981784,
+          "chunks": 20
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 0,
+          "rate": 32000,
+          "duration": 2.2,
+          "first_chunk_seconds": 0.1635420000020531,
+          "total_seconds": 0.1636201000001165,
+          "chunks": 9
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 1,
+          "rate": 32000,
+          "duration": 7.2,
+          "first_chunk_seconds": 0.3875449999977718,
+          "total_seconds": 0.38765329999660025,
+          "chunks": 29
+        },
+        {
+          "mode": "graph",
+          "seed": 17,
+          "text_index": 2,
+          "rate": 32000,
+          "duration": 4.96,
+          "first_chunk_seconds": 0.25515509999968344,
+          "total_seconds": 0.2552039000001969,
+          "chunks": 20
+        }
+      ],
+      "case": "v2ProPlus-flash"
+    }
+  ]
+}

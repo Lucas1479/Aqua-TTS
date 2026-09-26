@@ -85,6 +85,33 @@ def test_upstream_decoder_patch_preserves_native_naive_generator(monkeypatch):
     assert steps >= 1
 
 
+def test_speaker_sources_resolve_outside_upstream_cwd(tmp_path, monkeypatch):
+    from aquatts.upstream import configure_speaker_encoder
+
+    repo = _fake_upstream(tmp_path / "upstream")
+    directory = repo / "GPT_SoVITS" / "eres2net"
+    directory.mkdir()
+    for name in ("ERes2NetV2.py", "fusion.py", "pooling_layers.py", "kaldi.py"):
+        (directory / name).write_text("# fixture\n")
+    monkeypatch.setenv("GPT_SOVITS_HOME", str(repo))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.chdir(tmp_path)
+    assert configure_speaker_encoder() == directory
+    assert Path.cwd() == tmp_path
+    assert str(directory) in sys.path
+
+
+def test_legacy_checkout_only_requires_speaker_sources_for_pro(tmp_path, monkeypatch):
+    from aquatts.upstream import configure_speaker_encoder
+
+    repo = _fake_upstream(tmp_path)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setenv("GPT_SOVITS_HOME", str(repo))
+    assert configure_gpt_sovits(repo, require=True) == repo
+    with pytest.raises(GPTSoVITSConfigurationError, match="Pro speaker encoder"):
+        configure_speaker_encoder()
+
+
 def test_selected_t2s_source_is_not_bundled_fork():
     home = os.environ.get("GPT_SOVITS_HOME", "").strip()
     if not home:

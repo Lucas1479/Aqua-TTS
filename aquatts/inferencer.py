@@ -11,6 +11,7 @@ from string import punctuation
 import torch
 import numpy as np
 
+from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
 from aquatts.inference.semantic_stability import (
     SemanticGenerationError,
     assess_semantic_candidate,
@@ -155,7 +156,8 @@ class TTSInferencer:
                  language="Auto",
                  cuda_graph_preset="full",
                  use_flash_attn=None,
-                 flash_attn_mode=None):
+                 flash_attn_mode=None,
+                 sv_model_path=None):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -174,6 +176,7 @@ class TTSInferencer:
             sovits_pretrain_path: Path to the v3 SoVITS base checkpoint.
             bigvgan_path: Path to the local BigVGAN model directory.
             fast_langdetect_path: Directory containing the cached lid.176.bin.
+            sv_model_path: ERes2Net checkpoint required only by v2Pro/v2ProPlus.
             language: Default language — "Auto", "中文", "英文", "日文", etc.
                       默认语言
             cuda_graph_preset: CUDA Graph capture strategy — "full" (all buckets pre-captured),
@@ -236,6 +239,12 @@ class TTSInferencer:
             self.cnhubert_path = cnhubert_path or default_cnhubert_path
             self.sovits_pretrain_path = sovits_pretrain_path or default_sovits_pretrain_path
             self.bigvgan_path = bigvgan_path or default_bigvgan_path
+            self.sv_model_path = sv_model_path or os.path.join(
+                base_dir, "GPT_SoVITS", "pretrained_models", "sv",
+                "pretrained_eres2netv2w24s4ep4.ckpt",
+            )
+            self.sv_model = None
+            self.bigvgan_model = None
             self.fast_langdetect_path = (
                 fast_langdetect_path or default_fast_langdetect_path
             )
@@ -244,10 +253,8 @@ class TTSInferencer:
             for path, desc in [
                 (self.gpt_path, "GPT权重"),
                 (self.sovits_path, "SoVITS权重"),
-                (self.sovits_pretrain_path, "SoVITS预训练权重"),
                 (self.bert_path, "BERT模型"),
                 (self.cnhubert_path, "CNHuBERT模型"),
-                (self.bigvgan_path, "BigVGAN模型"),
                 (self.fast_langdetect_path, "fast-langdetect模型"),
             ]:
                 if not os.path.exists(path):
@@ -436,41 +443,38 @@ class TTSInferencer:
         self.model_version = self._detect_model_version()
 
         dict_language_v1 = {
-            self.i18n("中文"): "all_zh",
-            self.i18n("英文"): "en",
-            self.i18n("日文"): "all_ja",
-            self.i18n("中英混合"): "zh",
-            self.i18n("日英混合"): "ja",
-            self.i18n("多语种混合"): "auto",
+            "中文": "all_zh",
+            "英文": "en",
+            "日文": "all_ja",
+            "中英混合": "zh",
+            "日英混合": "ja",
+            "多语种混合": "auto",
         }
 
         dict_language_v2 = {
-            self.i18n("中文"): "all_zh",
-            self.i18n("英文"): "en",
-            self.i18n("日文"): "all_ja",
-            self.i18n("粤语"): "all_yue",
-            self.i18n("韩文"): "all_ko",
-            self.i18n("中英混合"): "zh",
-            self.i18n("日英混合"): "ja",
-            self.i18n("粤英混合"): "yue",
-            self.i18n("韩英混合"): "ko",
-            self.i18n("多语种混合"): "auto",
-            self.i18n("多语种混合(粤语)"): "auto_yue",
+            "中文": "all_zh",
+            "英文": "en",
+            "日文": "all_ja",
+            "粤语": "all_yue",
+            "韩文": "all_ko",
+            "中英混合": "zh",
+            "日英混合": "ja",
+            "粤英混合": "yue",
+            "韩英混合": "ko",
+            "多语种混合": "auto",
+            "多语种混合(粤语)": "auto_yue",
         }
 
-        self.dict_language = dict_language_v2 if self.model_version in ["v2", "v3"] else dict_language_v1
+        labels = dict_language_v1 if self.sovits_version == "v1" else dict_language_v2
+        # Keep the documented API labels stable when the host UI uses another locale.
+        self.dict_language = {**labels, **{self.i18n(key): value for key, value in labels.items()}}
         self.splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
 
     def _detect_model_version(self):
-        """Detect model version from checkpoint path or filename.
-        检测模型版本"""
-        # 简单版本检测，可根据文件名或其他特征判断
-        if "v3" in self.sovits_path or "v3" in self.gpt_path:
-            return "v3"
-        elif "v2" in self.sovits_path or "v2" in self.gpt_path:
-            return "v2"
-        else:
-            return "v1"
+        """Read the architecture separately from the text-symbol version."""
+        self.sovits_version, model, self._detected_lora = detect_sovits_version(self.sovits_path)
+        self.is_v2pro = model in PRO_MODELS
+        return model
 
     def _init_bert_model(self):
         """Initialize BERT model for Chinese text encoding.
@@ -698,14 +702,16 @@ class TTSInferencer:
         self.hps.model.semantic_frame_rate = "25hz"
 
         # 确定SoVITS版本
-        if 'enc_p.text_embedding.weight' not in dict_s2['weight']:
+        if self.is_v2pro:
+            self.hps.model.version = self.model_version
+        elif 'enc_p.text_embedding.weight' not in dict_s2['weight']:
             self.hps.model.version = "v2"  # v3model,v2symbols
         elif dict_s2['weight']['enc_p.text_embedding.weight'].shape[0] == 322:
             self.hps.model.version = "v1"
         else:
             self.hps.model.version = "v2"
 
-        self.sovits_version = self.hps.model.version
+        self.sovits_version = "v2" if self.is_v2pro else self.hps.model.version
         logger.info(f"SoVITS版本: {self.sovits_version}, 模型版本: {self.model_version}")
 
         # 根据模型版本创建模型
@@ -723,6 +729,15 @@ class TTSInferencer:
                 n_speakers=self.hps.data.n_speakers,
                 **self.hps.model
             )
+
+        if self.is_v2pro:
+            if "sv_emb" not in inspect.signature(self.vq_model.decode).parameters or not all(
+                hasattr(self.vq_model, name) for name in ("sv_emb", "ge_to512", "prelu")
+            ):
+                raise RuntimeError(
+                    "Selected GPT-SoVITS checkout lacks the v2Pro/v2ProPlus decoder; "
+                    "update GPT_SOVITS_HOME to a compatible upstream checkout"
+                )
 
         # 处理预训练模型
         if "pretrained" not in self.sovits_path:
@@ -742,7 +757,8 @@ class TTSInferencer:
         # 检查是否是LoRA模型 — 通过 checkpoint key 名称判断，比文件大小可靠。
         # LoRA checkpoint 含 "lora_rank" 顶层键，或 weight keys 中含 "lora_" 前缀。
         self.if_lora_v3 = self.model_version == "v3" and (
-            "lora_rank" in dict_s2
+            self._detected_lora
+            or "lora_rank" in dict_s2
             or any("lora_" in k for k in dict_s2.get("weight", {}))
         )
         if self.if_lora_v3:
@@ -751,7 +767,17 @@ class TTSInferencer:
         # 加载权重
         if not self.if_lora_v3:
             logger.info(f"加载sovits_{self.model_version}模型权重")
-            self.vq_model.load_state_dict(dict_s2["weight"], strict=False)
+            incompatible = self.vq_model.load_state_dict(dict_s2["weight"], strict=False)
+            if self.is_v2pro:
+                # enc_q is training-only and may be absent. Conditioning weights
+                # may not be silently skipped or left randomly initialized.
+                missing = [key for key in incompatible.missing_keys if not key.startswith("enc_q.")]
+                unexpected = [key for key in incompatible.unexpected_keys if not key.startswith("enc_q.")]
+                if missing or unexpected:
+                    raise RuntimeError(
+                        f"Incompatible {self.model_version} checkpoint: "
+                        f"missing={missing}, unexpected={unexpected}"
+                    )
         else:
             # 加载预训练模型和LoRA权重
             if not os.path.exists(self.sovits_pretrain_path):
@@ -777,6 +803,11 @@ class TTSInferencer:
             # 合并LoRA权重
             self.vq_model.cfm = self.vq_model.cfm.merge_and_unload()
             self.vq_model.eval()
+
+        if self.is_v2pro:
+            from aquatts.inference.speaker import SpeakerEncoder
+
+            self.sv_model = SpeakerEncoder(self.sv_model_path, self.device, self.is_half)
 
     def _load_bigvgan_model(self):
         """Load BigVGAN vocoder model (required for v3).
@@ -894,6 +925,8 @@ class TTSInferencer:
             else:
                 refer = refer.float()
             cache_item["refer_spec"] = refer
+            if self.is_v2pro:
+                cache_item["sv_embedding"] = self.sv_model.encode(ref_audio_path)
 
             # 4) v3 额外缓存：ref_audio 24k 的 mel2（归一化后）
             if self.model_version == "v3":
@@ -1077,6 +1110,45 @@ class TTSInferencer:
         except FileNotFoundError:
             logger.warning("未找到音频超分模型参数，跳过超分处理")
             return audio.cpu().detach().numpy(), sr
+
+    def _decode_v2(self, semantic, phones, ref_audio_path, session, inp_refs, speed):
+        """Decode v1/v2/Pro with aligned spectrum and speaker reference pairs."""
+        references = []
+        speakers = []
+        for reference in inp_refs or ():
+            try:
+                path = os.fspath(reference) if isinstance(reference, (str, os.PathLike)) else reference.name
+                spectrum = self.get_spepc(path).to(self.device)
+                spectrum = spectrum.half() if self.is_half else spectrum.float()
+                speaker = self.sv_model.encode(path) if self.is_v2pro else None
+            except Exception as exc:
+                logger.warning("Failed to load extra reference %s: %s", reference, exc)
+                continue
+            references.append(spectrum)
+            if self.is_v2pro:
+                speakers.append(speaker)
+
+        if not references:
+            spectrum = session.get("refer_spec")
+            if spectrum is None:
+                spectrum = self.get_spepc(ref_audio_path).to(self.device)
+                spectrum = spectrum.half() if self.is_half else spectrum.float()
+            references.append(spectrum)
+            if self.is_v2pro:
+                speaker = session.get("sv_embedding")
+                if speaker is None:
+                    speaker = self.sv_model.encode(ref_audio_path)
+                speakers.append(speaker)
+
+        kwargs = {"speed": speed}
+        if self.is_v2pro:
+            kwargs["sv_emb"] = speakers
+        return self.vq_model.decode(
+            semantic,
+            torch.LongTensor(phones).to(self.device).unsqueeze(0),
+            references,
+            **kwargs,
+        )[0][0]
 
     def get_spepc(self, filename):
         """Extract spectrogram from reference audio.
@@ -1310,43 +1382,9 @@ class TTSInferencer:
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
-                    # Decode for v1/v2 models
-                    # v1/v2模型解码
-                    # Process multiple reference audios
-                    # 处理多个参考音频
-                    refers = []
-                    if inp_refs:
-                        for ref_path in inp_refs:
-                            try:
-                                ref_path = ref_path if isinstance(ref_path, str) else ref_path.name
-                                # 根据is_half决定是否使用half
-                                refer = self.get_spepc(ref_path).to(self.device)
-                                if self.is_half:
-                                    refer = refer.half()
-                                else:
-                                    refer = refer.float()
-                                refers.append(refer)
-                                logger.info(f"加载额外参考音频: {ref_path}")
-                            except Exception as e:
-                                logger.warning(f"加载额外参考音频失败: {e}")
-
-                    # Fall back to main reference audio if no extra refs
-                    # 如果没有额外参考音频，使用主参考音频
-                    if len(refers) == 0:
-                        refer = sess.get("refer_spec")
-                        if refer is None:
-                            refer = self.get_spepc(ref_audio_path).to(self.device)
-                            refer = refer.half() if self.is_half else refer.float()
-                        refers = [refer]
-
-                    # Decode
-                    # 解码
-                    audio = self.vq_model.decode(
-                        pred_semantic,
-                        torch.LongTensor(phones2).to(self.device).unsqueeze(0),
-                        refers,
-                        speed=speed
-                    )[0][0]
+                    audio = self._decode_v2(
+                        pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
+                    )
 
                     # Prevent audio clipping
                     # 防止爆音
@@ -1801,43 +1839,9 @@ class TTSInferencer:
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
-                    # Decode for v1/v2 models
-                    # v1/v2模型解码
-                    # Process multiple reference audios
-                    # 处理多个参考音频
-                    refers = []
-                    if inp_refs:
-                        for ref_path in inp_refs:
-                            try:
-                                ref_path = ref_path if isinstance(ref_path, str) else ref_path.name
-                                # 根据is_half决定是否使用half
-                                refer = self.get_spepc(ref_path).to(self.device)
-                                if self.is_half:
-                                    refer = refer.half()
-                                else:
-                                    refer = refer.float()
-                                refers.append(refer)
-                                logger.info(f"加载额外参考音频: {ref_path}")
-                            except Exception as e:
-                                logger.warning(f"加载额外参考音频失败: {e}")
-
-                    # Fall back to main reference audio if no extra refs
-                    # 如果没有额外参考音频，使用主参考音频
-                    if len(refers) == 0:
-                        refer = sess.get("refer_spec")
-                        if refer is None:
-                            refer = self.get_spepc(ref_audio_path).to(self.device)
-                            refer = refer.half() if self.is_half else refer.float()
-                        refers = [refer]
-
-                    # Decode
-                    # 解码
-                    audio = self.vq_model.decode(
-                        pred_semantic,
-                        torch.LongTensor(phones2).to(self.device).unsqueeze(0),
-                        refers,
-                        speed=speed
-                    )[0][0]
+                    audio = self._decode_v2(
+                        pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
+                    )
 
                     # Prevent audio clipping
                     # 防止爆音
@@ -2065,8 +2069,7 @@ class TTSInferencer:
         except Exception as e:
             logger.error(f"流式推理失败: {str(e)}")
             logger.error(traceback.format_exc())
-            # 返回一个空音频块，避免生成器中断
-            yield sr if 'sr' in locals() else 24000, np.zeros(16000, dtype=np.float32), ""
+            raise
 
     def _apply_fade_out(self, audio: np.ndarray, sr: int, duration_ms: int = 15) -> np.ndarray:
         """对音频末尾做线性淡出，避免句尾突然截断产生的爆音感。
@@ -2291,7 +2294,8 @@ def process_text(texts):
 
 def synthesize(gpt_model_path, sovits_model_path, ref_audio_path, ref_text_path, ref_language,
                target_text_path, target_language, output_path, sample_steps=16, top_p=0.6,
-               temperature=0.6, speed=1.0, how_to_cut="不切", if_sr=False, pause_second=0.3):
+               temperature=0.6, speed=1.0, how_to_cut="不切", if_sr=False, pause_second=0.3,
+               sv_model_path=None):
     """
     合成语音的封装函数，符合原始CLI工具的接口
 
@@ -2311,12 +2315,14 @@ def synthesize(gpt_model_path, sovits_model_path, ref_audio_path, ref_text_path,
         how_to_cut: 文本切分方式
         if_sr: 是否使用音频超分
         pause_second: 句间停顿秒数
+        sv_model_path: Pro／Plus 的 ERes2Net 权重路径
     """
     try:
         # 初始化TTS推理器
         inferencer = TTSInferencer(
             gpt_path=gpt_model_path,
-            sovits_path=sovits_model_path
+            sovits_path=sovits_model_path,
+            sv_model_path=sv_model_path,
         )
 
         # 读取参考文本
@@ -2369,6 +2375,7 @@ def main():
     parser = argparse.ArgumentParser(description="GPT-SoVITS TTS 推理工具")
     parser.add_argument('--gpt_model', required=True, help="GPT模型路径")
     parser.add_argument('--sovits_model', required=True, help="SoVITS模型路径")
+    parser.add_argument('--sv_model', help="Pro／Plus 的 ERes2Net 权重路径")
     parser.add_argument('--ref_audio', required=True, help="参考音频路径")
     parser.add_argument('--ref_text', required=True, help="参考文本路径")
     parser.add_argument('--ref_language', required=True, choices=["中文", "英文", "日文"], help="参考音频语言")
@@ -2394,6 +2401,7 @@ def main():
     synthesize(
         gpt_model_path=args.gpt_model,
         sovits_model_path=args.sovits_model,
+        sv_model_path=args.sv_model,
         ref_audio_path=args.ref_audio,
         ref_text_path=args.ref_text,
         ref_language=args.ref_language,

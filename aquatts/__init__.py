@@ -1,5 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
-"""Aqua-TTS: GPU-optimized runtime for GPT-SoVITS v3. / Aqua-TTS：针对 GPT-SoVITS v3 的 GPU 优化运行时。"""
+"""Aqua-TTS: GPU-optimized GPT-SoVITS v2/v2Pro/v2ProPlus/v3 inference runtime."""
 
 import os
 from contextlib import contextmanager

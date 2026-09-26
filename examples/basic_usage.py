@@ -29,6 +29,7 @@ def main():
     parser = argparse.ArgumentParser(description="Aqua-TTS basic usage")
     parser.add_argument("--gpt-model", required=True)
     parser.add_argument("--sovits-model", required=True)
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--ref-audio", required=True)
     parser.add_argument("--ref-text", required=True)
     parser.add_argument("--text", required=True)
@@ -54,6 +55,7 @@ def main():
         device="cuda",
         gpt_path=args.gpt_model,
         sovits_path=args.sovits_model,
+        sv_model_path=args.sv_model,
     )
 
     print(f"Generating: {args.text}")

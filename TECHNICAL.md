@@ -276,3 +276,26 @@ This prevents the common "first request penalty" where CUDA lazy initialization,
 | `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FA2 reads the true KV length; `bucket` uses explicit scatter with the same safe valid prefix |
 | `BIGVGAN_CACHE_ROOT` | package CUDA directory | Product-owned root for ABI-keyed compiled BigVGAN extensions |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |
+
+## V2-family model integration
+
+SoVITS architecture selection delegates to upstream checkpoint metadata. Text
+symbols (`v1`/`v2`) stay separate from the `v2Pro`/`v2ProPlus` architecture tag;
+unsupported architectures fail before loading models. Pro checkpoints must load
+all inference parameters, including speaker projections; only training-only
+`enc_q` discrepancies are ignored. Existing v3 LoRA key detection is retained.
+
+`aquatts.inference.speaker.SpeakerEncoder` imports ERes2NetV2 and Kaldi features
+from the configured upstream checkout and accepts an explicit weight path.
+References are converted to 16 kHz mono and encoded using upstream's 80-bin
+filterbank / `forward3` contract. The primary embedding shares the reference
+session cache. Both inference APIs use `_decode_v2` to preserve spectrum/speaker
+pairing, including failed extra references. Plain v1/v2 never receives `sv_emb`.
+
+V2-family `infer_stream` decodes a complete text segment before chunking its PCM.
+It does not use v3 CFM or BigVGAN and does not yet call upstream `decode_streaming`.
+The server reads the initial sample-rate event in a worker thread before sending
+headers, retaining first-event audio and closing the generator after streaming.
+Model exceptions propagate to callers instead of becoming silent audio.
+
+The change is limited to model support; it adds no MPS/ROCm device paths.

@@ -44,6 +44,7 @@ def _parse_args():
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""))
     parser.add_argument("--gpt-model", default=os.environ.get("AQUA_GPT_MODEL"))
     parser.add_argument("--sovits-model", default=os.environ.get("AQUA_SOVITS_MODEL"))
+    parser.add_argument("--sv-model", help="ERes2Net checkpoint for v2Pro/v2ProPlus")
     parser.add_argument("--ref-audio", default=os.environ.get("AQUA_REF_AUDIO"))
     parser.add_argument("--ref-text", default=os.environ.get("TTS_REF_TEXT_JA", KURISU_REF_TEXT))
     parser.add_argument("--text-lang", default="日文")
@@ -113,6 +114,7 @@ def main():
             device=args.device,
             gpt_path=gpt_model,
             sovits_path=sovits_model,
+            sv_model_path=args.sv_model,
         )
     print(f"[live] Ready in {time.perf_counter() - t0:.2f}s")
 
