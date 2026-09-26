@@ -102,17 +102,27 @@ and synchronized stage diagnostics are recorded separately; no new CUDA Graphs
 were captured during measured requests. All three engines share the same Aqua
 frontend, reference cache, and SoVITS path for each checkpoint pair.
 
-| Model | T2S engine | Short p50 (ms) | Short p95 (ms) | Medium p50 (ms) | Long p50 (ms) |
-|---|---|---:|---:|---:|---:|
-| v2 | Upstream T2S | 255.7 | 293.6 | 519.5 | 1005.1 |
-| v2 | Graph + SDPA | 107.5 | 116.4 | 177.1 | 306.0 |
-| v2 | Graph + FA2 | 93.9 | 103.3 | 142.6 | 231.0 |
-| v2Pro | Upstream T2S | 272.7 | 303.7 | 547.4 | 965.4 |
-| v2Pro | Graph + SDPA | 110.9 | 122.5 | 183.4 | 293.0 |
-| v2Pro | Graph + FA2 | 96.4 | 110.3 | 143.1 | 221.4 |
-| v2ProPlus | Upstream T2S | 252.9 | 283.3 | 537.0 | 927.2 |
-| v2ProPlus | Graph + SDPA | 107.0 | 119.8 | 180.2 | 291.9 |
-| v2ProPlus | Graph + FA2 | 100.7 | 107.4 | 144.7 | 219.6 |
+**First-audio latency (TTFP, median / p50; lower is better)**
+
+| Model / input | Upstream T2S execution | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
+|---|---:|---:|---:|
+| v2 · short (3 chars) | 255.7 ms | 107.5 ms | **93.9 ms** |
+| v2 · medium (19 chars) | 519.5 ms | 177.1 ms | **142.6 ms** |
+| v2 · long (64 chars) | 1005.1 ms | 306.0 ms | **231.0 ms** |
+| v2Pro · short (3 chars) | 272.7 ms | 110.9 ms | **96.4 ms** |
+| v2Pro · medium (19 chars) | 547.4 ms | 183.4 ms | **143.1 ms** |
+| v2Pro · long (64 chars) | 965.4 ms | 293.0 ms | **221.4 ms** |
+| v2ProPlus · short (3 chars) | 252.9 ms | 107.0 ms | **100.7 ms** |
+| v2ProPlus · medium (19 chars) | 537.0 ms | 180.2 ms | **144.7 ms** |
+| v2ProPlus · long (64 chars) | 927.2 ms | 291.9 ms | **219.6 ms** |
+
+**Short-input first-audio latency (p95; lower is better)**
+
+| Model / input | Upstream T2S execution | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
+|---|---:|---:|---:|
+| v2 · short (3 chars) | 293.6 ms | 116.4 ms | **103.3 ms** |
+| v2Pro · short (3 chars) | 303.7 ms | 122.5 ms | **110.3 ms** |
+| v2ProPlus · short (3 chars) | 283.3 ms | 119.8 ms | **107.4 ms** |
 
 V2 Pro/FA2 short-text minimum was **93.1 ms** (median **96.4 ms**, p95 **110.3 ms**).
 v2 uses official base weights; Pro/Plus use the tested Kurisu fine-tunes. Compare
