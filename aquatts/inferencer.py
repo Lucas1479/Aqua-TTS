@@ -723,6 +723,8 @@ class TTSInferencer:
                 **self.hps.model
             )
         else:
+            # v3 使用 v2 文字符号，但声学模型必须保留 v3 架构版本。
+            self.hps.model.version = self.model_version
             self.vq_model = SynthesizerTrnV3(
                 self.hps.data.filter_length // 2 + 1,
                 self.hps.train.segment_size // self.hps.data.hop_length,
