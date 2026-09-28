@@ -10,6 +10,7 @@ from string import punctuation
 
 import torch
 import numpy as np
+from aquatts.inference.onset import LeadingSilence, leading_cut
 
 from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
 from aquatts.inference.semantic_stability import (
@@ -1396,7 +1397,7 @@ class TTSInferencer:
 
                     # Add to output list
                     # 添加到输出列表
-                    audio_outputs.append(audio)
+                    audio_outputs.append(self._trim_generated_lead(audio, sr))
                     audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
                 else:
@@ -1518,7 +1519,7 @@ class TTSInferencer:
 
                     # Add to output list
                     # 添加到输出列表
-                    audio_outputs.append(audio)
+                    audio_outputs.append(self._trim_generated_lead(audio, sr))
                     audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
             # Concatenate all audio segments
@@ -1863,6 +1864,7 @@ class TTSInferencer:
                     # Fade out sentence ending to prevent click artifacts
                     # 句尾淡出，消除突然截断的爆音感
                     audio_chunk = self._apply_fade_out(audio_chunk, sr)
+                    audio_chunk = self._trim_generated_lead(audio_chunk, sr)
 
                     # Stream current sentence audio + text (chunked if configured)
                     # 流式返回当前句子的音频和对应的文本（可分块）
@@ -1952,6 +1954,8 @@ class TTSInferencer:
                         idx = 0
                         total_todo_frames = fea_todo.shape[2]
                         stream_chunk_index = 0
+                        lead = LeadingSilence(sr)
+                        pending_text = text_item
                         while True:
                             chunk_end = min(total_todo_frames, idx + chunk_len)
                             fea_todo_chunk = fea_todo[:, :, idx:chunk_end]
@@ -2022,9 +2026,16 @@ class TTSInferencer:
                                     is_last_chunk=is_last_stream_chunk,
                                     apply_fade_in=(stream_chunk_index > 1),
                                 )
-                                yield sr, audio_chunk, text_item if stream_chunk_index == 1 else ""
+                                audio_chunk = lead.feed(audio_chunk)
+                                if audio_chunk is not None:
+                                    yield sr, audio_chunk, pending_text
+                                    pending_text = ""
                             else:
                                 cfm_resss.append(cfm_res)
+
+                        final_audio = lead.finish()
+                        if final_audio is not None:
+                            yield sr, final_audio, pending_text
 
                         if not stream_v3_chunks:
                             cmf_res = torch.cat(cfm_resss, 2)
@@ -2058,6 +2069,7 @@ class TTSInferencer:
                                 if_sr=if_sr,
                                 is_last_chunk=True,
                             )
+                            audio_chunk = self._trim_generated_lead(audio_chunk, sr)
 
                             # Stream current sentence audio + text / 流式返回当前句子音频和文本
                             for _sr, _chunk, _text in _yield_audio_segments(audio_chunk, text_item):
@@ -2072,6 +2084,12 @@ class TTSInferencer:
             logger.error(f"流式推理失败: {str(e)}")
             logger.error(traceback.format_exc())
             raise
+
+    def _trim_generated_lead(self, audio, sample_rate):
+        """Trim one model-produced item before adding the caller's pause."""
+        pcm = audio.detach().float().cpu().numpy() if torch.is_tensor(audio) else audio
+        start = leading_cut(pcm, sample_rate)
+        return audio[start:] if start else audio
 
     def _apply_fade_out(self, audio: np.ndarray, sr: int, duration_ms: int = 15) -> np.ndarray:
         """对音频末尾做线性淡出，避免句尾突然截断产生的爆音感。

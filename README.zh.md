@@ -28,6 +28,9 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 
 ## 亮点
 
+下方是历史首个 PCM 包的计时，并非首字出声时间，早于本次
+[生成静音裁切与起音指标](#声卡播放-demo)。
+
 <sub>**延迟定义：** TTFP 基准 = 预热缓存下模型侧首音延迟（下表）。端到端首音 = 完整管线含音频缓冲和播放启动耗时，实际通常 **0.4–0.7 s**。冷启动 = 初始化 + 模型加载 + 首次推理，主要被 BigVGAN CUDA 内核编译占据（首次约 2 分钟，之后缓存）。</sub>
 
 | | 上游 T2S 执行* | Aqua Graph + SDPA | Aqua 默认（FA2 `valid`） |
@@ -516,6 +519,17 @@ python benchmarks/bigvgan_raw_bench.py
 完整对比方法和结果见 [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md)。
 
 ## 声卡播放 Demo
+
+每个合成单元现在会裁掉开头低能量静音，保留首个达到 -45 dBFS 的 10 ms
+RMS 窗口之前的 50 ms。单元内部停顿、尾部音频和 `pause_second` 保留，全程
+未达到阈值的音频原样返回。流式路径等完整检测帧到齐再判断，文本随首个输出
+音频块发送。这是振幅规则，不是语义语音检测器，不保证所有权重都有同样收益。
+
+历史 TTFP 表记录首个非空 PCM 包，并不代表首字出声，且早于这项起音处理。
+Demo 保留原指标，另加 `lead_ms`（首个有效窗口之前的 PCM 时长）和
+`first_voiced_chunk_ms`（包含该窗口的音频块准备提交的时刻），均不是扬声器
+声学回录时间。暂存生成的静音块可能使首包时间变长，却减少实际提交播放的静音；
+应同时比较有声样本位置与听感。
 
 ```bash
 pip install -e ".[playback]"

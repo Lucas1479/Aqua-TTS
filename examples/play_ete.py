@@ -272,6 +272,8 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     _set_seed(args.seed)
     stream = None
     first_audio_ms = None
+    first_voiced_chunk_ms = None
+    speech = None
     sample_rate = 24000
     total_samples = 0
     chunks: list[np.ndarray] = []
@@ -349,6 +351,14 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
             else:
                 stream = _open_output_stream(pa, pyaudio, args, sample_rate)
 
+        if speech is None:
+            from aquatts.inference.onset import LeadingSilence
+            speech = LeadingSilence(sample_rate)
+        if speech.onset_sample is None:
+            speech.feed(merged, final=eof_in_drain)
+            if speech.onset_sample is not None:
+                first_voiced_chunk_ms = (time.perf_counter() - start) * 1000.0
+
         stream.write(merged.tobytes())
         total_samples += len(merged)
         if save_dir is not None:
@@ -362,6 +372,13 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     if producer_errors:
         raise producer_errors[0]
 
+    if speech is not None and speech.onset_sample is None:
+        speech.finish()
+        if speech.onset_sample is not None:
+            first_voiced_chunk_ms = (time.perf_counter() - start) * 1000.0
+    lead_ms = (speech.onset_sample * 1000.0 / sample_rate
+               if speech is not None and speech.onset_sample is not None else None)
+
     if stream is not None and output_stream is None:
         stream.stop_stream()
         stream.close()
@@ -373,6 +390,9 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
     first_audio_text = f"{first_audio_ms:.1f}ms" if first_audio_ms is not None else "n/a"
     t2s_detail = f" ({t2s_tokens} tokens/{t2s_elapsed:.3f}s)" if args.verbose else ""
     summary = f"[{label}] ttfp={first_audio_text}"
+    summary += f" | lead_ms={lead_ms:.1f}" if lead_ms is not None else " | lead_ms=n/a"
+    if first_voiced_chunk_ms is not None:
+        summary += f" | voiced_chunk={first_voiced_chunk_ms:.1f}ms"
     if show_t2s:
         summary += f" | t2s_live={t2s_rate:.0f} it/s{t2s_detail}"
     if getattr(args, "show_total", False):
@@ -386,6 +406,8 @@ def play_utterance(tts, pa, pyaudio, args, ref_audio: str, label: str, text: str
 
     return {
         "first_audio_ms": first_audio_ms if first_audio_ms is not None else float("nan"),
+        "first_voiced_chunk_ms": first_voiced_chunk_ms,
+        "lead_ms": lead_ms,
         "t2s_tokens": t2s_tokens,
         "t2s_elapsed": t2s_elapsed,
         "t2s_rate": t2s_rate,

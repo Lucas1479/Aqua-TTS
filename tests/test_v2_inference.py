@@ -101,6 +101,37 @@ def test_public_inference_paths_forward_condition_and_actual_rate(inferencer, mo
     assert ("sv_emb" in inferencer.vq_model.decode.call_args.kwargs) == inferencer.is_v2pro
 
 
+@pytest.mark.parametrize("stream", [False, True])
+def test_generated_lead_is_trimmed_per_item_without_removing_requested_pauses(inferencer, stream):
+    rate = 32000
+    raw = np.concatenate([np.zeros(6400), np.full(3200, .2), np.zeros(1280),
+                          np.full(3200, .1), np.zeros(2560)]).astype(np.float32)
+    inferencer.vq_model.decode.return_value = torch.from_numpy(raw).reshape(1, 1, -1)
+    inferencer.dict_language = {"英文": "en"}
+    inferencer.splits = {"."}
+    inferencer.max_sec = 10
+    inferencer.hps = SimpleNamespace(data=SimpleNamespace(sampling_rate=rate))
+    inferencer._build_session_cache = Mock(return_value={
+        "prompt": torch.ones(1, 10), "phones1": [1], "bert1": torch.zeros(1024, 1),
+        "refer_spec": torch.ones(1, 1025, 8), "sv_embedding": torch.ones(1, 20480),
+    })
+    inferencer.get_phones_and_bert = Mock(return_value=([1, 2], torch.zeros(1024, 2), "Text."))
+    inferencer._infer_semantic_with_guard = Mock(return_value=(torch.ones(1, 1, 10), 10, 1))
+    kwargs = dict(text="First.\nSecond.", ref_audio_path="ref.wav", prompt_text="Reference.",
+                  text_language="英文", prompt_language="英文", how_to_cut="不切", pause_second=.07)
+    if stream:
+        chunks = list(inferencer.infer_stream(**kwargs, chunk_size_seconds=.037))
+        audio = np.concatenate([piece for _, piece, _ in chunks if piece is not None])
+        assert [text for _, _, text in chunks if text] == ["First.", "Second."]
+        expected_item = inferencer._apply_fade_out(raw, rate)[4800:]
+    else:
+        returned_rate, audio = inferencer.infer(**kwargs)
+        assert returned_rate == rate
+        expected_item = raw[4800:]
+    expected_item = np.concatenate([expected_item, np.zeros(2240, dtype=np.float32)])
+    np.testing.assert_array_equal(audio, np.tile(expected_item, 2))
+
+
 def test_session_caches_each_reference_speaker_once(inferencer, monkeypatch):
     inferencer._session_cache = {}
     inferencer._session_cache_max = 8

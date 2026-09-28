@@ -13,6 +13,11 @@
 
 ### Fixed
 
+- Remove low-energy generated lead before each synthesized item while retaining
+  50 ms of preroll and the caller's `pause_second`. Complete and chunked output
+  share the same 10 ms RMS boundary; quiet items remain intact.
+- Keep playback demo TTFP as first PCM availability and additionally report
+  `lead_ms` and `first_voiced_chunk_ms`; neither is an acoustic loopback clock.
 - Return the actual sample rate in HTTP PCM streaming headers and propagate
   synthesis errors instead of emitting a silent fallback block.
 - Include HTTP endpoint tests in model-free CI.
