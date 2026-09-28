@@ -468,7 +468,7 @@ class TTSInferencer:
         labels = dict_language_v1 if self.sovits_version == "v1" else dict_language_v2
         # Keep the documented API labels stable when the host UI uses another locale.
         self.dict_language = {**labels, **{self.i18n(key): value for key, value in labels.items()}}
-        self.splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
+        self.splits = {"、", "，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
 
     def _detect_model_version(self):
         """Read the architecture separately from the text-symbol version."""
