@@ -169,6 +169,39 @@ def test_loader_preserves_architecture_and_requires_conditioning_weights(monkeyp
         encoder.assert_called_once_with("speaker.ckpt", "cpu", False)
 
 
+@pytest.mark.parametrize("lora", [False, True])
+def test_v3_loader_separates_acoustic_version_from_text_symbols(monkeypatch, tmp_path, lora):
+    weights = {} if lora else {"enc_p.text_embedding.weight": SimpleNamespace(shape=(732, 1))}
+    checkpoint = {"weight": weights, "config": {
+        "data": {"filter_length": 2048, "hop_length": 640, "n_speakers": 1},
+        "train": {"segment_size": 20480}, "model": {"version": "v2"},
+    }}
+    decoder = Mock()
+    decoder.to.return_value = decoder
+    decoder.cfm.merge_and_unload.return_value = decoder.cfm
+    constructor = Mock(return_value=decoder)
+    monkeypatch.setattr(module, "load_sovits_new", lambda _: checkpoint)
+    monkeypatch.setattr(module, "SynthesizerTrnV3", constructor)
+    monkeypatch.setattr(module, "get_peft_model", lambda model, config: model)
+    pretrain = tmp_path / "pretrained.pth"
+    pretrain.touch()
+    value = module.TTSInferencer.__new__(module.TTSInferencer)
+    value.sovits_path = "renamed.pth"
+    value.sovits_pretrain_path = str(pretrain)
+    value.model_version = "v3"
+    value.is_v2pro = False
+    value._detected_lora = lora
+    value.is_half = False
+    value.device = "cpu"
+
+    value._load_sovits_model()
+
+    assert constructor.call_args.kwargs["version"] == "v3"
+    assert value.hps.model.version == "v3"
+    assert value.sovits_version == "v2"
+    assert value.if_lora_v3 is lora
+
+
 def test_missing_speaker_weight_is_reported_before_importing_encoder(tmp_path):
     from aquatts.inference.speaker import SpeakerEncoder
     with pytest.raises(FileNotFoundError, match="speaker encoder weight"):
