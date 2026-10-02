@@ -36,6 +36,9 @@ v3 and RTX 4070 Laptop measurements are preserved in Highlights.
 
 ## Highlights
 
+The timings below are historical first-PCM measurements, not first spoken sound;
+they predate the [generated-lead trimming and onset fields](#speaker-demo).
+
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
 | | Upstream T2S execution* | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
@@ -564,6 +567,21 @@ python benchmarks/bigvgan_raw_bench.py
 See [benchmarks/README.md](https://github.com/Lucas1479/Aqua-TTS/blob/main/benchmarks/README.md) for full methodology and results.
 
 ## Speaker Demo
+
+Generated leading silence is trimmed per synthesis item, retaining 50 ms before
+the first 10 ms RMS window at or above -45 dBFS. Internal pauses, trailing audio,
+and `pause_second` are retained; entirely quiet items are returned intact. The
+streaming path waits for complete detection frames and carries text on the first
+emitted PCM chunk. This amplitude rule is not a linguistic voice detector and
+does not promise the same improvement for every checkpoint or reference.
+
+Historical TTFP tables measure first nonempty PCM, not first spoken sound, and
+predate this onset processing. The demo retains that metric and adds `lead_ms`
+(PCM duration preceding the first active window) and `first_voiced_chunk_ms`
+(when the containing chunk is ready for submission). Neither measures speaker
+output latency. Buffering silent generated chunks can increase reported TTFP
+while reducing the silence that playback submits; compare voiced PCM positions
+and listening as well as packet timings.
 
 ```bash
 pip install -e ".[playback]"

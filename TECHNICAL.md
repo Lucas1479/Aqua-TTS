@@ -227,6 +227,13 @@ These are the pure BigVGAN kernel costs after the CFM generates the mel spectrog
 
 ### TTFP (Time-To-First-Packet)
 
+These historical tables measure the first nonempty PCM chunk and predate
+generated-lead trimming. They are not first-voiced-sample measurements. Onset
+processing retains a 50 ms preroll before a -45 dBFS / 10 ms RMS window, defers
+partial streaming frames until more samples or EOF, and leaves internal and
+caller-added pauses unchanged. Playback demo onset fields describe PCM position
+and chunk submission readiness, not acoustic speaker timing.
+
 Measured with the automatic FA2 `valid` path, a matching cached BigVGAN CUDA
 extension and 0.25-second streaming chunks. Two utterances warm the pipeline;
 the table reports the median of five first-playable-chunk measurements:
