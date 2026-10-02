@@ -146,6 +146,39 @@ def test_session_caches_each_reference_speaker_once(inferencer, monkeypatch):
     assert [call.args[0] for call in inferencer.sv_model.encode.call_args_list] == ["one.wav", "two.wav"]
 
 
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("cut", ["不切", "按标点符号切"])
+@pytest.mark.parametrize("ending", ["、", ",", "，", "。", "？", "！", ""])
+def test_public_paths_preserve_existing_prompt_and_segment_punctuation(inferencer, stream, cut, ending):
+    inferencer.i18n = lambda key: key
+    inferencer.sovits_version = "v2"
+    inferencer._detect_model_version = lambda: "v2Pro"
+    inferencer._init_language_dict()
+    inferencer.max_sec = 10
+    inferencer.hps = SimpleNamespace(data=SimpleNamespace(sampling_rate=32000))
+    inferencer._build_session_cache = Mock(return_value={
+        "prompt": torch.ones(1, 10), "phones1": [1], "bert1": torch.zeros(1024, 1),
+        "refer_spec": torch.ones(1, 1025, 8), "sv_embedding": torch.ones(1, 20480),
+    })
+    inferencer.get_phones_and_bert = Mock(return_value=([1, 2], torch.zeros(1024, 2), "音声。"))
+    inferencer._infer_semantic_with_guard = Mock(return_value=(torch.ones(1, 1, 10), 10, 1))
+    first = "説明を始めます" + ending
+    prompt = "参照音声" + ending
+    expected = [first if ending else first + "。"]
+    text = first
+    if cut == "按标点符号切" and ending:
+        text += "次の項目を確認します。"
+        expected.append("次の項目を確認します。")
+    kwargs = dict(text=text, ref_audio_path="main.wav", prompt_text=prompt,
+                  text_language="日文", prompt_language="日文", how_to_cut=cut, pause_second=0)
+    if stream:
+        list(inferencer.infer_stream(**kwargs))
+    else:
+        inferencer.infer(**kwargs)
+    assert [call.args[0] for call in inferencer.get_phones_and_bert.call_args_list] == expected
+    assert inferencer._build_session_cache.call_args.args[1] == (prompt if ending else prompt + "。")
+
+
 @pytest.mark.parametrize("header,model", [(b"00", "v1"), (b"01", "v2"), (b"02", "v3"),
                                          (b"03", "v3"), (b"05", "v2Pro"), (b"06", "v2ProPlus")])
 def test_real_upstream_detector_accepts_renamed_header_checkpoint(tmp_path, header, model):
