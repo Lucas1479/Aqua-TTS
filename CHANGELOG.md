@@ -1,6 +1,6 @@
 ﻿# Changelog
 
-## [Unreleased]
+## [0.2.1] — 2026-10-06
 
 ### Added
 
@@ -10,27 +10,6 @@
   inference APIs, without loading v3-only assets for v2-family models.
 - A real-weight smoke matrix for ordinary and streaming inference across dynamic,
   static-KV, and CUDA Graph modes.
-
-### Fixed
-
-- Remove low-energy generated lead before each synthesized item while retaining
-  50 ms of preroll and the caller's `pause_second`. Complete and chunked output
-  share the same 10 ms RMS boundary; quiet items remain intact.
-- Keep playback demo TTFP as first PCM availability and additionally report
-  `lead_ms` and `first_voiced_chunk_ms`; neither is an acoustic loopback clock.
-- Return the actual sample rate in HTTP PCM streaming headers and propagate
-  synthesis errors instead of emitting a silent fallback block.
-- Include HTTP endpoint tests in model-free CI.
-- Keep documented inference language labels independent of the host UI locale,
-  and use the model's sample rate in playback examples.
-- Mask unused static/CUDA-Graph KV slots and keep graph-key alignment gaps out
-  of SDPA and FlashAttention2 attention.
-- Preserve the complete prompt and generated context when a fixed KV bucket
-  fills, continuing with dynamic KV instead of evicting the oldest entries.
-- Make CUDA Graph capture sampling-RNG neutral.
-- Reject and retry pathological semantic-token loops before SoVITS/BigVGAN.
-
-## [0.2.1] — 2026-08-30
 
 ### Changed
 
@@ -53,6 +32,24 @@
 
 ### Fixed
 
+- Remove low-energy generated lead before each synthesized item while retaining
+  50 ms of preroll and the caller's `pause_second`. Complete and chunked output
+  share the same 10 ms RMS boundary; quiet items remain intact.
+- Keep playback demo TTFP as first PCM availability and additionally report
+  `lead_ms` and `first_voiced_chunk_ms`; neither is an acoustic loopback clock.
+- Return the actual sample rate in HTTP PCM streaming headers and propagate
+  synthesis errors instead of emitting a silent fallback block.
+- Include HTTP endpoint tests in model-free CI.
+- Keep documented inference language labels independent of the host UI locale,
+  and use the model's sample rate in playback examples.
+- Mask unused static/CUDA-Graph KV slots and keep graph-key alignment gaps out
+  of SDPA and FlashAttention2 attention.
+- Preserve the complete prompt and generated context when a fixed KV bucket
+  fills, continuing with dynamic KV instead of evicting the oldest entries.
+- Make CUDA Graph capture sampling-RNG neutral.
+- Reject and retry pathological semantic-token loops before SoVITS/BigVGAN.
+- Preserve the v3 SoVITS acoustic architecture independently of its v2 text symbols.
+- Preserve existing Japanese comma endings in prompt and generated text segments.
 - Removed the default device-wide synchronize after every CUDA Graph replay;
   `CUDA_GRAPH_REPLAY_SYNC=1` retains it as a diagnostic.
 - Folded greedy and sampled EOS checks into one device-to-host sync.
