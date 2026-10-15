@@ -186,6 +186,19 @@ At end-of-sequence, a single summary line aggregates all stats:
 
 ## BigVGAN Pre-compiled CUDA Kernel
 
+CUDA device selection is resolved before weight loading. An unindexed `cuda`
+uses the current visible device, and explicit indexes are range checked. Model
+loading, extension cache identity, warmup and vocoder calls use that selected
+context; diagnostic synchronization names the device explicitly.
+
+Warmup defaults to 40/70/128 frames, five repetitions. Constructor settings
+override the Aqua environment settings and may disable warmup with an empty
+shape list. Preparation uses actual model channels/dtype/device in inference mode,
+restores CPU/selected-GPU RNG state, and reports status instead of silently hiding
+failures. Shapes/repetitions have a bounded startup budget. Request shape counts
+exclude synthetic warmup. Normal complete V3 stream output does not synchronize
+the device merely to calculate an unused diagnostic duration.
+
 ### Problem
 
 NVIDIA's official BigVGAN uses `torch.utils.cpp_extension.load()` which compiles the fused anti-alias activation CUDA kernel on first use. This requires Ninja and a C++ compiler at inference time, adding ~2-3s of startup latency.
@@ -334,6 +347,8 @@ This prevents the common "first request penalty" where CUDA lazy initialization,
 | `AQUATTS_T2S_FLASH_ATTN` | `auto` / unset | `0` forces SDPA; `1` explicitly requests FA2; `auto`, empty, or unset prefers FA2 when importable |
 | `AQUATTS_T2S_FLASH_ATTN_MODE` | `valid` | FA2 reads the true KV length; `bucket` uses explicit scatter with the same safe valid prefix |
 | `BIGVGAN_CACHE_ROOT` | package CUDA directory | Product-owned root for ABI-keyed compiled BigVGAN extensions |
+| `AQUATTS_BIGVGAN_WARMUP_SHAPES` | `40,70,128` | Positive mel lengths; an empty value disables warmup |
+| `AQUATTS_BIGVGAN_WARMUP_REPEATS` | `5` | Positive warmup repetitions, bounded to 20 |
 | `TORCH_CUDA_ARCH_LIST` | `""` | CUDA arch list (set by loader, not user) |
 
 ## V2-family model integration

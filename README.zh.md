@@ -206,6 +206,24 @@ assert result["ready"]  # status 为 built 或 hit
 归一化引用数超过容量时直接拒绝。成功结果还包含键、驻留数量和被淘汰的键。已捕获 CUDA
 Graph 时，更改设备或精度应新建推理器。省略预热仍可按请求构建参考缓存。
 
+### CUDA 设备与 vocoder 预热
+
+`device="cuda"` 在构造时解析为当前 CUDA 设备；`cuda:N` 指定进程可见设备索引，并遵循
+`CUDA_VISIBLE_DEVICES` 映射。CUDA 不可用或索引越界会在加载权重前报错。BigVGAN 扩展缓存
+选择与模型调用使用所选 CUDA 上下文。
+
+BigVGAN 默认仍预热 40/70/128 mel 帧，各五次。可设置
+`bigvgan_warmup_shapes=[9, 23, 47]`、`bigvgan_warmup_repeats=2`，空列表可关闭预热。
+省略参数时读取 `AQUATTS_BIGVGAN_WARMUP_SHAPES`（逗号分隔，空值关闭）和
+`AQUATTS_BIGVGAN_WARMUP_REPEATS`，显式参数优先。长度去重且必须为正整数；最多 16 个
+不同形状、每形状 4096 帧、20 次重复，预热总帧数不超过 65536。
+
+预热使用模型实际精度、设备及 mel 通道，在 inference mode 下执行并保留 CPU 与所选 GPU
+的 RNG 状态。`tts.vocoder_warmup_stats` 报告完成、关闭或失败，失败会记录日志；
+`tts.vocoder_shape_counts` 统计真实请求长度。24 kHz V3 的 0.1/0.25/0.5 秒块可能对应
+9/23/47 帧，另有短尾块，因此默认集合不覆盖所有负载。普通 vocoder 调用不增加全设备同步，
+诊断计时仍需显式开启。辅助 `load_bigvgan(..., device="cuda:N")` 也支持指定设备。
+
 ## 语言支持
 
 Aqua-TTS 使用所选 GPT-SoVITS 权重对应的文本前端。通过 `text_language` / `prompt_language` 参数传入语言代码，参考音频和目标文本可使用不同语言。

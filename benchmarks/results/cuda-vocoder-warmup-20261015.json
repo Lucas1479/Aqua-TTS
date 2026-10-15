@@ -1,0 +1,323 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "1577623",
+  "source_sha256_lf": {
+    "aquatts/inferencer.py": "626203c6636f17ff1e808f3e17f829837d31c9ca8ceb10b8feebf8c36e8b202e",
+    "aquatts/inference/cuda_runtime.py": "86b96b28ec4bf797c506c1ab32e191ae6ffdabfadd65e82a0ea6a06ba1447221",
+    "aquatts/inference/streaming.py": "3e4d3aad03638f4475611f6b4d8a9a64963abb47bac4ae83b6cf9951738bd18f",
+    "aquatts/bigvgan/cuda/load.py": "078d68b4ebde44a6d309216d53008ae5330e246b19b46971564db5dd791d499c"
+  },
+  "validation": {
+    "runtime_passed": 396,
+    "model_less_passed": 212,
+    "model_less_skipped": 16,
+    "ruff": "passed",
+    "build_twine_wheel_contents": "passed"
+  },
+  "real_weight_checks": {
+    "default": {
+      "warmup": "default",
+      "kernel_requested": "auto",
+      "kernel_actual": "cuda",
+      "kernel_fallback_reason": null,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "device": "cuda:0",
+      "visible_devices": 1,
+      "torch": "2.5.1+cu121",
+      "graph_preset": "lazy",
+      "load_seconds": 6.58417210000016,
+      "warmup_stats": {
+        "status": "completed",
+        "shapes": [
+          40,
+          70,
+          128
+        ],
+        "repeats": 5,
+        "forward_calls": 15,
+        "seconds": 0.9463326999998571,
+        "device": "cuda:0",
+        "dtype": "torch.float16",
+        "mel_channels": 100
+      },
+      "rng_preserved": true,
+      "shape_seconds_first_and_two_repeats": {
+        "9": [
+          0.11852230000022246,
+          0.031805699999949866,
+          0.03171810000003461
+        ],
+        "23": [
+          0.10967429999982414,
+          0.03342879999991055,
+          0.033126199999969685
+        ],
+        "46": [
+          0.09129469999970752,
+          0.03552540000009685,
+          0.035598100000242994
+        ],
+        "40": [
+          0.03676660000019183,
+          0.03570579999995971,
+          0.0354973999997128
+        ],
+        "70": [
+          0.040917699999681645,
+          0.04075249999959851,
+          0.040872699999908946
+        ],
+        "128": [
+          0.04791579999982787,
+          0.04817110000021785,
+          0.048266700000112905
+        ]
+      },
+      "request_shape_counts": {
+        "9": 21,
+        "2": 1,
+        "23": 8,
+        "7": 1,
+        "47": 4,
+        "3": 1,
+        "191": 1
+      },
+      "trials": [
+        {
+          "chunk_seconds": 0.1,
+          "first_nonempty_seconds": 2.3153943000002073,
+          "total_seconds": 4.530087800000274,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.25,
+          "first_nonempty_seconds": 1.2469263999996656,
+          "total_seconds": 2.2012682999998106,
+          "samples": 30656,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.5,
+          "first_nonempty_seconds": 0.9677777000001697,
+          "total_seconds": 1.5441009000001031,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": null,
+          "first_nonempty_seconds": 0.8615724999999657,
+          "total_seconds": 0.861654599999838,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        }
+      ],
+      "peak_cuda_allocated_bytes": 1489301504,
+      "source_sha256_lf": "626203c6636f17ff1e808f3e17f829837d31c9ca8ceb10b8feebf8c36e8b202e",
+      "scope": "One fresh process per configuration. Request timings follow synthetic vocoder probes and reference warmup; not cold end-to-end latency. Graph is disabled for request sync checks."
+    },
+    "custom": {
+      "warmup": "custom",
+      "kernel_requested": "auto",
+      "kernel_actual": "cuda",
+      "kernel_fallback_reason": null,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "device": "cuda:0",
+      "visible_devices": 1,
+      "torch": "2.5.1+cu121",
+      "graph_preset": "lazy",
+      "load_seconds": 6.355514500000027,
+      "warmup_stats": {
+        "status": "completed",
+        "shapes": [
+          9,
+          23,
+          47
+        ],
+        "repeats": 2,
+        "forward_calls": 6,
+        "seconds": 0.5783000999999786,
+        "device": "cuda:0",
+        "dtype": "torch.float16",
+        "mel_channels": 100
+      },
+      "rng_preserved": true,
+      "shape_seconds_first_and_two_repeats": {
+        "9": [
+          0.03153959999963263,
+          0.031987800000024436,
+          0.031512800000200514
+        ],
+        "23": [
+          0.03292229999988194,
+          0.033616300000176125,
+          0.034177700000327604
+        ],
+        "46": [
+          0.15255699999943317,
+          0.036295699999755016,
+          0.03592380000009143
+        ],
+        "40": [
+          0.13532470000063768,
+          0.03523649999988265,
+          0.03540120000070601
+        ],
+        "70": [
+          0.12329090000002907,
+          0.04048899999997957,
+          0.04076710000026651
+        ],
+        "128": [
+          0.1293456999992486,
+          0.04789489999984653,
+          0.04813259999991715
+        ]
+      },
+      "request_shape_counts": {
+        "9": 21,
+        "2": 1,
+        "23": 8,
+        "7": 1,
+        "47": 4,
+        "3": 1,
+        "191": 1
+      },
+      "trials": [
+        {
+          "chunk_seconds": 0.1,
+          "first_nonempty_seconds": 2.4326237000004767,
+          "total_seconds": 4.774215300000833,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.25,
+          "first_nonempty_seconds": 1.403049700000338,
+          "total_seconds": 2.4715586000002077,
+          "samples": 30656,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.5,
+          "first_nonempty_seconds": 0.9943555999998352,
+          "total_seconds": 1.646116500000062,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": null,
+          "first_nonempty_seconds": 0.9359441000005972,
+          "total_seconds": 0.9360335000001214,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        }
+      ],
+      "peak_cuda_allocated_bytes": 1489301504,
+      "source_sha256_lf": "626203c6636f17ff1e808f3e17f829837d31c9ca8ceb10b8feebf8c36e8b202e",
+      "scope": "One fresh process per configuration. Request timings follow synthetic vocoder probes and reference warmup; not cold end-to-end latency. Graph is disabled for request sync checks."
+    },
+    "off-pytorch": {
+      "warmup": "off",
+      "kernel_requested": "pytorch",
+      "kernel_actual": "pytorch",
+      "kernel_fallback_reason": null,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "device": "cuda:0",
+      "visible_devices": 1,
+      "torch": "2.5.1+cu121",
+      "graph_preset": "off",
+      "load_seconds": 5.5447674000001825,
+      "warmup_stats": {
+        "status": "disabled",
+        "shapes": [],
+        "repeats": 2,
+        "forward_calls": 0,
+        "seconds": 0.0
+      },
+      "rng_preserved": true,
+      "shape_seconds_first_and_two_repeats": {
+        "9": [
+          0.35548130000006495,
+          0.05558530000007522,
+          0.05240619999995033
+        ],
+        "23": [
+          0.1554505999997673,
+          0.05688450000025114,
+          0.05231640000010884
+        ],
+        "46": [
+          0.14315450000003693,
+          0.056082900000092195,
+          0.04802280000012615
+        ],
+        "40": [
+          0.16627040000003035,
+          0.0490617000000384,
+          0.07163330000003043
+        ],
+        "70": [
+          0.17337799999995696,
+          0.05725029999985054,
+          0.053838700000142126
+        ],
+        "128": [
+          0.1438849000001028,
+          0.05838519999997516,
+          0.05101920000015525
+        ]
+      },
+      "request_shape_counts": {
+        "9": 21,
+        "2": 1,
+        "23": 8,
+        "7": 1,
+        "47": 4,
+        "3": 1,
+        "191": 1
+      },
+      "trials": [
+        {
+          "chunk_seconds": 0.1,
+          "first_nonempty_seconds": 2.530700700000125,
+          "total_seconds": 5.437464000000091,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.25,
+          "first_nonempty_seconds": 1.3188202999999703,
+          "total_seconds": 2.4089294000000336,
+          "samples": 30656,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": 0.5,
+          "first_nonempty_seconds": 1.1309178999999858,
+          "total_seconds": 1.8476762999998755,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        },
+        {
+          "chunk_seconds": null,
+          "first_nonempty_seconds": 0.8719372999998996,
+          "total_seconds": 0.8720521999998709,
+          "samples": 30896,
+          "explicit_device_synchronizations": 0
+        }
+      ],
+      "peak_cuda_allocated_bytes": 1489301504,
+      "source_sha256_lf": "626203c6636f17ff1e808f3e17f829837d31c9ca8ceb10b8feebf8c36e8b202e",
+      "scope": "One fresh process per configuration. Request timings follow synthetic vocoder probes and reference warmup; not cold end-to-end latency. Graph is disabled for request sync checks."
+    }
+  },
+  "notes": [
+    "Selected RTX 4070 Laptop GPU by CUDA_VISIBLE_DEVICES UUID; one visible CUDA device.",
+    "Actual 0.1/0.25/0.5-second chunks use 9/23/47 frames after rounding, plus tails. Custom preparation was corrected and remeasured against this observation.",
+    "Default/custom configurations loaded the cached CUDA extension; the off configuration used real PyTorch vocoder execution. Compiler failure fallback was injected in the runtime test.",
+    "Fresh extension compilation occurred during the preceding N3 Laptop smoke; CUDA source files are unchanged in this part. No separate fresh compilation is claimed for the final source.",
+    "Current-device/index=1 selection policy has substitute tests; a new real multi-GPU test and RTX 4070 Ti SUPER measurements are deferred per user instruction.",
+    "Each mode is a single process; shape samples are first call plus two repeats, not a latency distribution. Requests follow synthetic probes and reference warmup."
+  ]
+}
