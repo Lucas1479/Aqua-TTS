@@ -98,6 +98,22 @@ The default remains bucket. Layout, device, dtype or capacity changes require a
 new decoder. At 24 layers/hidden512/FP16, full bucket uses 147 MiB unique KV and
 nested uses 48 MiB; a single 448 bucket instead uses 21 MiB versus 48 MiB.
 
+### Prepared-only Promotion
+
+When a nested view fills, select the smallest larger captured bucket. Its KV views
+alias the same roots, so valid history is neither copied nor reallocated. Clear
+only `[old_capacity:new_capacity)` (including nonfinite stale data), reset the
+target validity mask and position, then replay its existing graph. Uncaptured
+targets are skipped; sparse sets may jump directly from 256 to 1024. Initial lazy
+capture is permitted before prompt installation, but promotion never captures on
+live KV. No target, maximum overflow, or bucket storage uses full-prefix private
+dynamic KV. Replay failure uses eager static decode before eventual fallback.
+
+Request-local counters include owner wait, initial/final KV, start/final bucket,
+promotions, capture attempts and per-path steps; published stats are the last
+completed request. `total_steps` includes prefill and `generated_tokens` preserves
+the existing return convention. Promotion does not change token/EOS policy.
+
 ### Thread Safety
 
 Each bucket storage owner holds a reentrant lease for the complete AR request,

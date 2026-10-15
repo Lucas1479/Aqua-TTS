@@ -9,6 +9,10 @@
   bucket views; the default `bucket` layout retains independent bucket storage.
 - A fresh-process `kv_layout_bench.py` reports unique KV storage separately from
   allocator totals, including sparse capture and legacy-source controls.
+- Nested KV promotes to larger already captured buckets without copying live KV,
+  clears newly exposed tails, and preserves complete history on dynamic fallback.
+- Per-request promotion/path counters and a fixed-work real-weight promotion
+  benchmark, with exported-source controls and strict FA2 fallback detection.
 
 ### Fixed
 

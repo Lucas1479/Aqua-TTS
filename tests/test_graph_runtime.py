@@ -9,7 +9,7 @@ streaming = pytest.importorskip("aquatts.modeling.t2s_streaming")
 from aquatts.inference.presets import resolve_cuda_graph_config  # noqa: E402
 
 
-def make_decoder(device="cpu", preset="lazy", layout="bucket", dtype=None):
+def make_decoder(device="cpu", preset="lazy", layout="bucket", dtype=None, buckets=None):
     torch.manual_seed(73)
     model = upstream.Text2SemanticDecoder({"model": {
         "hidden_dim": 64, "embedding_dim": 64, "head": 2, "n_layer": 2,
@@ -20,7 +20,7 @@ def make_decoder(device="cpu", preset="lazy", layout="bucket", dtype=None):
     elif str(device).startswith("cuda"):
         model.half()
     return streaming.apply_cuda_graph_patch(
-        model, graph_config=resolve_cuda_graph_config(preset, {}), kv_cache_layout=layout)
+        model, buckets=buckets, graph_config=resolve_cuda_graph_config(preset, {}), kv_cache_layout=layout)
 
 
 @pytest.mark.parametrize("preset", ["full", "minimal", "lazy", "off"])

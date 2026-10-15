@@ -389,8 +389,12 @@ for sr, chunk, text in tts.infer_stream(
 短桶 attention 形状。共享根的 Graph 请求共用一个 owner。省略参数时构造器读取
 `AQUATTS_KV_CACHE_LAYOUT`（默认 `bucket`），显式参数优先。捕获后改变布局、设备、
 dtype 或容量需要新建 decoder。只用少量短图时 bucket 可能更省显存，nested 并非始终更小。
-full/minimal 只准备各自声明的桶；lazy/off 不在启动时分配 Graph 根。桶满仍保留完整历史
-并转动态解码，升到已准备目标的能力由后续改动提供。
+full/minimal 只准备各自声明的桶；lazy/off 不在启动时分配 Graph 根。nested 桶满后，
+切换到最小的、更大的**已捕获**桶，原地保留有效 KV，并清零新暴露的尾区。升桶不捕获
+新图，也不扩大准备集合。没有已准备目标或使用 bucket 存储时，保留完整历史转动态解码。
+
+`decoder.cuda_graph_stats` 记录最后完成请求的起止 KV、起止桶、升桶次数、Graph/静态/
+动态步数、捕获尝试和工作区等待秒数。数值日志提供相同路径信息，不记录文本内容。
 
 **自适应 FlashAttention2 T2S 路径**（兼容时自动优先）：
 
