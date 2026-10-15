@@ -17,7 +17,8 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 Runtime modifications applied in memory:
 - Replaced dynamic `torch.cat` KV cache with static `scatter_` buffers
-- Added bucketed CUDA Graph capture/replay (6 bucket sizes, 13 pre-captured pairs)
+- Added bucketed CUDA Graph capture/replay (6 bucket capacities, one graph per prepared bucket)
+- Added optional shared-root nested KV views and complete AR workspace ownership
 - Added `cuda_graph_stats` dict for per-step and EOS performance logging
 - Added `precapture_cuda_graph()` for eager graph enumeration at model load
 - Added `apply_cuda_graph_patch()` entry point in aquatts.modeling

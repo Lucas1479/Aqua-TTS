@@ -4,7 +4,21 @@ from threading import Event
 
 import pytest
 
-from aquatts.inference.workspace import GraphWorkspaceRegistry
+from aquatts.inference.workspace import GraphWorkspaceRegistry, resolve_kv_cache_layout
+
+
+def test_layout_default_and_explicit_override(monkeypatch):
+    monkeypatch.delenv("AQUATTS_KV_CACHE_LAYOUT", raising=False)
+    assert resolve_kv_cache_layout() == "bucket"
+    monkeypatch.setenv("AQUATTS_KV_CACHE_LAYOUT", "nested")
+    assert resolve_kv_cache_layout() == "nested"
+    assert resolve_kv_cache_layout(" BUCKET ") == "bucket"
+
+
+@pytest.mark.parametrize("layout", ["graph", "auto", "", False])
+def test_unknown_layout_is_visible(layout):
+    with pytest.raises(ValueError, match="bucket or nested"):
+        resolve_kv_cache_layout(layout)
 
 
 def test_same_owner_cannot_enter_between_request_steps():

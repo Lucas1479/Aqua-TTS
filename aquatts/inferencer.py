@@ -11,6 +11,7 @@ from string import punctuation
 import torch
 import numpy as np
 from aquatts.inference.onset import LeadingSilence, leading_cut
+from aquatts.inference.workspace import resolve_kv_cache_layout
 
 from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
 from aquatts.inference.semantic_stability import (
@@ -158,7 +159,8 @@ class TTSInferencer:
                  cuda_graph_preset="full",
                  use_flash_attn=None,
                  flash_attn_mode=None,
-                 sv_model_path=None):
+                 sv_model_path=None,
+                 kv_cache_layout=None):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -189,9 +191,12 @@ class TTSInferencer:
                 then auto-enable when FlashAttention2 is available.
             flash_attn_mode: "valid" (fused KV update) or "bucket" (explicit
                 scatter); both attend only the true contiguous KV prefix.
+            kv_cache_layout: "bucket" (independent bucket storage) or "nested"
+                (shared maximum root); None reads AQUATTS_KV_CACHE_LAYOUT once.
         """
         self._cuda_graph_preset = cuda_graph_preset
         self._cuda_graph_config = _resolve_cg_config(cuda_graph_preset)
+        self._kv_cache_layout = resolve_kv_cache_layout(kv_cache_layout)
         self._use_flash_attn = use_flash_attn
         self._flash_attn_mode = (
             flash_attn_mode
@@ -558,7 +563,8 @@ class TTSInferencer:
 
         from aquatts.modeling.t2s_streaming import apply_cuda_graph_patch
 
-        apply_cuda_graph_patch(decoder, graph_config=self._cuda_graph_config)
+        apply_cuda_graph_patch(decoder, graph_config=self._cuda_graph_config,
+                               kv_cache_layout=self._kv_cache_layout)
         logger.info("[Aqua] patched upstream GPT-SoVITS decoder: %s", source)
 
     def _warmup_bigvgan_shapes(self):

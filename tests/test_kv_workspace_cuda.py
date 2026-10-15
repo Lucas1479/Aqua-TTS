@@ -13,7 +13,8 @@ from aquatts.inference.workspace import GraphWorkspaceRegistry  # noqa: E402
 @pytest.mark.parametrize("different_key", [False, True])
 @pytest.mark.parametrize("attention", ["sdpa", "flash"])
 @pytest.mark.parametrize("prepared", [False, True])
-def test_concurrent_requests_match_serial_logits(monkeypatch, different_key, attention, prepared):
+@pytest.mark.parametrize("layout", ["bucket", "nested"])
+def test_concurrent_requests_match_serial_logits(monkeypatch, different_key, attention, prepared, layout):
     monkeypatch.setattr(streaming, "_CUDA_GRAPH_WARMUP_STEPS", 2)
     local = threading.local()
 
@@ -23,7 +24,7 @@ def test_concurrent_requests_match_serial_logits(monkeypatch, different_key, att
 
     monkeypatch.setattr(upstream, "sample", deterministic_sample)
     with torch.cuda.device(0), torch.no_grad():
-        decoder = make_decoder("cuda:0")
+        decoder = make_decoder("cuda:0", layout=layout)
         if attention == "flash":
             from aquatts.modeling.t2s_flash_attn import apply_flash_attn_patch, is_flash_attn_available
             if not is_flash_attn_available():
@@ -34,11 +35,11 @@ def test_concurrent_requests_match_serial_logits(monkeypatch, different_key, att
             for block in decoder.t2s_transformer_static.blocks:
                 monkeypatch.setattr(block.sdpa_block, "decode_next_token_with_static_cache", reject_fallback)
         if prepared:
-            assert decoder._warmup_and_capture_bucket(256, 32, "cuda:0")
+            assert decoder._warmup_and_capture_bucket(256, "cuda:0")
             if different_key:
-                assert decoder._warmup_and_capture_bucket(256, 64, "cuda:0")
+                assert decoder._warmup_and_capture_bucket(448, "cuda:0")
         inputs = []
-        for index, length in enumerate((16, 48 if different_key else 16)):
+        for index, length in enumerate((16, 144 if different_key else 16)):
             x = (torch.arange(length, device="cuda:0") + 1 + index * 11).remainder(62).unsqueeze(0)
             prompt = torch.arange(1, 17, device="cuda:0").unsqueeze(0)
             bert = torch.zeros(1, 1024, length, device="cuda:0", dtype=torch.float16)

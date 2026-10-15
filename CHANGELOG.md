@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- One CUDA Graph per computation bucket, shared across real prefix lengths.
+- Optional `kv_cache_layout="nested"` shares a maximum KV root across short
+  bucket views; the default `bucket` layout retains independent bucket storage.
+- A fresh-process `kv_layout_bench.py` reports unique KV storage separately from
+  allocator totals, including sparse capture and legacy-source controls.
+
 ### Fixed
 
 - Inference requests inherit the instance CUDA Graph policy by default. Preset,

@@ -129,7 +129,8 @@ def test_live_decoder_explicitly_receives_aqua_patch(monkeypatch):
     )
     inferencer.t2s_model = SimpleNamespace(model=decoder)
     inferencer._cuda_graph_config = {"enable": False}
+    inferencer._kv_cache_layout = "bucket"
 
     inferencer._apply_aqua_t2s_patch()
 
-    assert calls == [(decoder, {"graph_config": {"enable": False}})]
+    assert calls == [(decoder, {"graph_config": {"enable": False}, "kv_cache_layout": "bucket"})]

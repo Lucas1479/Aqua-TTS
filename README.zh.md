@@ -33,6 +33,9 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 
 <sub>**延迟定义：** TTFP 基准 = 预热缓存下模型侧首音延迟（下表）。端到端首音 = 完整管线含音频缓冲和播放启动耗时，实际通常 **0.4–0.7 s**。冷启动 = 初始化 + 模型加载 + 首次推理，主要被 BigVGAN CUDA 内核编译占据（首次约 2 分钟，之后缓存）。</sub>
 
+时延与吞吐行保留 KV 布局更新前的已发布测量，机制行说明当前运行时。
+新增存储测量见 [KV 布局 probe](benchmarks/README.md#graph-kv-storage-layouts)。
+
 | | 上游 T2S 执行* | Aqua Graph + SDPA | Aqua 默认（FA2 `valid`） |
 |---|---|---|---|
 | T2S 短形状 / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
@@ -45,10 +48,10 @@ Aqua-TTS 是专为**实时语音对话**设计的 GPU 优化推理运行时—�
 | Decode attention | 原生 PyTorch + 动态 KV | 静态 bucket 上的 SDPA | **按真实 KV 长度读取的 FA2** |
 | KV 缓存写入 | 每 token `torch.cat` | **原位 `scatter_`** | **FA2 KV-cache update** |
 | KV 分配 | 每 token 增长 | **按 bucket 预分配并限界** | **按 bucket 预分配并限界** |
-| CUDA Graph | 标准入口无 | **15 个常用 graph key / 6 个配置 bucket + 惰性捕获** | **15 个常用 graph key / 6 个配置 bucket + 惰性捕获** |
+| CUDA Graph | 标准入口无 | **每个准备桶一图，最多 6 图 + 惰性捕获** | **每个准备桶一图，最多 6 图 + 惰性捕获** |
 | Replay 同步 | eager launch | **CUDA stream 保序；无逐 token 设备同步** | **CUDA stream 保序；无逐 token 设备同步** |
 | EOS 主机读取 | 上游条件判断 | **greedy + sampled EOS 合并一次读取** | **greedy + sampled EOS 合并一次读取** |
-| Graph 并发 | 不适用 | **每个 `(bucket, initial_len)` key 独立锁** | **每个 `(bucket, initial_len)` key 独立锁** |
+| Graph 并发 | 不适用 | **按桶或 nested 共享根持有完整 AR 租约** | **按桶或 nested 共享根持有完整 AR 租约** |
 | 失败回退 | 动态 decoder | **Graph → 静态 KV → 动态** | **FA2 → SDPA；Graph → 静态 KV → 动态** |
 | BigVGAN 激活 | 运行时扩展/JIT 路径 | **ABI 缓存 CUDA → 纯 PyTorch 回退** | **ABI 缓存 CUDA → 纯 PyTorch 回退** |
 | 流式契约 | 上游原生 generator | **保留 generator；仅补丁直接 `infer_panel()`** | **保留 generator；仅补丁直接 `infer_panel()`** |
@@ -71,7 +74,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 - **静态 KV 缓存** — 预分配的 scatter 缓冲区，消除每步 `torch.cat` 开销
 - **语义稳定性保护** — 在声码器前拒绝重复 token 塌缩，并进行一次有界重试
-- **分桶 CUDA Graph** — 6 个配置 bucket 预捕获 15 个常用 graph key，少见形状惰性捕获
+- **分桶 CUDA Graph** — 每个准备桶一图，支持六个配置容量、可选 nested KV 存储及惰性捕获
 - **BigVGAN CUDA 扩展缓存** — 按 GPU/Python/Torch/CUDA ABI 缓存 NVIDIA 内核，支持 torch 回退
 - **自适应 FlashAttention2 KV 缓存** — 自动优先 `flash_attn_with_kvcache` `valid` 模式，并可回退 SDPA
 - **流式 API** — 基于生成器的 `infer_stream()`，首包尽早 yield
@@ -377,8 +380,17 @@ for sr, chunk, text in tts.infer_stream(
 
 同一 decoder 中共享同一 Graph 工作区的请求，会在完整 T2S AR 生成期间串行执行，
 覆盖 prompt 安装与采样。跨 stream 交接使用 CUDA event，不增加逐 token 的设备同步。
-不同 Graph key 和不同 decoder 实例保持独立所有权；关闭 Graph 的请求使用私有 KV。
+不同存储 owner 和不同 decoder 实例保持独立所有权；关闭 Graph 的请求使用私有 KV。
 计数器描述最后完成的 AR 请求，不是并发请求的累加总数。
+
+每个计算桶只捕获一张 Graph，不同真实前缀长度复用该图。
+`TTSInferencer(kv_cache_layout="bucket")` 按桶独立保存 KV，是当前默认值；
+`kv_cache_layout="nested"` 使用同一个最大容量根的短桶视图，减少多桶 KV 驻留并保留
+短桶 attention 形状。共享根的 Graph 请求共用一个 owner。省略参数时构造器读取
+`AQUATTS_KV_CACHE_LAYOUT`（默认 `bucket`），显式参数优先。捕获后改变布局、设备、
+dtype 或容量需要新建 decoder。只用少量短图时 bucket 可能更省显存，nested 并非始终更小。
+full/minimal 只准备各自声明的桶；lazy/off 不在启动时分配 Graph 根。桶满仍保留完整历史
+并转动态解码，升到已准备目标的能力由后续改动提供。
 
 **自适应 FlashAttention2 T2S 路径**（兼容时自动优先）：
 
