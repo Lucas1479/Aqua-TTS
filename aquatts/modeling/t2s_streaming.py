@@ -25,6 +25,7 @@ from aquatts.inference.presets import (
     resolve_cuda_graph_config,
     resolve_cuda_graph_request,
 )
+from aquatts.inference.workspace import GraphWorkspaceRegistry
 
 # ---------------------------------------------------------------------------
 # Upstream GPT-SoVITS imports. Aqua patches these objects in-place and does not
@@ -41,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 _GRAPH_INITIAL_LEN_STRIDE = 32
 _SUPPORTED_PATCH_KWARGS = frozenset({"enable_cuda_graph", "enable_static_kv"})
+# Torch's capture allocator is process-global even with per-device streams.
+_CAPTURE_LOCK = threading.RLock()
 
 
 class IncompatibleGPTSoVITSError(RuntimeError):
@@ -340,18 +343,16 @@ def _select_bucket(decoder, kv_cache_len):
 
 
 def _get_bucket_lock(decoder, bucket_key):
-    """Per-bucket lock for concurrency-safe graph capture and replay."""
-    if bucket_key is None:
-        return decoder.cuda_graph_lock
-    with decoder._bucket_locks_guard:
-        lock = decoder._bucket_locks.get(bucket_key)
-        if lock is None:
-            lock = threading.Lock()
-            decoder._bucket_locks[bucket_key] = lock
-    return lock
+    return decoder._graph_workspaces.lock_for(bucket_key)
 
 
 def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
+    key = (bucket_size, initial_len)
+    with decoder._graph_workspaces.lease(key, device), _CAPTURE_LOCK:
+        return _capture_bucket(decoder, bucket_size, initial_len, device)
+
+
+def _capture_bucket(decoder, bucket_size, initial_len, device):
     """Warm up and capture a CUDA Graph for a specific (bucket_size, initial_len) pair."""
     graph_key = (bucket_size, initial_len)
     print(f"Capturing CUDA Graph for bucket={bucket_size}, initial_len={initial_len}...")
@@ -435,11 +436,12 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
         try:
             _has_capture_error_mode = (
                 "capture_error_mode"
-                in _inspect.signature(torch.cuda.CUDAGraph.__init__).parameters
+                in _inspect.signature(torch.cuda.graph).parameters
             )
         except (ValueError, TypeError):
             _has_capture_error_mode = False  # PyTorch < 2.5
-        _graph_extra = {"capture_error_mode": "relaxed"} if _has_capture_error_mode else {}
+        # Other owners may replay while this thread prepares a different key.
+        _graph_extra = {"capture_error_mode": "thread_local"} if _has_capture_error_mode else {}
         with torch.cuda.device(device):
             cuda_graph = torch.cuda.CUDAGraph()
             capture_stream.wait_stream(torch.cuda.current_stream(device))
@@ -605,7 +607,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     logger.debug("Graph requested=%s default=%s available=%s enabled=%s",
                  kwargs.get("enable_cuda_graph"), decoder.cuda_graph_enabled,
                  decoder.cuda_graph_available, enable_cuda_graph)
-    graph_run_enabled = enable_cuda_graph and bool(getattr(decoder, "kv_cache_buckets", []))
+    graph_run_enabled = enable_cuda_graph and bsz == 1 and bool(getattr(decoder, "kv_cache_buckets", []))
 
     current_bucket = None
     bucket_captured = False
@@ -621,8 +623,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     dynamic_transformer = decoder.t2s_transformer
     static_mode_active = enable_static_kv and static_transformer is not None
 
-    decoder.cuda_graph_stats["total_steps"] = 0
-    decoder.cuda_graph_stats["graph_replay_steps"] = 0
+    request_stats = {"total_steps": 0, "graph_replay_steps": 0}
 
     if static_mode_active:
         transformer = static_transformer
@@ -748,7 +749,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                         _replay_cuda_graph(decoder, cuda_graph, xy_pos.device)
 
                         logits = static_outputs["logits"]
-                        decoder.cuda_graph_stats["graph_replay_steps"] += 1
+                        request_stats["graph_replay_steps"] += 1
                         graph_step_count += 1
 
                         if not hasattr(decoder, "_cuda_graph_replay_started"):
@@ -842,22 +843,23 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
             print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
 
             if graph_run_enabled and bucket_captured and current_bucket is not None:
-                decoder.cuda_graph_stats["total_steps"] = idx + 1
-                graph_ratio = (decoder.cuda_graph_stats["graph_replay_steps"] /
-                               decoder.cuda_graph_stats["total_steps"] * 100)
+                request_stats["total_steps"] = idx + 1
+                graph_ratio = (request_stats["graph_replay_steps"] /
+                               request_stats["total_steps"] * 100)
                 print(f"CUDA Graph stats: "
-                      f"total={decoder.cuda_graph_stats['total_steps']}, "
-                      f"replay={decoder.cuda_graph_stats['graph_replay_steps']} "
+                      f"total={request_stats['total_steps']}, "
+                      f"replay={request_stats['graph_replay_steps']} "
                       f"({graph_ratio:.1f}%), bucket={current_bucket}")
             break
 
-        decoder.cuda_graph_stats["total_steps"] = idx + 1
+        request_stats["total_steps"] = idx + 1
         y_emb = decoder.ar_audio_embedding(y[:, -1:])
         xy_pos = (y_emb * decoder.ar_audio_position.x_scale
                   + decoder.ar_audio_position.alpha
                   * decoder.ar_audio_position.pe[:, y_len + idx].to(
                       dtype=y_emb.dtype, device=y_emb.device))
 
+    decoder.cuda_graph_stats.update(request_stats)
     if ref_free:
         return y[:, :-1], 0
     return y[:, :-1], idx
@@ -929,11 +931,9 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
     decoder.bucket_k_cache_buffers = {}
     decoder.bucket_v_cache_buffers = {}
 
-    # --- Threading ---
-    if not hasattr(decoder, "cuda_graph_lock"):
-        decoder.cuda_graph_lock = threading.Lock()
-    decoder._bucket_locks = {}
-    decoder._bucket_locks_guard = threading.Lock()
+    # Shared graph state is owned for the complete AR request, not one replay.
+    decoder._graph_workspaces = GraphWorkspaceRegistry()
+    decoder.cuda_graph_lock = decoder._graph_workspaces.lock_for(None)
 
     # --- Stats ---
     if not hasattr(decoder, "cuda_graph_stats"):
@@ -992,10 +992,29 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
                 repetition_penalty,
                 **kwargs,
             )
-        return _patched_infer_panel_naive(
-            decoder, x, x_lens, prompts, bert_feature,
-            top_k, top_p, early_stop_num, temperature, repetition_penalty, **kwargs
+        def run_request():
+            return _patched_infer_panel_naive(
+                decoder, x, x_lens, prompts, bert_feature,
+                top_k, top_p, early_stop_num, temperature, repetition_penalty, **kwargs
+            )
+
+        graph_enabled = resolve_cuda_graph_request(
+            kwargs.get("enable_cuda_graph"), default=decoder.cuda_graph_enabled,
+            available=decoder.cuda_graph_available,
+            static_kv=bool(kwargs.get("enable_static_kv", decoder.use_static_kv_cache)
+                           and decoder.use_static_kv_cache),
         )
+        bucket = None
+        if graph_enabled and x.is_cuda and x.shape[0] == 1:
+            prefix = x.shape[1] + (0 if prompts is None else prompts.shape[1])
+            bucket = _select_bucket(decoder, prefix)
+        if bucket is None:
+            return run_request()
+        aligned = ((prefix + _GRAPH_INITIAL_LEN_STRIDE - 1)
+                   // _GRAPH_INITIAL_LEN_STRIDE * _GRAPH_INITIAL_LEN_STRIDE)
+        with decoder._graph_workspaces.lease((bucket, aligned), x.device) as wait_seconds:
+            logger.debug("Graph workspace request wait=%.6fs key=%s", wait_seconds, (bucket, aligned))
+            return run_request()
 
     decoder.infer_panel = patched_infer_panel
     decoder._aquatts_cuda_graph_patched = True

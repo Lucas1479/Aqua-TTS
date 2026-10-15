@@ -9,6 +9,8 @@
   path; `off` no longer leaves the decoder enabled.
 - Warm up and capture on an explicit stream for the selected CUDA device,
   avoiding reuse of Torch's implicit capture stream across different GPUs.
+- Own shared Graph KV and logits for the complete AR request, with CUDA-event
+  stream handoff, exception-safe release and request-local replay counters.
 
 ## [0.2.1] — 2026-10-06
 

@@ -375,6 +375,11 @@ for sr, chunk, text in tts.infer_stream(
 请求完成后可查看 `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]`
 确认实际执行；捕获成功不等于已 replay。
 
+同一 decoder 中共享同一 Graph 工作区的请求，会在完整 T2S AR 生成期间串行执行，
+覆盖 prompt 安装与采样。跨 stream 交接使用 CUDA event，不增加逐 token 的设备同步。
+不同 Graph key 和不同 decoder 实例保持独立所有权；关闭 Graph 的请求使用私有 KV。
+计数器描述最后完成的 AR 请求，不是并发请求的累加总数。
+
 **自适应 FlashAttention2 T2S 路径**（兼容时自动优先）：
 
 Aqua-TTS 可以用 `flash_attn_with_kvcache` 替换 q_len=1 的 T2S 静态 KV attention 步骤。`valid` 模式按真实 KV 长度参与注意力，而不是读取完整零填充 bucket；现在只要能导入兼容的 FlashAttention2 就默认使用。如果 FA2 不存在，或者内核拒绝当前 shape/device，Aqua 会回退到 SDPA。

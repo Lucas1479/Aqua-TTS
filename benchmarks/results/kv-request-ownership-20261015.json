@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "7abaf1c",
+  "python": "3.12.10",
+  "torch": "2.5.1+cu121",
+  "validation": {
+    "runtime_suite": {"passed": 278, "skipped": 0},
+    "model_less_suite": {"passed": 175, "skipped": 10},
+    "lint": "passed",
+    "sdist_wheel_twine": "passed"
+  },
+  "regression_control": {
+    "source": "Unchanged t2s_streaming.py from base commit, loaded in a fresh process",
+    "test": "same-key concurrent decoder output compared with serial output",
+    "before": "failed: token output differed",
+    "after": "passed"
+  },
+  "ownership_contracts": [
+    "Same owner cannot enter between another request's token steps",
+    "Different keys and separate registries remain independent",
+    "Nested leases record only the outer completion event",
+    "Exceptions release the lock and retain the GPU handoff edge",
+    "Queued CUDA writes are observed on the next owner's stream"
+  ],
+  "cuda_concurrency": {
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "decoder": "two-layer synthetic FP16, hidden 64",
+    "cases": 8,
+    "attention": ["SDPA", "strict FA2 valid without silent fallback"],
+    "keys": ["same", "different"],
+    "preparation": ["prepared", "concurrent lazy misses"],
+    "result": "tokens and per-step logits match serial controls"
+  },
+  "real_weight_smoke": {
+    "version": "v3",
+    "attention_requested": "FA2 valid",
+    "nonstream": "passed",
+    "stream_trials": 18,
+    "sample_rate": 24000,
+    "graph_count": 3,
+    "last_graph_replay_steps": 114,
+    "gpt_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+    "sovits_sha256": "8f979cfe86f8193ba03c767bb8905b44b3b78858bf3225b71c03c56e69b31916"
+  },
+  "limits": [
+    "Correctness checks do not establish latency or throughput improvements.",
+    "Concurrent serial-logit controls use a synthetic decoder; full-weight speech smoke is sequential.",
+    "Nested cross-bucket storage sharing and promotion follow in separate changes."
+  ]
+}
