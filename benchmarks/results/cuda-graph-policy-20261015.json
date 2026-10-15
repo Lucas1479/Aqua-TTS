@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "591fbb5f82052b6965612a3f50dbc201fbc7e261",
+  "python": "3.12.10",
+  "torch": "2.5.1+cu121",
+  "gpus": ["NVIDIA GeForce RTX 4070 Ti SUPER", "NVIDIA GeForce RTX 4070 Laptop GPU"],
+  "validation": {
+    "runtime_suite": {"passed": 265, "skipped": 0},
+    "model_less_suite": {"passed": 171, "skipped": 9},
+    "lint": "passed",
+    "sdist_and_wheel": "passed",
+    "twine_check": "passed",
+    "wheel_contents": "39 entries; CUDA sources present; model weights excluded"
+  },
+  "cuda_contracts": {
+    "devices": [0, 1],
+    "presets": ["full", "minimal", "lazy", "off"],
+    "cases": ["inherit", "off_explicit_opt_in", "full_explicit_opt_out"],
+    "observations": "Enabled requests replay real captured graphs; disabled requests do not replay. Captures use an explicit stream on the selected device."
+  },
+  "v3_real_weight_smoke": {
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "attention": "SDPA",
+    "preset": "lazy",
+    "sample_rate": 24000,
+    "nonstream_default_inheritance": "passed",
+    "stream_trials": 18,
+    "modes": ["dynamic", "static", "graph"],
+    "seeds": [7, 17],
+    "text_languages": ["Japanese", "English"],
+    "graph_count": 3,
+    "last_graph_replay_steps": 114,
+    "gpt_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+    "sovits_sha256": "8f979cfe86f8193ba03c767bb8905b44b3b78858bf3225b71c03c56e69b31916",
+    "checks": ["expected sample rate", "finite non-silent mono float32 PCM", "semantic generation stats", "actual Graph replay"]
+  },
+  "limits": [
+    "Correctness smoke, not a latency benchmark or listening evaluation.",
+    "Python 3.10/3.11 checks run separately in GitHub CI.",
+    "Request-level KV ownership and nested layouts are subsequent changes."
+  ]
+}

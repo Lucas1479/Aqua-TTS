@@ -122,13 +122,14 @@ def test_live_decoder_explicitly_receives_aqua_patch(monkeypatch):
     monkeypatch.setattr(
         streaming,
         "apply_cuda_graph_patch",
-        lambda value: calls.append(value) or value,
+        lambda value, **kwargs: calls.append((value, kwargs)) or value,
     )
     inferencer = inferencer_module.TTSInferencer.__new__(
         inferencer_module.TTSInferencer
     )
     inferencer.t2s_model = SimpleNamespace(model=decoder)
+    inferencer._cuda_graph_config = {"enable": False}
 
     inferencer._apply_aqua_t2s_patch()
 
-    assert calls == [decoder]
+    assert calls == [(decoder, {"graph_config": {"enable": False}})]

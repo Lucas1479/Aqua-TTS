@@ -99,7 +99,7 @@ try:
     from GPT_SoVITS.BigVGAN import bigvgan
 
     from aquatts.inference.presets import (
-        apply_cuda_graph_preset as _apply_cg_preset,
+        resolve_cuda_graph_config as _resolve_cg_config,
         apply_preset as _apply_preset,
     )
 
@@ -191,6 +191,7 @@ class TTSInferencer:
                 scatter); both attend only the true contiguous KV prefix.
         """
         self._cuda_graph_preset = cuda_graph_preset
+        self._cuda_graph_config = _resolve_cg_config(cuda_graph_preset)
         self._use_flash_attn = use_flash_attn
         self._flash_attn_mode = (
             flash_attn_mode
@@ -557,7 +558,7 @@ class TTSInferencer:
 
         from aquatts.modeling.t2s_streaming import apply_cuda_graph_patch
 
-        apply_cuda_graph_patch(decoder)
+        apply_cuda_graph_patch(decoder, graph_config=self._cuda_graph_config)
         logger.info("[Aqua] patched upstream GPT-SoVITS decoder: %s", source)
 
     def _warmup_bigvgan_shapes(self):
@@ -637,25 +638,7 @@ class TTSInferencer:
         """
         try:
             # Resolve CUDA Graph preset (env vars override the named preset)
-            cg = _apply_cg_preset(self._cuda_graph_preset)
-
-            # Env var overrides (preserve backward compat)
-            if os.environ.get("ENABLE_CUDA_GRAPH", "").strip() in ("0", "1"):
-                cg["enable"] = os.environ["ENABLE_CUDA_GRAPH"] == "1"
-            if os.environ.get("ENABLE_CUDA_GRAPH_PRECAPTURE", "").strip() in ("0", "1"):
-                cg["precapture"] = os.environ["ENABLE_CUDA_GRAPH_PRECAPTURE"] == "1"
-            bucket_env = os.environ.get("CUDA_GRAPH_PRECAPTURE_BUCKETS", "")
-            if bucket_env.strip():
-                buckets = []
-                for token in bucket_env.split(","):
-                    token = token.strip()
-                    if not token:
-                        continue
-                    try:
-                        buckets.append(int(token))
-                    except ValueError:
-                        logger.warning(f"跳过非法桶配置: {token}")
-                cg["buckets"] = buckets
+            cg = self._cuda_graph_config
 
             if not cg["enable"]:
                 logger.info("[precapture] CUDA Graph disabled by preset/env")
@@ -1191,7 +1174,7 @@ class TTSInferencer:
               if_freeze=False,
               inp_refs=None,
               if_sr=False,
-              enable_cuda_graph=False,
+              enable_cuda_graph=None,
               enable_static_kv=True,
               max_sec_override=None):
         """
@@ -1589,7 +1572,7 @@ class TTSInferencer:
                      if_freeze=False,
                      inp_refs=None,
                      if_sr=False,
-                     enable_cuda_graph=False,
+                     enable_cuda_graph=None,
                      enable_static_kv=True,
                      chunk_size_seconds: float = None,
                      max_sec_override: float = None,

@@ -399,6 +399,16 @@ Two layers of presets control quality/speed trade-offs:
 | `lazy` | No | on-the-fly | Lower memory, slower TTFP |
 | `off` | Disabled | none | Static KV only, no graphs |
 
+`infer()` and `infer_stream()` inherit the instance's Graph setting when
+`enable_cuda_graph` is omitted or `None`. Explicit `False` disables replay for
+that request; `True` opts in when NVIDIA CUDA and static KV are available,
+including lazy capture on an `off` instance. `enable_static_kv=False` always
+disables Graph. `ENABLE_CUDA_GRAPH=0/1` overrides the preset at construction;
+`ENABLE_CUDA_GRAPH_PRECAPTURE` and `CUDA_GRAPH_PRECAPTURE_BUCKETS` override startup
+capture only. Later environment changes do not alter an existing instance.
+Use `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]` after a request
+to verify execution; a successful capture alone does not demonstrate replay.
+
 **Adaptive FlashAttention2 T2S path** (preferred automatically when available):
 
 Aqua-TTS can replace the q_len=1 T2S static-KV attention step with
