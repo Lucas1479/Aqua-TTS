@@ -284,3 +284,21 @@ drift. These measurements describe T2S work and exclude acoustic synthesis.
 python benchmarks/kv_promotion_bench.py --gpt-model F:/local/gpt.ckpt --output F:/local/current.json
 python benchmarks/kv_promotion_bench.py --gpt-model F:/local/gpt.ckpt --baseline-source F:/local/n2.py --output F:/local/baseline.json
 ```
+
+### Optional BERT and AP-BWE loading
+
+`optional_models_smoke.py` runs English, Japanese and Chinese streaming requests
+with local V3 weights while rejecting every AP-BWE import. Run fresh processes
+with and without `--preload-bert` to record startup, allocated/reserved CUDA memory,
+RSS, first successful BERT load time and per-language PCM hashes. One run per mode
+is a functional/resource check, not a latency distribution.
+
+```powershell
+python benchmarks/optional_models_smoke.py --config F:/local/v3.json --output F:/local/lazy
+python benchmarks/optional_models_smoke.py --config F:/local/v3.json --preload-bert --output F:/local/preload
+```
+
+The selected upstream Chinese frontend also needs its G2PW resources. If it uses
+cwd-relative paths, `--frontend-cwd F:/local/existing-upstream-assets` selects an
+existing resource root for this standalone benchmark process. The result records
+that condition; it does not establish arbitrary-cwd or fully offline frontend support.

@@ -86,7 +86,6 @@ try:
     from GPT_SoVITS.text import cleaned_text_to_sequence
     from GPT_SoVITS.text.cleaner import clean_text
     from GPT_SoVITS.module.mel_processing import spectrogram_torch, mel_spectrogram_torch
-    from tools.audio_sr import AP_BWE
     from GPT_SoVITS.text import chinese
     from GPT_SoVITS.feature_extractor import cnhubert
     from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
@@ -160,7 +159,8 @@ class TTSInferencer:
                  use_flash_attn=None,
                  flash_attn_mode=None,
                  sv_model_path=None,
-                 kv_cache_layout=None):
+                 kv_cache_layout=None,
+                 preload_bert=False):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -191,9 +191,17 @@ class TTSInferencer:
                 then auto-enable when FlashAttention2 is available.
             flash_attn_mode: "valid" (fused KV update) or "bucket" (explicit
                 scatter); both attend only the true contiguous KV prefix.
+            preload_bert: Load Chinese BERT during construction instead of first use.
+                English/Japanese-only requests otherwise leave BERT unloaded.
             kv_cache_layout: "bucket" (independent bucket storage) or "nested"
                 (shared maximum root); None reads AQUATTS_KV_CACHE_LAYOUT once.
         """
+        self.tokenizer = None
+        self.bert_model = None
+        self.bert_load_seconds = None
+        self._bert_load_lock = threading.Lock()
+        self.sr_model = None
+        self._sr_load_lock = threading.Lock()
         self._cuda_graph_preset = cuda_graph_preset
         self._cuda_graph_config = _resolve_cg_config(cuda_graph_preset)
         self._kv_cache_layout = resolve_kv_cache_layout(kv_cache_layout)
@@ -260,7 +268,6 @@ class TTSInferencer:
             for path, desc in [
                 (self.gpt_path, "GPT权重"),
                 (self.sovits_path, "SoVITS权重"),
-                (self.bert_path, "BERT模型"),
                 (self.cnhubert_path, "CNHuBERT模型"),
                 (self.fast_langdetect_path, "fast-langdetect模型"),
             ]:
@@ -275,8 +282,9 @@ class TTSInferencer:
             # 初始化语言字典
             self._init_language_dict()
 
-            # 初始化BERT和SSL模型
-            self._init_bert_model()
+            # Chinese features load BERT on first use; explicit preload is optional.
+            if preload_bert:
+                self.preload_bert_model()
             self._init_ssl_model()
 
             # 加载GPT和SoVITS模型
@@ -483,19 +491,37 @@ class TTSInferencer:
         self.is_v2pro = model in PRO_MODELS
         return model
 
+    @property
+    def bert_loaded(self):
+        """Whether both Chinese tokenizer and model are ready on this instance."""
+        return self.tokenizer is not None and self.bert_model is not None
+
+    def _ensure_bert_model(self):
+        if self.bert_loaded:
+            return
+        with self._bert_load_lock:
+            if not self.bert_loaded:
+                self._init_bert_model()
+
+    def preload_bert_model(self):
+        """Load Chinese features now; return the original successful load duration."""
+        self._ensure_bert_model()
+        return self.bert_load_seconds
+
     def _init_bert_model(self):
-        """Initialize BERT model for Chinese text encoding.
-        初始化BERT模型"""
+        """Build locally, then publish the complete tokenizer/model pair."""
         from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-        logger.info(f"加载BERT模型: {self.bert_path}")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
-        self.bert_model = AutoModelForMaskedLM.from_pretrained(self.bert_path)
-
+        started = time.perf_counter()
+        logger.info("加载BERT模型: %s", self.bert_path)
+        tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
+        model = AutoModelForMaskedLM.from_pretrained(self.bert_path)
         if self.is_half:
-            self.bert_model = self.bert_model.half().to(self.device)
-        else:
-            self.bert_model = self.bert_model.to(self.device)
+            model = model.half()
+        model = model.to(self.device).eval()
+        self.bert_load_seconds = time.perf_counter() - started
+        self.tokenizer, self.bert_model = tokenizer, model
+        logger.info("BERT ready in %.3fs", self.bert_load_seconds)
 
     def _init_ssl_model(self):
         """Initialize CNHuBERT SSL model for semantic feature extraction.
@@ -974,6 +1000,7 @@ class TTSInferencer:
     def get_bert_feature(self, text, word2ph):
         """Extract BERT features for Chinese text at phone level.
         获取BERT特征"""
+        self._ensure_bert_model()
         with torch.no_grad():
             inputs = self.tokenizer(text, return_tensors="pt")
             for i in inputs:
@@ -1089,12 +1116,21 @@ class TTSInferencer:
 
         return bert
 
+    def _get_audio_sr_model(self):
+        if self.sr_model is not None:
+            return self.sr_model
+        with self._sr_load_lock:
+            if self.sr_model is None:
+                from tools.audio_sr import AP_BWE
+                self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
+        return self.sr_model
+
     def _audio_sr(self, audio, sr):
         """Audio super-resolution processing.
         音频超分辨率处理"""
         try:
 
-            sr_model = AP_BWE(self.device, DictToAttrRecursive)
+            sr_model = self._get_audio_sr_model()
             return sr_model(audio, sr)
         except ImportError:
             logger.warning("未找到音频超分模块，跳过超分处理")
@@ -1523,12 +1559,11 @@ class TTSInferencer:
                         logger.info("执行音频超分...")
                         # Lazy-init super-resolution model
                         # 初始化超分模型（如果未初始化）
-                        if not hasattr(self, 'sr_model') or self.sr_model is None:
-                            self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
+                        sr_model = self._get_audio_sr_model()
 
                         # Run super-resolution
                         # 进行音频超分
-                        final_audio, sr = self.sr_model(final_audio.unsqueeze(0), sr)
+                        final_audio, sr = sr_model(final_audio.unsqueeze(0), sr)
 
                         # Prevent clipping again
                         # 再次防止爆音
@@ -2110,9 +2145,8 @@ class TTSInferencer:
             if if_sr and self.model_version == "v3":
                 try:
                     logger.info("执行音频超分...")
-                    if not hasattr(self, 'sr_model') or self.sr_model is None:
-                        self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
-                    audio_chunk, sr = self.sr_model(audio_chunk.unsqueeze(0), sr)
+                    sr_model = self._get_audio_sr_model()
+                    audio_chunk, sr = sr_model(audio_chunk.unsqueeze(0), sr)
                     max_audio = np.abs(audio_chunk).max()
                     if max_audio > 1:
                         audio_chunk = audio_chunk / max_audio

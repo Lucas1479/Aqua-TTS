@@ -155,7 +155,7 @@ sr, audio = tts.infer(
 （已验证 `08d627c`）。未传入 `sv_model_path` 时，从上游目录的
 `GPT_SoVITS/pretrained_models/sv/pretrained_eres2netv2w24s4ep4.ckpt` 加载。
 编码器权重由用户提供，仅 Pro／Plus 加载；普通 v2 无需此权重。v2 系列也不加载
-V3 底模或 BigVGAN，但仍需 BERT、CNHuBERT 和相应文本前端资源。
+V3 底模或 BigVGAN，仍需 CNHuBERT 和相应文本前端资源；中文特征请求才需要 BERT 资源。
 
 `infer()` 和 `infer_stream()` 均支持这些模型。主参考音频的说话人特征按会话缓存，
 额外参考音频的频谱和说话人特征逐一配对。**v2 系列先解码完整文本段，再分块输出音频**；
@@ -171,6 +171,16 @@ V3 底模或 BigVGAN，但仍需 BERT、CNHuBERT 和相应文本前端资源。
 
 具体权重与验证范围见[模型验证报告](benchmarks/results/v2-model-support.md)。
 本次未加入 MPS／ROCm 支持。
+
+### 可选模型按需加载
+
+BERT 默认延迟加载：首次中文目标或参考片段才加载 tokenizer 和模型。目标及参考均为
+纯英文／日文时，BERT 始终不加载；混合语言按文本前端产生的中文片段触发。
+首次中文请求需要承担加载耗时。可在构造时设置 `preload_bert=True`，或在应用准备阶段
+调用 `tts.preload_bert_model()`。`tts.bert_loaded` 和 `tts.bert_load_seconds` 分别表示
+当前就绪状态和首次成功加载的耗时。并发首次调用只加载一次，失败后可以重试。
+
+AP-BWE 模块及模型仅在请求超分时加载。缺少可选依赖或权重时，保留原有音频回退和警告。
 
 ## 语言支持
 

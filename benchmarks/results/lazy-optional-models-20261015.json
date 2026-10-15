@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "9e3e76c",
+  "upstream_commit": "08d627c3338173c3229286d8787060d6559fe0f8",
+  "source_sha256_lf": "9d7bc3e0df82fa5b999924981f6ad57ed49b0306388683c97a0adbbd0f804e8b",
+  "validation": {
+    "runtime_passed": 345,
+    "model_less_passed": 180,
+    "model_less_skipped": 13,
+    "lifecycle_cases": 15,
+    "ruff": "passed",
+    "build_twine": "passed"
+  },
+  "observed_cuda_startup_allocation_difference_bytes": 652541440,
+  "paired_pcm_hashes_equal": true,
+  "lazy": {
+    "preload_bert": false,
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "startup_seconds": 5.655706699999882,
+    "startup": {
+      "bert_loaded": false,
+      "bert_loads": 0,
+      "cuda_allocated": 1363315712,
+      "cuda_reserved": 1650458624,
+      "rss": 3091890176
+    },
+    "bert_load_seconds": [
+      0.5565522000001693
+    ],
+    "trials": [
+      {
+        "language": "english",
+        "first_nonempty_seconds": 6.096271599999909,
+        "total_seconds": 7.12102979999986,
+        "samples": 44448,
+        "pcm_sha256": "5a8fbf5b967e036b0bb887f5c73edb6defc73d920c1890ebfc3da50a5b8797f7",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1491693056,
+        "cuda_reserved": 1593835520,
+        "rss": 2231349248
+      },
+      {
+        "language": "japanese",
+        "first_nonempty_seconds": 0.9900321000000076,
+        "total_seconds": 1.6991504000000077,
+        "samples": 30656,
+        "pcm_sha256": "c974c45e334bba1cb2ff6f656f08e30e6be77f54289ed922f7d16b173f2f37ee",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1491521024,
+        "cuda_reserved": 1614807040,
+        "rss": 2272944128
+      },
+      {
+        "language": "chinese",
+        "first_nonempty_seconds": 3.2736504999998033,
+        "total_seconds": 4.789317399999845,
+        "samples": 70320,
+        "pcm_sha256": "0584a7e9bef1dbef6a60affa7bd350a8faf41c14e72167377cb3a4da27028cae",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2145231872,
+        "cuda_reserved": 2246049792,
+        "rss": 4262182912
+      }
+    ],
+    "ap_bwe_import_blocked": true,
+    "explicit_frontend_cwd": true,
+    "source_sha256_lf": "9d7bc3e0df82fa5b999924981f6ad57ed49b0306388683c97a0adbbd0f804e8b",
+    "scope": "One fresh-process sample per mode; functional/resource check, not a latency distribution or language-quality evaluation."
+  },
+  "preload": {
+    "preload_bert": true,
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "startup_seconds": 6.378825800000186,
+    "startup": {
+      "bert_loaded": true,
+      "bert_loads": 1,
+      "cuda_allocated": 2015857152,
+      "cuda_reserved": 2304770048,
+      "rss": 2788270080
+    },
+    "bert_load_seconds": [
+      1.144792900000084
+    ],
+    "trials": [
+      {
+        "language": "english",
+        "first_nonempty_seconds": 6.439378100000113,
+        "total_seconds": 7.416723700000148,
+        "samples": 44448,
+        "pcm_sha256": "5a8fbf5b967e036b0bb887f5c73edb6defc73d920c1890ebfc3da50a5b8797f7",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2144234496,
+        "cuda_reserved": 2250244096,
+        "rss": 2239787008
+      },
+      {
+        "language": "japanese",
+        "first_nonempty_seconds": 0.9988677000001189,
+        "total_seconds": 1.7196576999999706,
+        "samples": 30656,
+        "pcm_sha256": "c974c45e334bba1cb2ff6f656f08e30e6be77f54289ed922f7d16b173f2f37ee",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2144062464,
+        "cuda_reserved": 2271215616,
+        "rss": 2282147840
+      },
+      {
+        "language": "chinese",
+        "first_nonempty_seconds": 2.5860477000001083,
+        "total_seconds": 4.002944600000092,
+        "samples": 70320,
+        "pcm_sha256": "0584a7e9bef1dbef6a60affa7bd350a8faf41c14e72167377cb3a4da27028cae",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2144658432,
+        "cuda_reserved": 2271215616,
+        "rss": 2740805632
+      }
+    ],
+    "ap_bwe_import_blocked": true,
+    "explicit_frontend_cwd": true,
+    "source_sha256_lf": "9d7bc3e0df82fa5b999924981f6ad57ed49b0306388683c97a0adbbd0f804e8b",
+    "scope": "One fresh-process sample per mode; functional/resource check, not a latency distribution or language-quality evaluation."
+  },
+  "limitations": [
+    "One process per mode; startup/RSS samples are observations, not distributions.",
+    "Chinese G2PW required an explicit existing frontend resource working directory; arbitrary-cwd and offline resource handling belong to the later offline-boundary change.",
+    "AP-BWE absence/failure/retry was tested with substitutes; no real super-resolution output assessment.",
+    "Provisional hardware acceptance on RTX 4070 Laptop GPU; RTX 4070 Ti SUPER retest is deferred per user instruction."
+  ]
+}
