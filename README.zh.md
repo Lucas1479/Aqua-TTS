@@ -182,6 +182,30 @@ BERT 默认延迟加载：首次中文目标或参考片段才加载 tokenizer �
 
 AP-BWE 模块及模型仅在请求超分时加载。缺少可选依赖或权重时，保留原有音频回退和警告。
 
+### 参考预热与就绪
+
+公共预热与两个推理 API 使用相同的归一化和缓存入口：
+
+```python
+result = tts.warm_reference_cache("/voices/reference.wav", "こんにちは。", "日文")
+assert result["ready"]  # status 为 built 或 hit
+```
+
+构造器可接收 `warmup_references=[voice, ...]`，条目为 `Voice` 或包含
+`ref_audio_path`、`prompt_text`、`prompt_language` 的字典。仅预热调用者提供的引用，
+结果保存在 `tts.reference_warmup_results`。默认严格模式在失败时抛错；构造器设置
+`warmup_strict=False`，或公共方法设置 `strict=False`，可获得明确的 `failed` 结果。
+
+缓存键包含规范路径、文件修改时间和大小、归一化文本及语言、模型代次和实际设备／精度。
+替换文件会重新构建，也可调用 `tts.clear_reference_cache()` 显式失效。V3 空文本 fallback
+与正常推理共用同一引用；非 V3 无参考文本模式仅缓存声学条件，不编码未使用的语义 prompt。
+并发构建只发布完整条目，CUDA event 保证跨 stream 读取顺序；公共预热在声明就绪前同步
+所选设备。
+
+`AQUA_SESSION_CACHE_MAX` 为正整数容量，默认 8，采用 FIFO 淘汰。构造器预热列表的不同
+归一化引用数超过容量时直接拒绝。成功结果还包含键、驻留数量和被淘汰的键。已捕获 CUDA
+Graph 时，更改设备或精度应新建推理器。省略预热仍可按请求构建参考缓存。
+
 ## 语言支持
 
 Aqua-TTS 使用所选 GPT-SoVITS 权重对应的文本前端。通过 `text_language` / `prompt_language` 参数传入语言代码，参考音频和目标文本可使用不同语言。

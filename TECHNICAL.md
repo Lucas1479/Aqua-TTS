@@ -29,6 +29,22 @@ The language frontend selects Chinese segments for both target and reference tex
 English/Japanese zero BERT features do not invoke the loader. AP-BWE import and
 construction similarly happen only at the requested super-resolution boundary.
 
+## Reference cache lifecycle
+
+Warmup and both inference APIs normalize reference paths, language labels and
+terminal punctuation before lookup. Keys include file stat identity, normalized
+conditioning, model generation and actual acoustic-model dtype/device. Successful
+GPT/SoVITS replacement and explicit clearing invalidate the cache. Construction
+is serialized and coordinated with acoustic decoding; incomplete or failed builds
+are not published. FIFO eviction bounds residency, and CUDA completion events order
+cross-stream hits without a normal-hit device synchronization. Explicit warmup
+synchronizes the selected device and checks residency before reporting ready.
+
+Version-specific validation requires semantic fields only when used, Pro speaker
+features for Pro models, and V3 mel/reference-encoder features for V3. Existing
+mutable reference-feature cloning remains in both V3 paths. Ordinary V3 cache hits
+also skip redundant reference audio loading, matching the streaming path.
+
 ## Static KV Cache
 
 ### Problem
