@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-21",
+  "base_commit": "0eb5a86",
+  "upstream_commit": "08d627c3338173c3229286d8787060d6559fe0f8",
+  "source_sha256_lf": {
+    "aquatts/inferencer.py": "a1fd68f8b0fea57af9843d3e725b5329de8b41a7901ff29870e3ab4d041c4a90",
+    "aquatts/inference/offline.py": "fcb7114b76c6d008b45fc78ea8c90c4ce7422f7b072138cb58823b3a4928b00e",
+    "aquatts/inference/language_detector.py": "d469a5546eb466efeb71b251df25ec128c936c927abf2857956ae1eb870943af",
+    "aquatts/inference/streaming.py": "59e12803a70fa1586e794c784d30f0b9a58385d58bc115be0edd380f4d24a1da",
+    "benchmarks/optional_models_smoke.py": "c8e9e1b8d98117a8cdacbb51e3df24d84bb0d960c57824c113801a429372baf8"
+  },
+  "validation": {
+    "runtime_passed": 417,
+    "model_less_passed": 220,
+    "model_less_skipped": 17,
+    "ruff": "passed",
+    "build_twine_wheel_contents": "passed"
+  },
+  "real_weight_check": {
+    "preload_bert": false,
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "startup_seconds": 6.7611329999999725,
+    "startup": {
+      "bert_loaded": false,
+      "bert_loads": 0,
+      "cuda_allocated": 1363315712,
+      "cuda_reserved": 1415577600,
+      "rss": 2764173312
+    },
+    "bert_load_seconds": [
+      0.892418200000975
+    ],
+    "trials": [
+      {
+        "language": "english",
+        "first_nonempty_seconds": 8.189518099999987,
+        "total_seconds": 9.765755399999762,
+        "samples": 44448,
+        "pcm_sha256": "5a8fbf5b967e036b0bb887f5c73edb6defc73d920c1890ebfc3da50a5b8797f7",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1492839936,
+        "cuda_reserved": 1595932672,
+        "rss": 2509922304
+      },
+      {
+        "language": "japanese",
+        "first_nonempty_seconds": 1.555802599999879,
+        "total_seconds": 2.7357670000019425,
+        "samples": 30656,
+        "pcm_sha256": "c974c45e334bba1cb2ff6f656f08e30e6be77f54289ed922f7d16b173f2f37ee",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1491619328,
+        "cuda_reserved": 1595932672,
+        "rss": 2553192448
+      },
+      {
+        "language": "chinese",
+        "first_nonempty_seconds": 4.461101700002473,
+        "total_seconds": 6.185610100001213,
+        "samples": 70320,
+        "pcm_sha256": "0584a7e9bef1dbef6a60affa7bd350a8faf41c14e72167377cb3a4da27028cae",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2147034112,
+        "cuda_reserved": 2248146944,
+        "rss": 4547059712
+      },
+      {
+        "language": "mixed",
+        "first_nonempty_seconds": 0.7978656999985105,
+        "total_seconds": 1.9051056999996945,
+        "samples": 44208,
+        "pcm_sha256": "0d989dd752c12b11a7715fbb87c3136dc7d63258aae30a734446edfb6289c9cc",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2146599936,
+        "cuda_reserved": 2269118464,
+        "rss": 4546625536
+      }
+    ],
+    "ap_bwe_import_blocked": true,
+    "offline_only": true,
+    "network_attempts": [],
+    "missing_resource_rejections": [
+      "BERT/config.json",
+      "BERT/vocab.txt",
+      "BERT/pytorch_model.bin",
+      "CNHuBERT/preprocessor_config.json",
+      "fast-langdetect/lid.176.bin",
+      "BigVGAN/bigvgan_generator.pt"
+    ],
+    "explicit_frontend_cwd": true,
+    "source_sha256_lf": "a1fd68f8b0fea57af9843d3e725b5329de8b41a7901ff29870e3ab4d041c4a90",
+    "scope": "One fresh-process sample per mode; functional/resource check, not a latency distribution or language-quality evaluation."
+  },
+  "contracts": [
+    "BERT and both BigVGAN loaders pass local_files_only=True only for the offline instance",
+    "CNHuBERT uses an explicit constructor path without mutating its module default",
+    "FastText custom_model_path avoids download fallback; private splitter bindings preserve global detector",
+    "Hub and Transformers imported before construction; their offline policy remains unchanged",
+    "Online and offline detector bindings produce identical segments for four real text samples",
+    "Six missing-resource cases fail before network access in the same isolated probe process",
+    "English, Japanese, Chinese and mixed real PCM is finite, non-silent, 24 kHz"
+  ],
+  "limits": [
+    "Functional/resource smoke, one fresh process; timings are not performance claims or cold end-to-end measurements because resource probes precede requests",
+    "G2PW still uses upstream process cwd and bert_path; no per-instance Chinese frontend resource isolation",
+    "Initial upstream LangSegmenter import retains its existing global default assignment; constructors do not mutate that default",
+    "Offline en/ja/zh frontends verified; ko/yue explicitly rejected; AP-BWE resource preflight retains optional fallback",
+    "RTX 4070 Laptop GPU only; provisional acceptance authorized by user; RTX 4070 Ti SUPER retest deferred"
+  ]
+}
