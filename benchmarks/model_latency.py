@@ -73,6 +73,8 @@ def main():
     parser.add_argument("--diagnostic-repeats", type=int, default=3)
     parser.add_argument("--gpu-uuid", help="Lock CUDA to one physical NVIDIA GPU")
     parser.add_argument("--telemetry-output", type=Path, help="500 ms NVIDIA utilization/clock CSV")
+    parser.add_argument("--require-bigvgan-kernel", action="store_true",
+                        help="Require the actual V3 BigVGAN CUDA path; reject fallback")
     args = parser.parse_args()
     if args.repeats < 1:
         parser.error("--repeats must be positive")
@@ -93,6 +95,10 @@ def run_benchmark(args):
     import torch
     from aquatts import TTSInferencer
     from aqua_ttfp import BENCH_TEXTS, WARMUP_TEXTS
+    from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    journal = BenchmarkJournal(args.output)
+    source = source_identity(ROOT)
+    journal.record("started", engine=args.engine, source=source)
 
     class UpstreamInferencer(TTSInferencer):
         def _apply_aqua_t2s_patch(self):
@@ -103,12 +109,23 @@ def run_benchmark(args):
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if args.gpu_uuid:
         config["inferencer"]["device"] = "cuda:0"
+    identities = {key: file_identity(config["inferencer"][key])
+                  for key in ("gpt_path", "sovits_path")}
+    identities["reference_audio"] = file_identity(config["reference"]["ref_audio_path"])
+    identities["reference_text_sha256"] = hashlib.sha256(
+        config["reference"].get("prompt_text", "").encode("utf-8")).hexdigest()
     cls = UpstreamInferencer if args.engine == "upstream" else TTSInferencer
     started = time.perf_counter()
     inferencer = cls(**config["inferencer"], use_flash_attn=args.engine == "flash",
                      cuda_graph_preset="off" if args.engine == "upstream" else "lazy")
     load_seconds = time.perf_counter() - started
     assert inferencer.model_version == config["expected_version"]
+    if args.require_bigvgan_kernel:
+        assert inferencer.model_version == "v3" and inferencer.bigvgan_kernel_mode == "cuda", (
+            getattr(inferencer, "bigvgan_kernel_mode", None),
+            getattr(inferencer, "bigvgan_kernel_fallback_reason", None))
+    journal.record("loaded", model=inferencer.model_version, seconds=load_seconds,
+                   identities=identities, kernel=getattr(inferencer, "bigvgan_kernel_mode", None))
     decoder = inferencer.t2s_model.model
     if args.engine == "upstream":
         assert not hasattr(decoder, "_aquatts_original_infer_panel")
@@ -151,7 +168,7 @@ def run_benchmark(args):
         inferencer.get_phones_and_bert = timed_stage(inferencer.get_phones_and_bert, "frontend")
         inferencer._decode_v2 = timed_stage(inferencer._decode_v2, "acoustic")
 
-    def measure(text, seed, *, diagnostic=False):
+    def measure(text, seed, *, diagnostic=False, phase="warmup", case=None, index=None):
         nonlocal diagnostic_mode
         diagnostic_mode = diagnostic
         random.seed(seed)
@@ -201,7 +218,7 @@ def run_benchmark(args):
         hashes = [hashlib.sha256(item[0].detach().cpu().numpy().tobytes()).hexdigest()
                   for item in semantic_events]
         seconds = samples / rate
-        return dict(seed=seed, started_at=timestamp, first_audio_ms=first, total_ms=total, audio_seconds=seconds,
+        row = dict(seed=seed, started_at=timestamp, first_audio_ms=first, total_ms=total, audio_seconds=seconds,
                     rtf=total / 1000 / seconds, sample_rate=rate,
                     semantic_ms=sum(stat["elapsed_sec"] for stat in stats) * 1000 if stats else None,
                     frontend_ms=sum(stage_times["frontend"]) if diagnostic else None,
@@ -209,25 +226,35 @@ def run_benchmark(args):
                     new_graphs=len(getattr(decoder, "bucket_graphs", {})) - graphs_before,
                     semantic_tokens=sum(item[1] for item in semantic_events), semantic_hashes=hashes,
                     semantic_attempts=[item[2] for item in semantic_events])
+        journal.record("trial", phase=phase, case=case, index=index, result=row)
+        return row
 
     warmup = [] if args.steady else [measure(text, args.seed - index - 1) for index, text in enumerate(WARMUP_TEXTS)]
     cases = {}
     for name, text in BENCH_TEXTS:
         if args.steady:
-            first_use = measure(text, args.seed)
-            case_warmup = [measure(text, args.seed) for _ in range(args.warmup_per_case)]
-            rows = [measure(text, args.seed) for _ in range(args.repeats)]
+            first_use = measure(text, args.seed, phase="first_use", case=name)
+            case_warmup = [measure(text, args.seed, case=name, index=i) for i in range(args.warmup_per_case)]
+            rows = [measure(text, args.seed, phase="measured", case=name, index=i) for i in range(args.repeats)]
             assert all(row["new_graphs"] == 0 for row in rows), "Measured steady trials captured new graphs"
-            diagnostics = [measure(text, args.seed, diagnostic=True) for _ in range(args.diagnostic_repeats)]
+            diagnostics = [measure(text, args.seed, diagnostic=True, phase="diagnostic", case=name, index=i)
+                           for i in range(args.diagnostic_repeats)]
             cases[name] = dict(text=text, characters=len(text), first_use=first_use, warmup=case_warmup,
                                summary=summarize(rows), trials=rows, diagnostics=diagnostics,
                                semantic_variants=len({tuple(row["semantic_hashes"]) for row in rows}))
         else:
-            rows = [measure(text, args.seed + repeat) for repeat in range(args.repeats)]
+            rows = [measure(text, args.seed + repeat, phase="measured", case=name, index=repeat) for repeat in range(args.repeats)]
             cases[name] = dict(text=text, characters=len(text), summary=summarize(rows), trials=rows)
     if args.engine != "upstream":
         assert decoder.bucket_graphs and decoder.cuda_graph_stats["graph_replay_steps"] > 0
     result = dict(model=inferencer.model_version, engine=args.engine,
+                  source=source, identities=identities,
+                  bigvgan_kernel=getattr(inferencer, "bigvgan_kernel_mode", None),
+                  cfm_unpadded=getattr(inferencer, "cfm_unpadded", False),
+                  kv_cache_layout=getattr(decoder, "kv_cache_layout", "bucket"),
+                  generated_lead_policy="current product behavior; no timing-only bypass",
+                  warmup_per_case=args.warmup_per_case if args.steady else None,
+                  diagnostic_repeats=args.diagnostic_repeats if args.steady else None,
                   protocol="fixed-seed-steady" if args.steady else "paired-seed",
                   torch_threads=torch.get_num_threads(), torch_interop_threads=torch.get_num_interop_threads(),
                   gpu_uuid_sha256=hashlib.sha256(args.gpu_uuid.encode()).hexdigest() if args.gpu_uuid else None,
@@ -243,6 +270,7 @@ def run_benchmark(args):
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     for name, value in cases.items():
         print(args.engine, name, json.dumps(value["summary"]))
+    journal.record("completed", cases=list(cases))
     print(f"PASS {args.output}")
 
 

@@ -276,10 +276,22 @@ def main(argv: list[str] | None = None) -> int:
     print(f"checkpoint={checkpoint}")
     print("=" * 88)
 
+    sys.path.insert(0, str(ROOT))
+    from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    journal = BenchmarkJournal(args.json_output)
+    metadata = {"source": source_identity(ROOT), "checkpoint_identity": file_identity(checkpoint),
+                "seed": args.seed}
+    journal.record("started", engine=args.engine, flash_attn=args.flash_attn, **metadata)
+
     torch, model, decoder, config, graph_enabled = _load_decoder(
         args, upstream_home, checkpoint, args.buckets
     )
     del model  # decoder retains all references required for inference
+    if args.flash_attn != "off":
+        def reject_fallback(*_args, **_kwargs):
+            raise AssertionError("FA2 benchmark fell back to SDPA")
+        for block in decoder.t2s_transformer_static.blocks:
+            block.sdpa_block.decode_next_token_with_static_cache = reject_fallback
     if not torch.cuda.is_available() or torch.device(args.device).type != "cuda":
         raise RuntimeError("this benchmark requires a CUDA device")
 
@@ -297,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             graph_enabled=graph_enabled,
             seed=args.seed,
         )
+        journal.record("trial", phase="cold", case=conversation.name, index=0, result=cold)
         print(
             f"cold/conversation  initial={conversation.initial_len:>3} "
             f"bucket={conversation.expected_bucket:>3} steps={cold['reported_steps']:>3} "
@@ -304,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         for index in range(args.warmup):
-            _run_once(
+            warmup_row = _run_once(
                 torch,
                 decoder,
                 inputs[conversation.name],
@@ -312,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
                 graph_enabled=graph_enabled,
                 seed=args.seed + index,
             )
+            journal.record("trial", phase="warmup", case=conversation.name, index=index, result=warmup_row)
 
         summaries: dict[str, Any] = {}
         for case in DEFAULT_CASES:
@@ -326,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
                     seed=args.seed + repeat,
                 )
                 rows.append(row)
+                journal.record("trial", phase="measured", case=case.name, index=repeat, result=row)
             summary = _summarize(rows)
             summaries[case.name] = {
                 **asdict(case),
@@ -342,7 +357,11 @@ def main(argv: list[str] | None = None) -> int:
         decoder.EOS = original_eos
 
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
+        **metadata,
+        "flash_fallback_forbidden": args.flash_attn != "off",
+        "kv_cache_layout": getattr(decoder, "kv_cache_layout", "bucket"),
+        "eos_protocol": "EOS=-1; fixed early-stop boundary, unchanged from the historical benchmark",
         "engine": args.engine,
         "flash_attn": args.flash_attn,
         "device": str(device),
@@ -361,6 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"json={destination}")
+    journal.record("completed", cases=list(summaries))
     return 0
 
 
