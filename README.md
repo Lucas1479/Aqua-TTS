@@ -1,3 +1,5 @@
+> Performance refresh pending: the draft measurements below used the wrong Torch 2.5.1/cu121 environment. They are not acceptance data. The required baseline is Torch 2.6/cu124.
+
 
 
 
@@ -27,7 +29,7 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime for real-time voice conversation with GPT-SoVITS character voices. It combines static KV buffers, bucketed CUDA Graphs, optional FlashAttention2 and cached BigVGAN CUDA kernels. The 2026-10-21 Aqua-only retest measured **670–715 synchronized it/s** with FA2 and **454–488 it/s** with SDPA on an RTX 4070 Ti SUPER over USB4. An RTX 4070 Laptop measured **542–572 it/s** with FA2. Current V3 API warm first-PCM medians with FA2 were **686 / 751 / 1019 ms** for short/medium/long inputs. These model-side numbers exclude speaker playback; full protocols and workload identities are linked below.
+Aqua-TTS is a GPU-optimized inference runtime for real-time voice conversation with GPT-SoVITS character voices. It combines static KV buffers, bucketed CUDA Graphs, optional FlashAttention2 and cached BigVGAN CUDA kernels. The 2026-10-21 Aqua-only retest measured **670–715 synchronized it/s** with FA2 and **454–488 it/s** with SDPA on an RTX 4070 Ti SUPER over USB4. An RTX 4070 Laptop measured **542–572 it/s** with FA2. V3 warm first raw-PCM medians with FA2 were **326 / 379 / 442 ms** for short/medium/long inputs, before onset trimming. These model-side numbers exclude speaker playback; full protocols and workload identities are linked below.
 
 **V2-family support:** Aqua-TTS also loads **v2, v2Pro, and v2ProPlus** checkpoints,
 including the Pro/Plus speaker encoder. See the [v2-family benchmarks](#additional-v2-family-benchmarks)
@@ -35,26 +37,27 @@ and [checkpoint setup](#v2-v2-pro-and-v2-pro-plus-checkpoints) below. Current v3
 
 ## Highlights
 
-**Measured 2026-10-21, Aqua engines only.** TTFP is time to the first nonempty PCM
-returned by the current API, including its normal leading-silence trimming.
-It excludes model loading, sound-device buffering and playback. Archived tables
-predate onset trimming; their raw values are not a matched before/after comparison.
+**Measured 2026-10-21, Aqua engines only.** TTFP retains the historical endpoint:
+**the first raw PCM block, before generated-lead buffering or trimming**. It excludes
+model loading, sound-device buffering and playback. Benchmarks bypass only onset
+processing in their own process; normal product inference keeps it enabled.
 
 | Metric | Aqua Graph + SDPA | Aqua Graph + FA2 `valid` |
 |---|---|---|
 | T2S short / bucket 448 | 454.0 it/s | 669.6 it/s |
 | T2S conversation / bucket 512 | 487.6 it/s | 715.1 it/s |
 | T2S long / bucket 768 | 456.1 it/s | 688.1 it/s |
-| V3 TTFP short (3) | 491.4 ms | 685.7 ms |
-| V3 TTFP medium (19) | 522.2 ms | 751.3 ms |
-| V3 TTFP long (64) | 630.0 ms | 1018.6 ms |
+| V3 TTFP short (3) | 322.5 ms | 325.6 ms |
+| V3 TTFP medium (19) | 448.9 ms | 378.8 ms |
+| V3 TTFP long (64) | 582.9 ms | 442.1 ms |
 
 Windows, Python 3.12.10, Torch 2.5.1+cu121, fp16, upstream `08d627c`;
 default `bucket` KV layout and CFM unpadded off. T2S uses the original fixed
 51/123/180-step shapes, 15 warmups and seven synchronized measurements per shape.
 V3 reuses the original `aqua_ttfp.py`: two warmup texts, five requests per test
 text, T2S statistics enabled, no benchmark seed reset, stopping at first PCM.
-Its measurement function is unchanged; only evidence saving was added outside timing.
+Its measurement function is unchanged; the benchmark's `raw-pcm` mode restores
+the historical output boundary and first-chunk stopping behavior.
 V3 used the actual BigVGAN CUDA kernel. Headline FA2 jobs rejected fallback before capture.
 
 | Mechanism | Upstream structure | Aqua Graph + SDPA | Aqua Graph + FA2 |
@@ -114,8 +117,8 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 ## Additional v2-family benchmarks
 
 **Latest measurement: 2026-10-21.** RTX 4070 Ti SUPER over USB4, Windows,
-Torch 2.5.1+cu121, fp16, upstream `08d627c`. These are warm current-API first-PCM
-latencies for the existing 3/19/64-character Japanese inputs.
+Torch 2.5.1+cu121, fp16, upstream `08d627c`. These are warm model-side raw-PCM
+latencies before onset buffering/trimming for the existing 3/19/64-character Japanese inputs.
 
 Each model/engine/text combination used five warmups, twenty requests with seed
 `20260926`, and three separate diagnostics: **360 measured requests** for the
@@ -126,31 +129,30 @@ captured no new graphs; FA2 jobs rejected SDPA fallback. Only Aqua SDPA and FA2 
 
 | Model / input | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · short | 185.9 ms | 144.6 ms |
-| v2 · medium | 270.5 ms | 146.3 ms |
-| v2 · long | 403.9 ms | 221.6 ms |
-| v2Pro · short | 112.7 ms | 96.1 ms |
-| v2Pro · medium | 172.7 ms | 137.0 ms |
-| v2Pro · long | 288.0 ms | 222.1 ms |
-| v2ProPlus · short | 105.9 ms | 99.8 ms |
-| v2ProPlus · medium | 192.5 ms | 155.6 ms |
-| v2ProPlus · long | 281.9 ms | 217.2 ms |
+| v2 · short | 159.8 ms | 93.1 ms |
+| v2 · medium | 244.0 ms | 164.3 ms |
+| v2 · long | 413.6 ms | 302.5 ms |
+| v2Pro · short | 164.1 ms | 142.5 ms |
+| v2Pro · medium | 242.1 ms | 201.2 ms |
+| v2Pro · long | 398.8 ms | 313.3 ms |
+| v2ProPlus · short | 159.7 ms | 137.3 ms |
+| v2ProPlus · medium | 255.7 ms | 230.2 ms |
+| v2ProPlus · long | 376.3 ms | 291.3 ms |
 
 **Short-input first-PCM latency (p95, nearest rank over 20 samples)**
 
 | Model / input | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · short | 218.8 ms | 172.2 ms |
-| v2Pro · short | 120.5 ms | 102.0 ms |
-| v2ProPlus · short | 112.5 ms | 113.2 ms |
+| v2 · short | 184.3 ms | 104.4 ms |
+| v2Pro · short | 189.1 ms | 174.8 ms |
+| v2ProPlus · short | 212.7 ms | 166.6 ms |
 
-V2 Pro/FA2 short minimum: **86.7 ms**;
-p50 **96.1 ms**, p95 **102.0 ms**.
+V2 Pro/FA2 short minimum: **133.8 ms**; p50 **142.5 ms**, p95 **174.8 ms**.
 V2 uses the existing stock checkpoints; Pro/Plus use the existing Kurisu fine-tunes.
 Compare engines within one checkpoint pair. Backend floating-point differences
 can change sampled tokens; these are observed input latencies, not fixed-token
 speedup claims. V2-family output is 32 kHz and decodes each text segment before
-chunk transport. The current API's onset processing remains enabled.
+chunk transport. Only benchmark processes bypass onset processing for historical comparability.
 
 The [new report](benchmarks/results/readme-performance-20261021.md) and [raw trials](benchmarks/results/readme-performance-20261021.json) include p95 for
 every input, model-load time, first use, total duration/RTF, token hashes and
@@ -572,9 +574,9 @@ Torch 2.5.1+cu121, 15 warmups and seven synchronized repeats:
 
 These are observed same-card differences for fixed T2S work. Desktop scheduling
 and GPU P-state can affect them; they do not predict full-pipeline TTFP. In this
-run the original V3 first-PCM protocol was slower with FA2, while the separate
-steady protocol had different results. Neither is a matched historical
-before/after test; see the full report before drawing a regression conclusion.
+report, raw-PCM TTFP and post-trim API availability are separate metrics.
+The earlier 686 / 751 / 1019 ms FA2 numbers measured post-trim API output;
+they do not represent the historical TTFP endpoint or establish a migration regression.
 
 ```python
 from aquatts import apply_preset, list_presets
@@ -835,8 +837,8 @@ streaming path waits for complete detection frames and carries text on the first
 emitted PCM chunk. This amplitude rule is not a linguistic voice detector and
 does not promise the same improvement for every checkpoint or reference.
 
-Archived TTFP tables predate this onset processing. The current headline retest
-keeps onset processing enabled and measures first nonempty PCM, not speaker output. The demo retains that metric and adds `lead_ms`
+Headline TTFP retains the pre-trim first raw-PCM endpoint. Post-trim API
+availability is a separate metric; neither measures speaker output. The demo retains that metric and adds `lead_ms`
 (PCM duration preceding the first active window) and `first_voiced_chunk_ms`
 (when the containing chunk is ready for submission). Neither measures speaker
 output latency. Buffering silent generated chunks can increase reported TTFP

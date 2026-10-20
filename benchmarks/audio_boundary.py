@@ -31,6 +31,6 @@ def audio_boundary(inferencer, boundary):
         raise ValueError(f"Unknown audio boundary: {boundary}")
     module = import_module("aquatts.inferencer")
     with patch.object(module, "LeadingSilence", _RawChunks), patch.object(
-        inferencer, "_trim_generated_lead", lambda audio, sample_rate: audio
+        module, "leading_cut", lambda audio, sample_rate: 0
     ):
         yield

@@ -1,3 +1,5 @@
+> Performance refresh pending: cu121 draft figures are nonbaseline observations, not acceptance evidence. Required environment: Torch 2.6/cu124.
+
 # Aqua benchmark suite
 
 Reproducible comparisons of Aqua and the selected upstream GPT-SoVITS
@@ -87,13 +89,18 @@ Use same-card comparisons, not cross-GPU rates, for this USB4 host.
 
 ## TTFP (time to first playable audio)
 
-The current headline measures text-ready to the first nonempty PCM returned by
-the normal API, including generated-lead trimming. It is not sound-device latency.
+Headline TTFP keeps the historical boundary: text-ready to the first raw PCM
+block, before generated-lead buffering/trimming. It is not sound-device latency.
 The 2026-10-21 V3 headline reuses `aqua_ttfp.py` with its original measurement
 function (AST checked against `4206bb1`): two warmup texts, five repeats per test
 text, T2S statistics enabled, no benchmark seed reset, and stop at first PCM.
-Chunk size is 0.25 seconds, speed 1.1 and CFM steps four. The current API's normal
-onset processing remains enabled.
+Chunk size is 0.25 seconds, speed 1.1 and CFM steps four. Both latency scripts
+default to `--audio-boundary raw-pcm`, which bypasses onset buffering/cropping
+only in their isolated benchmark process. This restores both the original
+endpoint and stop-after-first-chunk RNG consumption. Product inference is unchanged.
+
+`--audio-boundary api-pcm` measures current post-trim API availability instead.
+Keep that metric separate: silent generated chunks may delay its first output.
 
 ```powershell
 $env:CUDA_VISIBLE_DEVICES = "GPU-YOUR-DEVICE-UUID"
@@ -113,7 +120,7 @@ FA2 fallback before capture; it did not change successful timing or sampling.
 The v2-family tables reuse `model_latency.py --steady --seed 20260926
 --warmup-per-case 5 --repeats 20 --diagnostic-repeats 3`, with `--engine sdpa`
 or `flash`. The config format is documented below. We also ran that protocol on
-V3 with `--require-bigvgan-kernel`; those 120 requests are supplementary and do
+V3 with `--require-bigvgan-kernel` before this correction; those 120 post-trim requests are supplementary and do
 not supply the V3 headline. Steady-protocol formal requests disable diagnostic
 timing and capture no new graphs.
 
@@ -122,14 +129,15 @@ timing and capture no new graphs.
 | T2S short / bucket 448 | 454.0 it/s | 669.6 it/s |
 | T2S conversation / bucket 512 | 487.6 it/s | 715.1 it/s |
 | T2S long / bucket 768 | 456.1 it/s | 688.1 it/s |
-| V3 TTFP short (3) | 491.4 ms | 685.7 ms |
-| V3 TTFP medium (19) | 522.2 ms | 751.3 ms |
-| V3 TTFP long (64) | 630.0 ms | 1018.6 ms |
+| V3 TTFP short (3) | 322.5 ms | 325.6 ms |
+| V3 TTFP medium (19) | 448.9 ms | 378.8 ms |
+| V3 TTFP long (64) | 582.9 ms | 442.1 ms |
 
 The [complete report](results/readme-performance-20261021.md) keeps all five original-protocol
 V3 samples per case plus the separate steady V3 p95, total time/RTF and first use.
-Old untrimmed TTFP values remain in the archived
-reports and are not treated as directly comparable implementation speedups.
+Historical tables remain archived. Their raw-PCM endpoint is now preserved,
+but software versions and unverified historical asset hashes still prevent a
+controlled implementation speedup claim.
 All three benchmark scripts now fsync every completed trial to
 an adjacent `.trials.jsonl` file, outside the measured window, and record workload
 hashes/source identity. Keep those journals and the GPU CSV if a run is interrupted.

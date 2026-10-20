@@ -1,3 +1,5 @@
+> NONBASELINE ARCHIVE: these measurements used Torch 2.5.1/cu121, contrary to the required Torch 2.6/cu124 environment. Preserve as observations only; do not use for migration acceptance or README headline claims.
+
 # Aqua README performance retest — 2026-10-21
 
 Measured source: `74dfa923c9d0032faeff7547e1add028fa112a96` for T2S and steady latency,
@@ -6,6 +8,69 @@ Measured source: `74dfa923c9d0032faeff7547e1add028fa112a96` for T2S and steady l
 These commits only change benchmark evidence recording and fallback checks; inference code is unchanged from
 the dual-GPU-validated stack `4206bb1996ca1ca50ba992ea1b180adb8fe61d2c`.
 Upstream: `08d627c3338173c3229286d8787060d6559fe0f8`. Only Aqua engines were run.
+
+## Corrected headline: historical raw-PCM boundary
+
+The first published draft incorrectly populated the historical TTFP column with
+post-trim API availability. The intended metric has always ended at the **first
+raw PCM block before onset buffering/cropping**. The benchmark script alone
+remaining identical did not preserve that endpoint when API behavior changed.
+
+Corrected measured source: `a21bf5480a724b26ac5817a1cc64148cc38b97c3`. Only benchmark code
+changed. `--audio-boundary raw-pcm` (default) restores the pre-trim output in an
+isolated process; it keeps generation, normalization, CPU transfer, fades, chunk
+sizes and the original stop-after-first-chunk behavior. Normal product inference
+continues to trim silence. `--audio-boundary api-pcm` selects the distinct
+post-trim metric. No old post-trim sample was re-labelled as raw PCM.
+
+The original V3 `_measure()` AST matches the historical `9459f18` and `93beb48`,
+not just the migration head. Onset trimming was added in `419d5d4` and is already
+in the migration's actual `origin/main` base `591fbb5`; local `main` is stale and
+must not be used to locate that boundary. The historical Torch/FA2 environment
+and unverified old asset hashes still differ, so this is not a paired migration
+before/after experiment.
+
+Fresh headline latency evidence: **30 V3 requests** (two warmup texts, five
+repeats per case, T2S stats on, no benchmark seed reset) and **360 v2-family
+requests** (5/20/3 fixed-seed steady protocol). All measured rows are journaled;
+the 510 earlier post-trim requests remain below and in JSON as a separate metric.
+T2S throughput is unchanged from the validated 63-trial headline.
+The complete archive now contains **900 measured latency requests**, separated
+into 390 raw-PCM headline samples and 510 post-trim API samples.
+
+### V3 raw-PCM TTFP
+
+| Engine | Input | Median ms | All five trials, ms |
+|---|---|---|---|
+| sdpa | short | 322.5 | 345.3 / 319.5 / 306.9 / 322.5 / 329.3 |
+| sdpa | medium | 448.9 | 441.3 / 448.9 / 469.3 / 439.6 / 452.4 |
+| sdpa | long | 582.9 | 632.6 / 622.2 / 571.8 / 529.2 / 582.9 |
+| flash | short | 325.6 | 312.7 / 354.8 / 353.0 / 325.6 / 294.1 |
+| flash | medium | 378.8 | 342.6 / 378.8 / 391.4 / 399.7 / 343.8 |
+| flash | long | 442.1 | 468.1 / 456.2 / 442.0 / 442.1 / 438.6 |
+
+### V2-family raw-PCM TTFP
+
+| Model | Engine | Input | p50 ms | p95 ms | Raw-output RTF p50 |
+|---|---|---|---|---|---|
+| v2 | sdpa | short | 159.8 | 184.3 | 0.127 |
+| v2 | sdpa | medium | 244.0 | 278.7 | 0.109 |
+| v2 | sdpa | long | 413.6 | 505.6 | 0.094 |
+| v2 | flash | short | 93.1 | 104.4 | 0.074 |
+| v2 | flash | medium | 164.3 | 260.9 | 0.073 |
+| v2 | flash | long | 302.5 | 370.0 | 0.064 |
+| v2Pro | sdpa | short | 164.1 | 189.1 | 0.125 |
+| v2Pro | sdpa | medium | 242.1 | 282.3 | 0.109 |
+| v2Pro | sdpa | long | 398.8 | 460.9 | 0.084 |
+| v2Pro | flash | short | 142.5 | 174.8 | 0.108 |
+| v2Pro | flash | medium | 201.2 | 239.7 | 0.091 |
+| v2Pro | flash | long | 313.3 | 354.6 | 0.065 |
+| v2ProPlus | sdpa | short | 159.7 | 212.7 | 0.131 |
+| v2ProPlus | sdpa | medium | 255.7 | 302.2 | 0.104 |
+| v2ProPlus | sdpa | long | 376.3 | 440.4 | 0.086 |
+| v2ProPlus | flash | short | 137.3 | 166.6 | 0.113 |
+| v2ProPlus | flash | medium | 230.2 | 257.4 | 0.099 |
+| v2ProPlus | flash | long | 291.3 | 346.3 | 0.064 |
 
 ## Environment and scope
 
@@ -16,7 +81,7 @@ Upstream: `08d627c3338173c3229286d8787060d6559fe0f8`. Only Aqua engines were run
 - Default `bucket` KV; CFM unpadded off. V3 BigVGAN CUDA kernel was verified.
 - Headline FA2 jobs used `valid` mode and rejected SDPA fallback before capture.
 - **63 fixed-work measured T2S trials**, **30 original-protocol V3 requests** and
-  **360 v2-family steady requests** supply the README tables.
+  **360 v2-family steady requests** were initially used before the raw-PCM boundary correction below.
   Another **120 V3 steady requests** are supplementary, for **510 total measured
   latency requests**. First use, warmup and diagnostics are additional records.
 - The first two T2S FA2 jobs (42 trials) installed the fallback guard after
@@ -39,7 +104,7 @@ enabled. First AR excludes loading and graph preparation.
 | Ti SUPER · FA2 | 437.6 | 669.6 | 715.1 | 688.1 |
 | Laptop · FA2 | 331.7 | 542.1 | 572.4 | 550.0 |
 
-## V3 headline: original first-PCM protocol
+## Earlier V3 post-trim API measurements (not headline TTFP)
 
 The original `aqua_ttfp.py` measurement function is AST-identical to `4206bb1`.
 Only out-of-window evidence saving was added. Each fresh process runs the same
@@ -57,11 +122,11 @@ The current API's generated-lead trimming remains enabled.
 | flash | medium | 751.3 | 884.0 / 672.8 / 651.9 / 751.3 / 755.9 |
 | flash | long | 1018.6 | 1037.6 / 1018.6 / 1090.2 / 779.9 / 892.1 |
 
-These are the V3 values used by both READMEs. The initial 20-repeat V3 run used
+These post-trim values are retained as API-availability evidence, not README TTFP. The initial 20-repeat V3 run used
 the v2 steady protocol; it is retained below as supplementary evidence, rather
 than silently substituting a different measurement method for the old V3 script.
 
-## V2-family current API latency
+## Earlier V2-family post-trim API measurements (not headline TTFP)
 
 Five same-text warmups, twenty fixed-seed (`20260926`) measurements and three
 separate diagnostics follow each text's first use, reusing `model_latency.py`.
@@ -90,7 +155,7 @@ RTF includes the configured 0.3-second pauses. V3 outputs 24 kHz; v2-family 32 k
 | v2ProPlus | flash | medium | 147.1 | 155.6 | 165.2 | 261.8 | 2.8 | 0.094 |
 | v2ProPlus | flash | long | 207.1 | 217.2 | 230.1 | 454.7 | 8.2 | 0.056 |
 
-## Supplementary V3 steady measurements
+## Supplementary V3 post-trim steady measurements
 
 Same 5/20/3 fixed-seed steady protocol as the preceding v2 table. These are
 full-generation requests with instrumentation disabled for formal timing,
@@ -118,7 +183,7 @@ sample. Higher latencies are retained rather than replaced with historical value
 
 The original V3 first-PCM run was slower with FA2 than SDPA, despite the
 fixed-work T2S advantage. The supplementary steady run gives a different
-ordering. These observations do not identify a cause or establish a migration
+ordering. These post-trim observations do not measure the historical TTFP endpoint or establish a migration
 regression; the protocols, graph preparation and sampled work differ. Both
 sets are preserved, and no latency acceptance threshold was declared passed.
 
@@ -160,3 +225,14 @@ GPU telemetry:
 - [original_v3_flash](readme-performance-20261021-original_v3_flash-gpu.csv)
 - [verified_t2s_ti_super_flash](readme-performance-20261021-verified_t2s_ti_super_flash-gpu.csv)
 - [verified_t2s_laptop_flash](readme-performance-20261021-verified_t2s_laptop_flash-gpu.csv)
+
+Corrected raw-PCM telemetry:
+
+- [raw_v3_sdpa](readme-performance-20261021-raw_v3_sdpa-gpu.csv)
+- [raw_v3_flash](readme-performance-20261021-raw_v3_flash-gpu.csv)
+- [raw_v2_sdpa](readme-performance-20261021-raw_v2_sdpa-gpu.csv)
+- [raw_v2_flash](readme-performance-20261021-raw_v2_flash-gpu.csv)
+- [raw_v2Pro_sdpa](readme-performance-20261021-raw_v2Pro_sdpa-gpu.csv)
+- [raw_v2Pro_flash](readme-performance-20261021-raw_v2Pro_flash-gpu.csv)
+- [raw_v2ProPlus_sdpa](readme-performance-20261021-raw_v2ProPlus_sdpa-gpu.csv)
+- [raw_v2ProPlus_flash](readme-performance-20261021-raw_v2ProPlus_flash-gpu.csv)

@@ -16,6 +16,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import json
 import os
@@ -153,7 +154,7 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
     x, x_lens, prompts, bert = inputs
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.cuda.synchronize()
+    torch.cuda.synchronize(x.device)
     started = time.perf_counter()
     with torch.inference_mode():
         _semantic, reported_steps = decoder.infer_panel(
@@ -169,7 +170,7 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
             enable_static_kv=True,
         )
     wall_elapsed = time.perf_counter() - started
-    torch.cuda.synchronize()
+    torch.cuda.synchronize(x.device)
     sync_elapsed = time.perf_counter() - started
     steps = int(reported_steps)
     if steps != case.generated_steps:
@@ -184,6 +185,31 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
         "wall_it_s": steps / wall_elapsed,
         "sync_it_s": steps / sync_elapsed,
     }
+
+
+@contextmanager
+def _fixed_length_eos(decoder, *, eos_module=None):
+    """Ignore stopping without changing Aqua's EOS vocabulary/host-read work."""
+    if eos_module is None:
+        # The unpatched upstream path owns its inline EOS checks.
+        original_eos = decoder.EOS
+        decoder.EOS = -1
+        try:
+            yield
+        finally:
+            decoder.EOS = original_eos
+    else:
+        original_check = eos_module._should_stop_on_eos
+
+        def ignore_stop(logits, samples, eos):
+            original_check(logits, samples, eos)
+            return False
+
+        eos_module._should_stop_on_eos = ignore_stop
+        try:
+            yield
+        finally:
+            eos_module._should_stop_on_eos = original_check
 
 
 def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int]):
@@ -202,6 +228,7 @@ def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int
     import torch
     from AR.models.t2s_lightning_module import Text2SemanticLightningModule
 
+    torch.cuda.set_device(args.device)
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     config = payload["config"]
     model = Text2SemanticLightningModule(config, "****", is_train=False)
@@ -298,9 +325,10 @@ def main(argv: list[str] | None = None) -> int:
 
     device = next(decoder.parameters()).device
     inputs = {case.name: _make_inputs(torch, config, case, device) for case in DEFAULT_CASES}
-    original_eos = decoder.EOS
-    decoder.EOS = -1
-    try:
+    eos_module = None
+    if args.engine.startswith("aqua"):
+        import aquatts.modeling.t2s_streaming as eos_module
+    with _fixed_length_eos(decoder, eos_module=eos_module):
         conversation = next(case for case in DEFAULT_CASES if case.name == "conversation")
         cold = _run_once(
             torch,
@@ -354,15 +382,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"wall={summary['median_wall_it_s']:>7.1f} it/s "
                 f"range={summary['min_sync_it_s']:.1f}-{summary['max_sync_it_s']:.1f}"
             )
-    finally:
-        decoder.EOS = original_eos
 
     output = {
         "schema_version": 2,
         **metadata,
         "flash_fallback_forbidden": args.flash_attn != "off",
         "kv_cache_layout": getattr(decoder, "kv_cache_layout", "bucket"),
-        "eos_protocol": "EOS=-1; fixed early-stop boundary, unchanged from the historical benchmark",
+        "eos_protocol": "native-predicate-ignore-stop" if eos_module else "disabled-upstream-eos-id",
         "engine": args.engine,
         "flash_attn": args.flash_attn,
         "device": str(device),

@@ -1,3 +1,5 @@
+> 性能复测待完成：下方草稿数据误用了 Torch 2.5.1/cu121，不能用于验收；正确基线为 Torch 2.6/cu124。
+
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/Lucas1479/Aqua-TTS/main/assets/aqua.png" width="720"/>
@@ -20,7 +22,7 @@
 
 ---
 
-Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，结合静态 KV 缓存、分桶 CUDA Graph、可选 FlashAttention2 和缓存的 BigVGAN CUDA 内核。2026-10-21 的 Aqua 专项复测中，USB4 外接 RTX 4070 Ti SUPER 的 FA2 吞吐为 **670–715 同步 it/s**，SDPA 为 **454–488 it/s**；RTX 4070 Laptop 的 FA2 为 **542–572 it/s**。当前 V3 API 在 FA2 路径下的短／中／长输入预热首个 PCM 包中位数为 **686 / 751 / 1019 ms**。这些模型侧数字不包含声卡播放，完整协议与负载身份见下文。
+Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，结合静态 KV 缓存、分桶 CUDA Graph、可选 FlashAttention2 和缓存的 BigVGAN CUDA 内核。2026-10-21 的 Aqua 专项复测中，USB4 外接 RTX 4070 Ti SUPER 的 FA2 吞吐为 **670–715 同步 it/s**，SDPA 为 **454–488 it/s**；RTX 4070 Laptop 的 FA2 为 **542–572 it/s**。V3 在 FA2 路径下的短／中／长输入预热首个原始 PCM（裁切前）中位数为 **326 / 379 / 442 ms**。这些模型侧数字不包含声卡播放，完整协议与负载身份见下文。
 
 **新增 v2 系列支持：** Aqua-TTS 现已支持 **v2、v2Pro、v2ProPlus** 权重，
 包括 Pro／Plus 的说话人编码器。下方提供 [v2 系列性能基准](#新增v2-系列性能基准)
@@ -28,24 +30,24 @@ Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，
 
 ## 亮点
 
-**测量日期：2026-10-21，仅运行 Aqua 执行方式。** TTFP 为当前 API 返回首个非空 PCM
-音频块的时间，保留正常的生成静音裁切，不含模型加载、声卡缓冲和播放启动。
-旧表早于起音裁切，不能把新旧原始数值直接当作配对的优化前后对比。
+**测量日期：2026-10-21，仅运行 Aqua 执行方式。** TTFP 延续历史定义：
+**裁切／缓存生成静音之前，第一个原始 PCM 块可用的时间**。
+不含模型加载、声卡缓冲和播放。仅基准进程绕过起音处理，正常产品推理继续启用静音裁切。
 
 | 指标 | Aqua Graph + SDPA | Aqua Graph + FA2 `valid` |
 |---|---|---|
 | T2S 短 / bucket 448 | 454.0 it/s | 669.6 it/s |
 | T2S 对话 / bucket 512 | 487.6 it/s | 715.1 it/s |
 | T2S 长 / bucket 768 | 456.1 it/s | 688.1 it/s |
-| V3 TTFP 短 (3) | 491.4 ms | 685.7 ms |
-| V3 TTFP 中 (19) | 522.2 ms | 751.3 ms |
-| V3 TTFP 长 (64) | 630.0 ms | 1018.6 ms |
+| V3 TTFP 短 (3) | 322.5 ms | 325.6 ms |
+| V3 TTFP 中 (19) | 448.9 ms | 378.8 ms |
+| V3 TTFP 长 (64) | 582.9 ms | 442.1 ms |
 
 环境为 Windows、Python 3.12.10、Torch 2.5.1+cu121、fp16、上游 `08d627c`；
 保持默认 `bucket` KV 布局，关闭 CFM unpadded。T2S 沿用 51／123／180 步固定形状，
 先预热 15 次，再对每种形状同步测量 7 次。V3 复用原来的 `aqua_ttfp.py`：
 两条预热文本、每条测试文本测量 5 次、启用 T2S 统计、不在基准中重置随机种子，
-收到首个 PCM 即停止。测量函数保持原样，仅在计时之外增加结果落盘。
+收到首个 PCM 即停止。测量函数保持原样；基准的 `raw-pcm` 模式恢复历史输出边界及首块后停止的行为。
 V3 确认使用 BigVGAN CUDA 内核；首页 FA2 数据均在捕获前启用禁止回退检查。
 
 | 机制 | 上游结构 | Aqua Graph + SDPA | Aqua Graph + FA2 |
@@ -100,7 +102,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 ## 新增：v2 系列性能基准
 
 **最新测量：2026-10-21。** 环境为 USB4 外接 RTX 4070 Ti SUPER、Windows、
-Torch 2.5.1+cu121、fp16、上游 `08d627c`。下表为当前 API 预热后的首个 PCM 包延迟，
+Torch 2.5.1+cu121、fp16、上游 `08d627c`。下表为预热后、起音裁切之前的首个原始 PCM 块延迟，
 沿用 3／19／64 字符的短、中、长日语输入。
 
 每个模型／执行方式／文本组合先预热 5 次，固定种子 `20260926` 测量 20 次，
@@ -111,30 +113,28 @@ Torch 2.5.1+cu121、fp16、上游 `08d627c`。下表为当前 API 预热后的�
 
 | 模型 / 输入 | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · 短句 | 185.9 ms | 144.6 ms |
-| v2 · 中句 | 270.5 ms | 146.3 ms |
-| v2 · 长句 | 403.9 ms | 221.6 ms |
-| v2Pro · 短句 | 112.7 ms | 96.1 ms |
-| v2Pro · 中句 | 172.7 ms | 137.0 ms |
-| v2Pro · 长句 | 288.0 ms | 222.1 ms |
-| v2ProPlus · 短句 | 105.9 ms | 99.8 ms |
-| v2ProPlus · 中句 | 192.5 ms | 155.6 ms |
-| v2ProPlus · 长句 | 281.9 ms | 217.2 ms |
+| v2 · 短句 | 159.8 ms | 93.1 ms |
+| v2 · 中句 | 244.0 ms | 164.3 ms |
+| v2 · 长句 | 413.6 ms | 302.5 ms |
+| v2Pro · 短句 | 164.1 ms | 142.5 ms |
+| v2Pro · 中句 | 242.1 ms | 201.2 ms |
+| v2Pro · 长句 | 398.8 ms | 313.3 ms |
+| v2ProPlus · 短句 | 159.7 ms | 137.3 ms |
+| v2ProPlus · 中句 | 255.7 ms | 230.2 ms |
+| v2ProPlus · 长句 | 376.3 ms | 291.3 ms |
 
 **短句首个 PCM 包延迟（p95，20 样本最近秩）**
 
 | 模型 / 输入 | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · 短句 | 218.8 ms | 172.2 ms |
-| v2Pro · 短句 | 120.5 ms | 102.0 ms |
-| v2ProPlus · 短句 | 112.5 ms | 113.2 ms |
+| v2 · 短句 | 184.3 ms | 104.4 ms |
+| v2Pro · 短句 | 189.1 ms | 174.8 ms |
+| v2ProPlus · 短句 | 212.7 ms | 166.6 ms |
 
-V2 Pro／FA2 短句最低 **86.7 ms**，
-p50 **96.1 ms**，
-p95 **102.0 ms**。
+V2 Pro／FA2 短句最低 **133.8 ms**，p50 **142.5 ms**，p95 **174.8 ms**。
 v2 沿用已有底模，Pro／Plus 沿用 Kurisu 微调权重，请在同一组权重内比较执行方式。
 不同后端的浮点差异可能改变采样 token，因此这是同输入下的实测延迟，不是固定 token
-数量的纯计算加速。v2 系列输出 32 kHz，按文本段解码后分块传输，保留当前起音处理。
+数量的纯计算加速。v2 系列输出 32 kHz，按文本段解码后分块传输。基准进程单独绕过起音处理，以延续历史统计口径。
 
 [本轮报告](benchmarks/results/readme-performance-20261021.md)与[原始样本](benchmarks/results/readme-performance-20261021.json)包含各输入的 p95、模型加载、
 首次调用、总耗时／RTF、token 哈希和负载身份。
@@ -500,7 +500,7 @@ Torch 2.5.1+cu121，预热 15 次，每个形状同步测量 7 次：
 | conversation / 512 | 487.6 it/s | 715.1 it/s | 47% |
 | long / 768 | 456.1 it/s | 688.1 it/s | 51% |
 
-这些是同卡固定 T2S 工作量的实测差值，仍受桌面调度和 GPU P-state 影响，不能用来预测完整管线首包延迟。本轮原始 V3 首包协议下 FA2 较慢，另一套稳态协议的结果则不同。两者都不是与历史版本配对的前后对照；判断是否回归前，请结合完整报告中的环境和负载差异。
+这些是同卡固定 T2S 工作量的实测差值，仍受桌面调度和 GPU P-state 影响，不能用来预测完整管线首包延迟。原始 PCM 的 TTFP 与裁切后的 API 首包是两个指标。之前的 FA2 686／751／1019 ms 测到了裁切后的 API 输出，不能当作历史 TTFP，也不能据此判断迁移退化。
 
 ```python
 from aquatts import apply_preset, list_presets
@@ -732,7 +732,7 @@ RMS 窗口之前的 50 ms。单元内部停顿、尾部音频和 `pause_second` 
 未达到阈值的音频原样返回。流式路径等完整检测帧到齐再判断，文本随首个输出
 音频块发送。这是振幅规则，不是语义语音检测器，不保证所有权重都有同样收益。
 
-归档 TTFP 表早于这项起音处理；当前首页复测保留起音处理，测量首个非空 PCM 包，仍不代表声卡出声时刻。
+首页 TTFP 延续裁切前首个原始 PCM 块的定义；裁切后的 API 首包另行统计，两者都不代表声卡出声时刻。
 Demo 保留原指标，另加 `lead_ms`（首个有效窗口之前的 PCM 时长）和
 `first_voiced_chunk_ms`（包含该窗口的音频块准备提交的时刻），均不是扬声器
 声学回录时间。暂存生成的静音块可能使首包时间变长，却减少实际提交播放的静音；
