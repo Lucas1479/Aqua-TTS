@@ -67,78 +67,72 @@ JSON evidence can be saved with `--json-output result.json`.
 
 ## Current T2S result
 
-RTX 4070 Ti SUPER, Windows 11, Python 3.12, PyTorch 2.5.1+cu124,
-upstream GPT-SoVITS `08d627c`, seven-repeat median:
+**2026-10-21, Aqua-only retest.** Windows, Python 3.12.10, Torch 2.5.1+cu121,
+upstream `08d627c`, default bucket storage, 15 warmups and seven synchronized
+measurements per fixed shape. Ti SUPER is USB4-attached and drives a desktop;
+Laptop is not a display GPU. Values are median it/s.
 
-| Engine | Cold | Short / 448 | Conversation / 512 | Long / 768 |
-|---|---:|---:|---:|---:|
-| Current upstream | 106.8 | 145.5 | 153.5 | 156.0 |
-| Aqua Graph + SDPA fallback | 346.7 | 490.0 | 519.3 | 476.9 |
-| Aqua Graph + FA2 `valid` (runtime default when available) | 398.6 | 568.5 | 627.4 | 644.9 |
+| GPU / engine | First AR after capture | Short / 448 | Conversation / 512 | Long / 768 |
+|---|---|---|---|---|
+| Ti SUPER · SDPA | 362.2 | 454.0 | 487.6 | 456.1 |
+| Ti SUPER · FA2 | 437.6 | 669.6 | 715.1 | 688.1 |
+| Laptop · FA2 | 331.7 | 542.1 | 572.4 | 550.0 |
 
-See the [raw methodology and interpretation](results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md).
-
-The old June 2026 claim that FlashAttention2 had no short-case benefit and only
-about 8% long-case benefit predates the removal of the per-token CUDA Graph
-replay synchronization. It is historical, not the current recommendation. The
-runtime now prefers FA2 when it is installed and falls back to SDPA otherwise;
-the benchmark still requires an explicit variant so A/B evidence stays clear.
-
-Absolute rates are sensitive to Windows GPU P-state and desktop scheduling.
-Use the JSON trial range and reproduce on the deployment GPU before treating a
-percentage as portable.
-
-### RTX 4070 Laptop GPU (8 GB)
-
-The same Aqua Graph + FA2 `valid` command and deterministic protocol were run
-on a render-free RTX 4070 Laptop GPU in the same Windows 11 dual-GPU host. The
-software environment, checkpoint, fixed shapes, 15 warmups, and seven
-synchronized repeats were unchanged.
-
-| Engine | Cold | Short / 448 | Conversation / 512 | Long / 768 |
-|---|---:|---:|---:|---:|
-| Aqua Graph + FA2 `valid` | 313.4 | 542.1 | 585.3 | 568.1 |
-
-This is isolated T2S AR throughput rather than TTFP. The result shows that the
-optimized decoder remains comfortably real-time on an 8 GB, lower-power mobile
-Ada GPU; full-pipeline latency still depends on the SoVITS/CFM/BigVGAN workload
-and local audio scheduling.
+Each configuration ran in a fresh process. FA2 jobs reject SDPA fallback.
+The [report](results/readme-performance-20261021.md), [all samples](results/readme-performance-20261021.json)
+and linked telemetry preserve ranges and context. No official engine was rerun.
+The [August upstream comparison](results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md)
+remains historical; it used a different Torch CUDA build and lacks weight hashes.
+Use same-card comparisons, not cross-GPU rates, for this USB4 host.
 
 ## TTFP (time to first playable audio)
 
-```bash
-python benchmarks/aqua_ttfp.py \
-  --gpt-model /path/to/xxx-e15.ckpt \
-  --sovits-model /path/to/xxx_e2_s174_l32.pth \
-  --sovits-pretrain /path/to/s2Gv3.pth \
-  --bert-model /path/to/chinese-roberta-wwm-ext-large \
-  --cnhubert-model /path/to/chinese-hubert-base \
-  --bigvgan-model /path/to/models--nvidia--bigvgan_v2_24khz_100band_256x \
-  --fast-langdetect-model /path/to/fast_langdetect \
-  --ref-audio /path/to/ref_audio.wav \
-  --ref-text "reference transcript"
+The current headline measures text-ready to the first nonempty PCM returned by
+the normal API, including generated-lead trimming. It is not sound-device latency.
+The 2026-10-21 V3 headline reuses `aqua_ttfp.py` with its original measurement
+function (AST checked against `4206bb1`): two warmup texts, five repeats per test
+text, T2S statistics enabled, no benchmark seed reset, and stop at first PCM.
+Chunk size is 0.25 seconds, speed 1.1 and CFM steps four. The current API's normal
+onset processing remains enabled.
+
+```powershell
+$env:CUDA_VISIBLE_DEVICES = "GPU-YOUR-DEVICE-UUID"
+$env:AQUATTS_T2S_FLASH_ATTN = "1"
+python benchmarks/aqua_ttfp.py --gpt-model F:/local/gpt.ckpt `
+  --sovits-model F:/local/sovits.pth --sovits-pretrain F:/local/s2Gv3.pth `
+  --bert-model F:/local/bert --cnhubert-model F:/local/cnhubert `
+  --bigvgan-model F:/local/bigvgan --ref-audio F:/local/reference.wav `
+  --ref-text "the reference transcript" --json-output F:/local/v3-flash.json
 ```
 
-TTFP measures text-ready to first non-empty audio returned by `infer_stream()`.
-Use two or more warmup texts, five repeats per text, and report the median. Do
-not place `torch.cuda.empty_cache()` in the hot path. TTFP intentionally does
-not add CUDA synchronization inside its timing window because it measures the
-latency visible to the caller.
+Set `AQUATTS_T2S_FLASH_ATTN=0` in a separate process for SDPA. Set
+`GPT_SOVITS_HOME` as described above. The local evidence runner additionally
+asserted BigVGAN's actual CUDA kernel, checked the measurement AST, and rejected
+FA2 fallback before capture; it did not change successful timing or sampling.
 
-Current warm result with a cached matching BigVGAN CUDA extension,
-0.25-second chunks, two warmup utterances and five repeats. All columns share
-the same Aqua text/SoVITS/BigVGAN pipeline and vary only T2S execution:
+The v2-family tables reuse `model_latency.py --steady --seed 20260926
+--warmup-per-case 5 --repeats 20 --diagnostic-repeats 3`, with `--engine sdpa`
+or `flash`. The config format is documented below. We also ran that protocol on
+V3 with `--require-bigvgan-kernel`; those 120 requests are supplementary and do
+not supply the V3 headline. Steady-protocol formal requests disable diagnostic
+timing and capture no new graphs.
 
-| T2S execution | Short (3 chars) | Medium (19 chars) | Long (64 chars) |
-|---|---:|---:|---:|
-| Current upstream dynamic path | 416.8 ms | 692.7 ms | 1135.2 ms |
-| Aqua Graph + SDPA | 250.5 ms | 305.0 ms | 394.2 ms |
-| Aqua Graph + FA2 `valid` | **233.1 ms** | **287.7 ms** | **348.3 ms** |
+| Metric | Aqua Graph + SDPA | Aqua Graph + FA2 `valid` |
+|---|---|---|
+| T2S short / bucket 448 | 454.0 it/s | 669.6 it/s |
+| T2S conversation / bucket 512 | 487.6 it/s | 715.1 it/s |
+| T2S long / bucket 768 | 456.1 it/s | 688.1 it/s |
+| V3 TTFP short (3) | 491.4 ms | 685.7 ms |
+| V3 TTFP medium (19) | 522.2 ms | 751.3 ms |
+| V3 TTFP long (64) | 630.0 ms | 1018.6 ms |
 
-The first long-text repeat was 3059.3 ms because it triggered one-time frontend
-initialization; the following four were 342.1–369.1 ms. Preserve cold-shape
-outliers in raw evidence, but do not substitute one cold sample for the warm
-five-repeat median.
+The [complete report](results/readme-performance-20261021.md) keeps all five original-protocol
+V3 samples per case plus the separate steady V3 p95, total time/RTF and first use.
+Old untrimmed TTFP values remain in the archived
+reports and are not treated as directly comparable implementation speedups.
+All three benchmark scripts now fsync every completed trial to
+an adjacent `.trials.jsonl` file, outside the measured window, and record workload
+hashes/source identity. Keep those journals and the GPU CSV if a run is interrupted.
 
 ## BigVGAN raw kernel timing
 
@@ -241,7 +235,8 @@ this benchmark process and records that same GPU's utilization, clocks, memory,
 power and temperature every 500 ms. Three seconds of pre-load activity are
 recorded first. The tool does not close other applications or change GPU power
 settings; telemetry therefore describes the actual desktop environment, not an
-isolated GPU. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
+isolated GPU. The [2026-10-21 Aqua-only retest](results/readme-performance-20261021.md)
+uses this protocol for the current v2-family README tables. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
 the previous measurements and documents the changed measurement protocol.
 
 ### Graph KV storage layouts
