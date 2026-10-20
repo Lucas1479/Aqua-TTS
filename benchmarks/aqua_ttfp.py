@@ -15,6 +15,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 import os
 import statistics
 import sys
@@ -63,7 +65,14 @@ def main():
                         help="Audio output chunk size; v1/v2/Pro decode whole sentences first. Set <=0 to disable.")
     parser.add_argument("--measure-total", action="store_true",
                         help="Continue after first playable chunk to measure full generation time.")
+    parser.add_argument("--json-output", type=Path, help="Save original-protocol trials and adjacent JSONL")
     args = parser.parse_args()
+    from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    journal = BenchmarkJournal(args.json_output)
+    source = source_identity(ROOT)
+    identities = {name: file_identity(value) for name, value in (
+        ("gpt", args.gpt_model), ("sovits", args.sovits_model), ("reference_audio", args.ref_audio))}
+    journal.record("started", source=source, identities=identities)
 
     # Configure optimizations via env vars before importing TTSInferencer
     if args.no_cuda_graph:
@@ -111,7 +120,16 @@ def main():
     # BigVGAN kernel toggle (set before first inference)
     if args.no_bigvgan_kernel and inferencer.bigvgan_model is not None:
         inferencer.bigvgan_model.use_cuda_kernel = False
-    print(f"[bench] Loaded in {time.perf_counter() - t0:.2f}s")
+    load_seconds = time.perf_counter() - t0
+    print(f"[bench] Loaded in {load_seconds:.2f}s")
+    decoder = inferencer.t2s_model.model
+    backend = {
+        "flash_active": getattr(decoder, "use_flash_attn_kvcache", False),
+        "bigvgan_kernel": getattr(inferencer, "bigvgan_kernel_mode", None),
+        "kv_cache_layout": getattr(decoder, "kv_cache_layout", None),
+        "graph_count_after_load": len(getattr(decoder, "bucket_graphs", {})),
+    }
+    journal.record("loaded", seconds=load_seconds, **backend)
 
     def _measure(text: str) -> dict:
         t0 = time.perf_counter()
@@ -155,8 +173,11 @@ def main():
         }
 
     print("[bench] Warmup...")
-    for wt in WARMUP_TEXTS:
-        _measure(wt)
+    warmup_rows = []
+    for index, wt in enumerate(WARMUP_TEXTS):
+        row = _measure(wt)
+        warmup_rows.append(row)
+        journal.record("trial", phase="warmup", index=index, result=row)
     print("[bench] Warmup done\n")
 
     print("--- Aqua TTFP ---")
@@ -165,21 +186,39 @@ def main():
     print(hdr)
     print("-" * 80)
 
+    cases = {}
     for label, text in BENCH_TEXTS:
-        ttfp_vals, total_vals = [], []
+        ttfp_vals, total_vals, rows = [], [], []
         for rep in range(REPEATS):
             r = _measure(text)
+            rows.append(r)
+            journal.record("trial", phase="measured", case=label, index=rep, result=r)
             ttfp_vals.append(r["first_chunk_ms"])
             total_vals.append(r["total_ms"])
             print(f"{label:<8} {len(text.strip()):>5}  "
                   f"{r['first_chunk_ms']:>9.1f}ms  {r['total_ms']:>8.1f}ms  "
                   f"{r['chunk_count']:>6}  {text[:40]}  [rep {rep + 1}]")
+        cases[label] = {"text": text, "characters": len(text), "trials": rows,
+                        "median_first_chunk_ms": statistics.median(ttfp_vals)}
         print(f"  -> median ttfp={statistics.median(ttfp_vals):.1f}ms  "
               f"median {elapsed_label}={statistics.median(total_vals):.1f}ms")
 
     print("-" * 60)
     gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A"
     print(f"\nGPU: {gpu}")
+    result = {
+        "protocol": "original-aqua-ttfp", "source": source, "identities": identities,
+        "gpu": gpu, "torch": torch.__version__, "model_load_seconds": load_seconds,
+        "backend": backend, "warmup": warmup_rows, "cases": cases, "repeats": REPEATS,
+        "chunk_seconds": args.chunk_size_seconds, "segmentation": args.how_to_cut,
+        "measure_total": args.measure_total, "collect_t2s_stats": True,
+        "benchmark_seed_reset": False, "stop_after_first_nonempty_chunk": not args.measure_total,
+        "measurement_function": "unchanged from reviewed baseline 4206bb1",
+    }
+    if args.json_output:
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    journal.record("completed", cases=list(cases))
 
 
 if __name__ == "__main__":
