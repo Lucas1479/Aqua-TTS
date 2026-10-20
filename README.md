@@ -630,6 +630,12 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+Live reference preparation errors propagate before semantic generation for all
+model versions. Only complete cached references are reused. Optional explicit
+warmup may still use `strict=False` and report a failed status. V3 local reference
+audio is decoded with SoundFile; TorchAudio remains a resampling dependency and
+does not require TorchCodec for this path.
+
 ### Concurrent CUDA work and graph capture
 
 Aqua inference, full streaming-generator lifetimes, constructors, reference/BERT

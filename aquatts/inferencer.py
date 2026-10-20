@@ -430,19 +430,11 @@ class TTSInferencer:
                 enable_cuda_graph=enable_cuda_graph,
                 enable_static_kv=enable_static_kv,
             )
-            reported_count = max(0, int(idx))
-            # Upstream uses idx=0 as a ref-free sentinel even though
-            # ``prediction`` contains the complete generated sequence.
-            generated_count = (
-                reported_count
-                if reported_count
-                else int(prediction.shape[-1])
-            )
-            candidate = (
-                prediction[:, -generated_count:]
-                if generated_count
-                else prediction[:, :0]
-            )
+            # The upstream result includes the prompt prefix. idx is a stop
+            # index (and zero in ref-free mode), not a reliable output length.
+            prefix_length = 0 if prompt is None else prompt.shape[-1]
+            candidate = prediction[:, prefix_length:]
+            generated_count = int(candidate.shape[-1])
 
             if not guard_enabled:
                 return candidate.unsqueeze(0), generated_count, attempt
@@ -1041,6 +1033,8 @@ class TTSInferencer:
                     raise RuntimeError("Reference changed during preparation; retry with a stable file")
                 return entry
             entry, status, evicted = self._reference_cache.get_or_build(key, build)
+            if status == "hit":
+                self._validate_reference_features(reference, entry)
             return entry, status, key, evicted
 
     @cuda_work
@@ -1093,12 +1087,21 @@ class TTSInferencer:
         return results
 
     def _build_session_cache(self, ref_audio_path: str, prompt_text: str, prompt_language_code: str):
-        try:
-            reference = self._normalize_reference_prompt(ref_audio_path, prompt_text, prompt_language_code)
-            return self._get_reference_entry(reference)[0]
-        except Exception:
-            logger.warning("构建会话缓存失败，回退到逐句计算。", exc_info=True)
-            return {}
+        reference = self._normalize_reference_prompt(ref_audio_path, prompt_text, prompt_language_code)
+        return self._get_reference_entry(reference)[0]
+
+    def _load_reference_audio_24k(self, path):
+        """Read local PCM with SoundFile; TorchAudio is used only for resampling."""
+        if sf is None:
+            raise ImportError("Reference decoding requires soundfile (Aqua-TTS[runtime])")
+        samples, rate = sf.read(path, dtype="float32", always_2d=True)
+        if not samples.size or not np.isfinite(samples).all():
+            raise ValueError(f"Reference audio is empty or non-finite: {path}")
+        audio = torch.from_numpy(samples.T.copy()).to(
+            device=self.device, dtype=torch.float16 if self.is_half else torch.float32)
+        if audio.shape[0] > 1:
+            audio = audio.mean(0, keepdim=True)
+        return self._resample(audio, rate) if rate != 24000 else audio
 
     def _normalize_semantic_reference(self, value, *, prompt_text, prompt_language, ref_free):
         if value is None:
@@ -1177,17 +1180,7 @@ class TTSInferencer:
 
         # 4) v3 额外缓存：ref_audio 24k 的 mel2（归一化后）
         if self.model_version == "v3":
-            import torchaudio
-            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-            ref_audio = ref_audio.to(self.device)
-            if self.is_half:
-                ref_audio = ref_audio.half()
-            else:
-                ref_audio = ref_audio.float()
-            if ref_audio.shape[0] == 2:
-                ref_audio = ref_audio.mean(0).unsqueeze(0)
-            if ref_sr != 24000:
-                ref_audio = self._resample(ref_audio, ref_sr)
+            ref_audio = self._load_reference_audio_24k(ref_audio_path)
 
             mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
             cache_item["mel2_norm"] = mel2
@@ -1637,8 +1630,7 @@ class TTSInferencer:
                     with self._sovits_decode_lock:
                         # Decode for v3 model
                         # v3模型解码
-                        import torchaudio
-
+    
                         # Prefer session-cached reference spectrogram
                         # 优先使用会话缓存的参考频谱
                         refer = sess.get("refer_spec")
@@ -1660,13 +1652,7 @@ class TTSInferencer:
                         # 加载并处理参考音频
                         mel2 = sess.get("mel2_norm")
                         if mel2 is None:
-                            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-                            ref_audio = ref_audio.to(self.device)
-                            ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
-                            if ref_audio.shape[0] == 2:
-                                ref_audio = ref_audio.mean(0).unsqueeze(0)
-                            if ref_sr != 24000:
-                                ref_audio = self._resample(ref_audio, ref_sr)
+                            ref_audio = self._load_reference_audio_24k(ref_audio_path)
                             mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
 
                         # Align lengths to T_min
@@ -2080,7 +2066,6 @@ class TTSInferencer:
                 else:
                     # Decode for v3 model (serialized — CFM/BigVGAN share GPU resources)
                     # v3模型解码（串行化 — CFM/BigVGAN 共享 GPU 资源）
-                    import torchaudio
 
                     def decode_chunks():
                         refer = sess.get("refer_spec")
@@ -2105,13 +2090,7 @@ class TTSInferencer:
                         # Normalization parameters needed for denorm regardless of cache hit
                         # 归一化/反归一化参数与函数（无论是否命中缓存都需要）
                         if mel2 is None:
-                            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-                            ref_audio = ref_audio.to(self.device)
-                            ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
-                            if ref_audio.shape[0] == 2:  # Convert to mono / 转单声道
-                                ref_audio = ref_audio.mean(0).unsqueeze(0)
-                            if ref_sr != 24000:
-                                ref_audio = self._resample(ref_audio, ref_sr)
+                            ref_audio = self._load_reference_audio_24k(ref_audio_path)
                             mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
 
                         # Align lengths to T_min
