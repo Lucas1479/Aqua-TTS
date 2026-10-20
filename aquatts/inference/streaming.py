@@ -5,6 +5,40 @@ Aqua package can be structurally inspected without a GPU. / 延迟导入可避�
 """
 
 
+def locked_chunks(iterator, lock):
+    """Serialize generator computation without retaining a thread lock at yield."""
+    try:
+        while True:
+            with lock:
+                try:
+                    chunk = next(iterator)
+                except StopIteration:
+                    return
+            yield chunk
+    finally:
+        with lock:
+            iterator.close()
+
+
+class SerializedIterator:
+    """Allow a worker-thread close to wait for an in-progress next safely."""
+    def __init__(self, iterator):
+        import threading
+        self.iterator = iter(iterator)
+        self.lock = threading.Lock()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self.lock:
+            return next(self.iterator)
+
+    def close(self):
+        with self.lock:
+            self.iterator.close()
+
+
 def apply_fade_in(audio, sr: int, duration_ms: int = 15):
     """Linear fade-in at the start of the audio chunk. / 音频块开头的线性淡入。
 
