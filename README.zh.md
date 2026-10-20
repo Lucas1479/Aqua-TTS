@@ -559,6 +559,34 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### V3 语义与声学参考
+
+`infer()` 和 `infer_stream()` 均可传 `semantic_reference`，接受 `Voice` 或包含
+`ref_audio_path`、`prompt_text`、`prompt_language`（默认日文）的字典。普通参考
+提供声学条件，显式参考提供语义条件：
+
+| 字段 | 来源 |
+| --- | --- |
+| `prompt`、`phones1`、`bert1` | 语义参考 |
+| `refer_spec`、`prompt_fea_ref`、`prompt_ge`、`mel2_norm` | 普通声学参考 |
+
+```python
+from aquatts import Voice
+
+semantic = Voice("semantic", "semantic.wav", "对应的真实转写文本。", "中文")
+sr, audio = tts.infer(
+    "需要合成的内容。", ref_audio_path="acoustic.wav",
+    prompt_text="声学参考的真实转写文本。", prompt_language="中文",
+    text_language="中文", semantic_reference=semantic,
+)
+```
+
+混合时两份转写均须显式且非空，语言必须有效；`ref_free=True` 和非 V3 模型会被
+拒绝。不完整参考明确报错，不会悄悄换用另一份条件。每个请求独立复制组合字段，
+不改写共享缓存。可用 `warmup_references` 或 `warm_reference_cache` 预热两份参考；
+要同时驻留两个不同的归一化条目，缓存容量至少为 2。省略可选参数保持普通参考行为。
+该 API 明确条件来源，不承诺固定情绪强度或音色完全不变，音质和听检另行评估。
+
 ### V3 CFM mask 优化实验
 
 `TTSInferencer(cfm_unpadded=True)` 显式启用实验路径，默认 `False`。

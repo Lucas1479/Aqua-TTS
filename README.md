@@ -630,6 +630,39 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### V3 semantic and acoustic references
+
+Both `infer()` and `infer_stream()` accept an optional `semantic_reference`,
+using a `Voice` or a dictionary with `ref_audio_path`, `prompt_text` and
+`prompt_language` (default Japanese). The ordinary reference supplies acoustic
+conditions; the explicit reference supplies semantic conditioning:
+
+| Fields | Source |
+| --- | --- |
+| `prompt`, `phones1`, `bert1` | Semantic reference |
+| `refer_spec`, `prompt_fea_ref`, `prompt_ge`, `mel2_norm` | Ordinary acoustic reference |
+
+```python
+from aquatts import Voice
+
+semantic = Voice("semantic", "semantic.wav", "Its actual transcript.", "英文")
+audio = tts.infer(
+    "Target sentence.", ref_audio_path="acoustic.wav",
+    prompt_text="Acoustic reference transcript.", prompt_language="英文",
+    text_language="英文", semantic_reference=semantic,
+)
+```
+
+When mixing, both transcripts must be explicit and nonempty, languages must be
+recognized, and `ref_free=True` is rejected. Non-V3 models reject the parameter.
+Incomplete references fail without silently substituting the other source.
+Each request combines independent copies; shared cache entries are not modified.
+Warm both references with `warmup_references` or `warm_reference_cache`; keeping
+both resident requires cache capacity of at least two distinct normalized entries.
+Omitting `semantic_reference` preserves ordinary reference behavior. This API
+defines conditioning sources; it does not guarantee a fixed emotion strength or
+unchanged speaker identity. Voice quality and listening review remain separate.
+
 ### Experimental V3 CFM mask optimization
 
 `TTSInferencer(cfm_unpadded=True)` opts into an experimental single-item path;

@@ -39,9 +39,18 @@ def main():
     parser.add_argument("--no-cuda-graph", action="store_true")
     parser.add_argument("--offline-only", action="store_true", help="Require preinstalled local models/frontend resources")
     parser.add_argument("--cfm-unpadded", action="store_true", help="Enable the experimental V3 unpadded CFM path")
+    parser.add_argument("--semantic-ref-audio", help="Optional V3 semantic reference audio")
+    parser.add_argument("--semantic-ref-text", help="Transcript for --semantic-ref-audio")
+    parser.add_argument("--semantic-ref-lang", default="日文")
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""),
                         help="Path to main GPT-SoVITS repo")
     args = parser.parse_args()
+    if bool(args.semantic_ref_audio) != bool(args.semantic_ref_text):
+        parser.error("--semantic-ref-audio and --semantic-ref-text must be supplied together")
+    semantic_reference = ({"ref_audio_path": args.semantic_ref_audio,
+                           "prompt_text": args.semantic_ref_text,
+                           "prompt_language": args.semantic_ref_lang}
+                          if args.semantic_ref_audio else None)
 
     if args.gpt_sovits_home:
         os.environ["GPT_SOVITS_HOME"] = args.gpt_sovits_home
@@ -77,6 +86,7 @@ def main():
         speed=1.1, sample_steps=4,
         enable_cuda_graph=not args.no_cuda_graph,
         enable_static_kv=True,
+        semantic_reference=semantic_reference,
     ):
         if chunk is not None and len(chunk) > 0:
             audio_parts.append(chunk)

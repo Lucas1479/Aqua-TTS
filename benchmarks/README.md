@@ -350,3 +350,16 @@ committed. Run GPU measurements without concurrent GPU tests.
 ```powershell
 python benchmarks/cfm_unpadded_bench.py --config F:/local/v3.json --output F:/local/cfm
 ```
+
+### V3 mixed references
+
+`mixed_reference_smoke.py` prewarms two supplied references and checks ordinary
+and streaming synthesis across omitted, identical, mixed, reversed and restored
+references. It verifies the source of all seven composed fields, unchanged shared
+cache values, exactly two reference builds, and identical baseline/same/restored
+PCM. The second audio may be an explicitly identified synthetic fixture with a
+known transcript; such a test establishes routing, not emotion or speaker quality.
+
+```powershell
+python benchmarks/mixed_reference_smoke.py --config F:/local/v3.json --semantic-audio F:/local/semantic.wav --semantic-text "Its transcript." --semantic-language "英文" --output F:/local/mixed
+```
