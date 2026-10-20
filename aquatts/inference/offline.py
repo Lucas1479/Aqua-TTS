@@ -24,6 +24,15 @@ def require_checkpoint(component, path):
     require_files(component, path.parent, [path.name])
 
 
+def audio_sr_resource_dir():
+    """Locate resources by the selected upstream tools.audio_sr module."""
+    from importlib.util import find_spec
+    spec = find_spec("tools.audio_sr")
+    if spec is None or spec.origin is None:
+        raise ImportError("AP-BWE requires the upstream tools.audio_sr module")
+    return Path(spec.origin).resolve().parent / "AP_BWE_main" / "24kto48k"
+
+
 def require_transformer(component, directory, *, tokenizer=False, weights=True, processor=False):
     names = ["config.json"]
     if processor:

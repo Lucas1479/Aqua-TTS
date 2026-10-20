@@ -1,0 +1,249 @@
+{
+  "date": "2026-10-21",
+  "reviewed_baseline": "b6b1638134826680c90eeb845232ff21d72f7d2b",
+  "base_of_final_followup": "38221da",
+  "validation": {
+    "runtime_passed": 489,
+    "model_less_passed": 226,
+    "model_less_skipped": 23,
+    "ruff": "passed",
+    "build_twine_wheel": "passed",
+    "starlette": "1.1.0"
+  },
+  "findings": [
+    {
+      "id": 1,
+      "result": "confirmed and fixed",
+      "regressions": [
+        "actual V3 generator unlocks before yield and resumes on another worker",
+        "two HTTP requests remain mutually exclusive",
+        "disconnect/cancel closes generators and work leases"
+      ]
+    },
+    {
+      "id": 2,
+      "result": "confirmed and fixed",
+      "negative_control": "real upstream exponential_ sampler raises Offset increment outside graph capture encountered unexpectedly when admission is bypassed",
+      "regressions": [
+        "bucket prepared decoding and nested Graph-off work",
+        "new work waits during admitted capture",
+        "direct pre-capture does not touch CUDA events before work admission",
+        "deferred capture retries after all work completes"
+      ]
+    },
+    {
+      "id": 3,
+      "result": "confirmed and fixed",
+      "regressions": [
+        "v2/Pro/V3 ordinary and streaming preparation errors preserve the original exception",
+        "SoundFile stereo decoding/resampling while TorchAudio load is unavailable",
+        "generated semantics sliced after actual prompt prefix",
+        "ref-free zero-index retains complete generated sequence"
+      ]
+    },
+    {
+      "id": 4,
+      "result": "confirmed and fixed",
+      "regressions": [
+        "AP-BWE resource directory and loaded checkpoint resolve beside selected tools.audio_sr from unrelated cwd"
+      ]
+    },
+    {
+      "id": 5,
+      "result": "compatibility risk confirmed and narrowed to offline opt-in",
+      "regressions": [
+        "online construction succeeds with incompatible private splitter adapter",
+        "offline adapter failure leaves global detector unchanged"
+      ]
+    }
+  ],
+  "real_v3_concurrency": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "constructor_capture_deferred": true,
+    "capture_retry_passed": true,
+    "torchcodec_load_blocked": true,
+    "same_instance_http_seconds": 14.040050899999187,
+    "trials": [
+      {
+        "case": "same_instance_http",
+        "samples": 44992
+      },
+      {
+        "case": "same_instance_http",
+        "samples": 44928
+      },
+      {
+        "case": "separate_instances",
+        "samples": 42176
+      },
+      {
+        "case": "separate_instances",
+        "samples": 43792
+      }
+    ],
+    "sequential_samples": 44160,
+    "active_work_after_completion": 0,
+    "scope": "Functional concurrent real-model smoke, not a performance comparison; all requests use real sampling and CFM randomness."
+  },
+  "real_offline_v3": {
+    "preload_bert": false,
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "startup_seconds": 8.413592199998675,
+    "startup": {
+      "bert_loaded": false,
+      "bert_loads": 0,
+      "cuda_allocated": 1363315712,
+      "cuda_reserved": 1415577600,
+      "rss": 2764640256
+    },
+    "bert_load_seconds": [
+      1.6354539999992994
+    ],
+    "trials": [
+      {
+        "language": "english",
+        "first_nonempty_seconds": 10.117301599999337,
+        "total_seconds": 11.59161210000093,
+        "samples": 44448,
+        "pcm_sha256": "5a8fbf5b967e036b0bb887f5c73edb6defc73d920c1890ebfc3da50a5b8797f7",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1492533760,
+        "cuda_reserved": 1595932672,
+        "rss": 2507350016
+      },
+      {
+        "language": "japanese",
+        "first_nonempty_seconds": 1.3676340999991226,
+        "total_seconds": 2.3821162000022014,
+        "samples": 30656,
+        "pcm_sha256": "c974c45e334bba1cb2ff6f656f08e30e6be77f54289ed922f7d16b173f2f37ee",
+        "bert_loaded": false,
+        "bert_loads": 0,
+        "cuda_allocated": 1491313152,
+        "cuda_reserved": 1595932672,
+        "rss": 2550779904
+      },
+      {
+        "language": "chinese",
+        "first_nonempty_seconds": 6.154234800000268,
+        "total_seconds": 8.52527579999878,
+        "samples": 70320,
+        "pcm_sha256": "0584a7e9bef1dbef6a60affa7bd350a8faf41c14e72167377cb3a4da27028cae",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2146727936,
+        "cuda_reserved": 2248146944,
+        "rss": 4554104832
+      },
+      {
+        "language": "mixed",
+        "first_nonempty_seconds": 1.1002726000006078,
+        "total_seconds": 2.5601389999974344,
+        "samples": 44208,
+        "pcm_sha256": "0d989dd752c12b11a7715fbb87c3136dc7d63258aae30a734446edfb6289c9cc",
+        "bert_loaded": true,
+        "bert_loads": 1,
+        "cuda_allocated": 2146293760,
+        "cuda_reserved": 2269118464,
+        "rss": 4553629696
+      }
+    ],
+    "ap_bwe_import_blocked": true,
+    "offline_only": true,
+    "network_attempts": [],
+    "missing_resource_rejections": [
+      "BERT/config.json",
+      "BERT/vocab.txt",
+      "BERT/pytorch_model.bin",
+      "CNHuBERT/preprocessor_config.json",
+      "fast-langdetect/lid.176.bin",
+      "BigVGAN/bigvgan_generator.pt"
+    ],
+    "explicit_frontend_cwd": true,
+    "source_sha256_lf": "078f0e227e2ba7e0aa1db6a947ec369d5b9184342dde2921a1e58022887051bf",
+    "scope": "One fresh-process sample per mode; functional/resource check, not a latency distribution or language-quality evaluation."
+  },
+  "real_pro_warmup": {
+    "version": "v2Pro",
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "generation_at_ready": 2,
+    "constructor_with_warmup_seconds": 8.352129999999306,
+    "warm_hit_seconds": 0.0010870000005525071,
+    "reference_encoders_after_warmup": {
+      "ssl": 1,
+      "spectrum": 1,
+      "reference_decode_encp": 0,
+      "speaker": 1
+    },
+    "trials": [
+      {
+        "streaming": false,
+        "sample_rate": 32000,
+        "samples": 42560,
+        "first_nonempty_seconds": null,
+        "total_seconds": 1.5279152000002796,
+        "reference_encoders": {
+          "ssl": 1,
+          "spectrum": 1,
+          "reference_decode_encp": 0,
+          "speaker": 1
+        }
+      },
+      {
+        "streaming": true,
+        "sample_rate": 32000,
+        "samples": 42560,
+        "first_nonempty_seconds": 0.25175019999733195,
+        "total_seconds": 0.2520747999988089,
+        "reference_encoders": {
+          "ssl": 1,
+          "spectrum": 1,
+          "reference_decode_encp": 0,
+          "speaker": 1
+        }
+      }
+    ],
+    "reference_encoders_after_clear_and_rebuild": {
+      "ssl": 2,
+      "spectrum": 2,
+      "reference_decode_encp": 0,
+      "speaker": 2
+    },
+    "source_sha256_lf": "078f0e227e2ba7e0aa1db6a947ec369d5b9184342dde2921a1e58022887051bf",
+    "scope": "Single-run functional and timing observations; no latency distribution claim."
+  },
+  "source_sha256_lf": {
+    "aquatts/inferencer.py": "078f0e227e2ba7e0aa1db6a947ec369d5b9184342dde2921a1e58022887051bf",
+    "aquatts/server.py": "7bad268c9ccec28948e9d4055a2fb9991b0693ea901f5d858e5abbb6e6154f79",
+    "aquatts/inference/cuda_execution.py": "cc4bdf02702c06c69922458ea90e4fbea07daa867cb9e86e248501fd5c3e01b0",
+    "aquatts/inference/streaming.py": "92893da5cf6053e768998c8d8f42d0ca5753cf5b726c922e83b3647b10fb5240",
+    "aquatts/inference/cuda_runtime.py": "849a5a686b4e85b338f79f029fbd3a9c078a32dd83f5a43e8ed29ba899f21ad8",
+    "aquatts/inference/offline.py": "97471973f9718523035a004379c732c20e3e5a82fcb2062220212cc97e48790f",
+    "aquatts/modeling/t2s_streaming.py": "ad90d23415739c1a5e2d2430806349b4858c30c04359d894556311f781eba05e",
+    "benchmarks/audit_concurrency_smoke.py": "0ac49ee1468593c43bd75d68ff012625e95f42a5b40d089f93dfa7b171e0d749"
+  },
+  "unchanged_choices": [
+    "bucket remains default; nested remains explicit",
+    "capture targets follow caller preset; no silent added buckets",
+    "CFM unpadded remains disabled by default",
+    "default vocoder shapes remain 40/70/128; caller can select 9/23/47",
+    "no Japanese-dictionary feature migration or ROCm/MPS support"
+  ],
+  "limits": [
+    "RTX 4070 Laptop GPU only; Ti SUPER follow-up remains deferred",
+    "capture admission is cooperative; other CUDA clients in the process must use the shared work scope",
+    "online language detection retains upstream global-detector behavior; only offline detection is isolated",
+    "functional concurrency validation, not speech-quality or performance-distribution claims"
+  ],
+  "amadeus_default_stream_observation": {
+    "main_commit": "fd17e707d8793480003f929bc8c78a8d134e41b5",
+    "file": "GPT_SoVITS/AR/models/t2s_model.py",
+    "line": 843,
+    "observation": "torch.cuda.graph receives no explicit stream; installed Torch 2.5.1 caches a class-level default capture stream",
+    "status": "code-based risk; ASR/T2S cross-device runtime not reproduced; Aqua explicit per-device stream retained"
+  }
+}

@@ -363,3 +363,18 @@ known transcript; such a test establishes routing, not emotion or speaker qualit
 ```powershell
 python benchmarks/mixed_reference_smoke.py --config F:/local/v3.json --semantic-audio F:/local/semantic.wav --semantic-text "Its transcript." --semantic-language "英文" --output F:/local/mixed
 ```
+
+### External audit concurrency regressions
+
+`audit_concurrency_smoke.py` loads two real V3 instances. A suspended stream
+keeps work admission while a second instance constructs and defers pre-capture.
+It then exercises two concurrent `/tts` requests on one instance, concurrent
+requests across both instances, and a successful deferred-capture retry. The
+real sampler and CFM RNG remain enabled, and `torchaudio.load` is blocked to
+verify SoundFile reference decoding. These are functional checks, not latency
+comparisons. Run the GPU unit regressions separately, without a concurrent
+benchmark process.
+
+```powershell
+python benchmarks/audit_concurrency_smoke.py --config F:/local/v3.json --output F:/local/concurrency.json
+```
