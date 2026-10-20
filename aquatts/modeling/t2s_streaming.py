@@ -380,6 +380,7 @@ def _graph_kv_buffers(decoder, bucket, device, dtype):
     return tuple([layer[:, :bucket, :] for layer in root.unbind(0)] for root in roots)
 
 
+@cuda_work
 def _warmup_and_capture_bucket(decoder, bucket_size, device):
     owner = _workspace_owner(decoder, bucket_size)
     with decoder._graph_workspaces.lease(owner, device):
