@@ -66,8 +66,11 @@ def main():
     parser.add_argument("--measure-total", action="store_true",
                         help="Continue after first playable chunk to measure full generation time.")
     parser.add_argument("--json-output", type=Path, help="Save original-protocol trials and adjacent JSONL")
+    parser.add_argument("--audio-boundary", choices=("raw-pcm", "api-pcm"), default="raw-pcm",
+                        help="Historical pre-trim PCM (default), or current post-trim API output")
     args = parser.parse_args()
     from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    from benchmarks.audio_boundary import audio_boundary
     journal = BenchmarkJournal(args.json_output)
     source = source_identity(ROOT)
     identities = {name: file_identity(value) for name, value in (
@@ -131,89 +134,91 @@ def main():
     }
     journal.record("loaded", seconds=load_seconds, **backend)
 
-    def _measure(text: str) -> dict:
-        t0 = time.perf_counter()
-        first_chunk_ms = None
-        chunk_count = 0
-        t2s_stats_start = len(getattr(inferencer, "t2s_stats", []))
+    with audio_boundary(inferencer, args.audio_boundary):
+        def _measure(text: str) -> dict:
+            t0 = time.perf_counter()
+            first_chunk_ms = None
+            chunk_count = 0
+            t2s_stats_start = len(getattr(inferencer, "t2s_stats", []))
 
-        for sr, chunk, _text in inferencer.infer_stream(
-            text=text,
-            ref_audio_path=args.ref_audio,
-            prompt_text=args.ref_text,
-            text_language=args.text_lang,
-            prompt_language=args.ref_lang,
-            how_to_cut=args.how_to_cut,
-            top_k=5, top_p=1, temperature=0.6,
-            speed=1.1, sample_steps=4,
-            enable_cuda_graph=not args.no_cuda_graph,
-            enable_static_kv=not args.no_static_kv,
-            chunk_size_seconds=args.chunk_size_seconds if args.chunk_size_seconds > 0 else None,
-            collect_t2s_stats=True,
-        ):
-            if chunk is None or len(chunk) == 0:
-                continue
-            if len(getattr(inferencer, "t2s_stats", [])) <= t2s_stats_start:
-                raise RuntimeError(
-                    "TTFP benchmark received audio before any T2S stats were recorded. "
-                    "This usually means inference hit the error fallback path; rerun with logs visible."
-                )
-            elapsed_ms = (time.perf_counter() - t0) * 1000.0
-            if first_chunk_ms is None:
-                first_chunk_ms = elapsed_ms
-            chunk_count += 1
-            if not args.measure_total:
-                break
+            for sr, chunk, _text in inferencer.infer_stream(
+                text=text,
+                ref_audio_path=args.ref_audio,
+                prompt_text=args.ref_text,
+                text_language=args.text_lang,
+                prompt_language=args.ref_lang,
+                how_to_cut=args.how_to_cut,
+                top_k=5, top_p=1, temperature=0.6,
+                speed=1.1, sample_steps=4,
+                enable_cuda_graph=not args.no_cuda_graph,
+                enable_static_kv=not args.no_static_kv,
+                chunk_size_seconds=args.chunk_size_seconds if args.chunk_size_seconds > 0 else None,
+                collect_t2s_stats=True,
+            ):
+                if chunk is None or len(chunk) == 0:
+                    continue
+                if len(getattr(inferencer, "t2s_stats", [])) <= t2s_stats_start:
+                    raise RuntimeError(
+                        "TTFP benchmark received audio before any T2S stats were recorded. "
+                        "This usually means inference hit the error fallback path; rerun with logs visible."
+                    )
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                if first_chunk_ms is None:
+                    first_chunk_ms = elapsed_ms
+                chunk_count += 1
+                if not args.measure_total:
+                    break
 
-        total_ms = (time.perf_counter() - t0) * 1000.0
-        return {
-            "first_chunk_ms": float(first_chunk_ms or total_ms),
-            "total_ms": float(total_ms),
-            "chunk_count": chunk_count,
-        }
+            total_ms = (time.perf_counter() - t0) * 1000.0
+            return {
+                "first_chunk_ms": float(first_chunk_ms or total_ms),
+                "total_ms": float(total_ms),
+                "chunk_count": chunk_count,
+            }
 
-    print("[bench] Warmup...")
-    warmup_rows = []
-    for index, wt in enumerate(WARMUP_TEXTS):
-        row = _measure(wt)
-        warmup_rows.append(row)
-        journal.record("trial", phase="warmup", index=index, result=row)
-    print("[bench] Warmup done\n")
+        print("[bench] Warmup...")
+        warmup_rows = []
+        for index, wt in enumerate(WARMUP_TEXTS):
+            row = _measure(wt)
+            warmup_rows.append(row)
+            journal.record("trial", phase="warmup", index=index, result=row)
+        print("[bench] Warmup done\n")
 
-    print("--- Aqua TTFP ---")
-    elapsed_label = "total" if args.measure_total else "elapsed"
-    hdr = f"{'case':<8} {'chars':>5}  {'ttfp':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
-    print(hdr)
-    print("-" * 80)
+        print("--- Aqua TTFP ---")
+        elapsed_label = "total" if args.measure_total else "elapsed"
+        hdr = f"{'case':<8} {'chars':>5}  {'ttfp':>12}  {elapsed_label:>10}  {'chunks':>6}  text"
+        print(hdr)
+        print("-" * 80)
 
-    cases = {}
-    for label, text in BENCH_TEXTS:
-        ttfp_vals, total_vals, rows = [], [], []
-        for rep in range(REPEATS):
-            r = _measure(text)
-            rows.append(r)
-            journal.record("trial", phase="measured", case=label, index=rep, result=r)
-            ttfp_vals.append(r["first_chunk_ms"])
-            total_vals.append(r["total_ms"])
-            print(f"{label:<8} {len(text.strip()):>5}  "
-                  f"{r['first_chunk_ms']:>9.1f}ms  {r['total_ms']:>8.1f}ms  "
-                  f"{r['chunk_count']:>6}  {text[:40]}  [rep {rep + 1}]")
-        cases[label] = {"text": text, "characters": len(text), "trials": rows,
-                        "median_first_chunk_ms": statistics.median(ttfp_vals)}
-        print(f"  -> median ttfp={statistics.median(ttfp_vals):.1f}ms  "
-              f"median {elapsed_label}={statistics.median(total_vals):.1f}ms")
+        cases = {}
+        for label, text in BENCH_TEXTS:
+            ttfp_vals, total_vals, rows = [], [], []
+            for rep in range(REPEATS):
+                r = _measure(text)
+                rows.append(r)
+                journal.record("trial", phase="measured", case=label, index=rep, result=r)
+                ttfp_vals.append(r["first_chunk_ms"])
+                total_vals.append(r["total_ms"])
+                print(f"{label:<8} {len(text.strip()):>5}  "
+                      f"{r['first_chunk_ms']:>9.1f}ms  {r['total_ms']:>8.1f}ms  "
+                      f"{r['chunk_count']:>6}  {text[:40]}  [rep {rep + 1}]")
+            cases[label] = {"text": text, "characters": len(text), "trials": rows,
+                            "median_first_chunk_ms": statistics.median(ttfp_vals)}
+            print(f"  -> median ttfp={statistics.median(ttfp_vals):.1f}ms  "
+                  f"median {elapsed_label}={statistics.median(total_vals):.1f}ms")
 
     print("-" * 60)
     gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A"
     print(f"\nGPU: {gpu}")
     result = {
-        "protocol": "original-aqua-ttfp", "source": source, "identities": identities,
+        "protocol": "original-aqua-ttfp", "audio_boundary": args.audio_boundary,
+        "source": source, "identities": identities,
         "gpu": gpu, "torch": torch.__version__, "model_load_seconds": load_seconds,
         "backend": backend, "warmup": warmup_rows, "cases": cases, "repeats": REPEATS,
         "chunk_seconds": args.chunk_size_seconds, "segmentation": args.how_to_cut,
         "measure_total": args.measure_total, "collect_t2s_stats": True,
         "benchmark_seed_reset": False, "stop_after_first_nonempty_chunk": not args.measure_total,
-        "measurement_function": "unchanged from reviewed baseline 4206bb1",
+        "measurement_function": "unchanged from historical 9459f18 and reviewed baseline 4206bb1",
     }
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)

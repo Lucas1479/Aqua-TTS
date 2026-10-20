@@ -75,6 +75,8 @@ def main():
     parser.add_argument("--telemetry-output", type=Path, help="500 ms NVIDIA utilization/clock CSV")
     parser.add_argument("--require-bigvgan-kernel", action="store_true",
                         help="Require the actual V3 BigVGAN CUDA path; reject fallback")
+    parser.add_argument("--audio-boundary", choices=("raw-pcm", "api-pcm"), default="raw-pcm",
+                        help="Historical pre-trim PCM (default), or current post-trim API output")
     args = parser.parse_args()
     if args.repeats < 1:
         parser.error("--repeats must be positive")
@@ -96,6 +98,7 @@ def run_benchmark(args):
     from aquatts import TTSInferencer
     from aqua_ttfp import BENCH_TEXTS, WARMUP_TEXTS
     from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    from benchmarks.audio_boundary import audio_boundary
     journal = BenchmarkJournal(args.output)
     source = source_identity(ROOT)
     journal.record("started", engine=args.engine, source=source)
@@ -229,22 +232,23 @@ def run_benchmark(args):
         journal.record("trial", phase=phase, case=case, index=index, result=row)
         return row
 
-    warmup = [] if args.steady else [measure(text, args.seed - index - 1) for index, text in enumerate(WARMUP_TEXTS)]
-    cases = {}
-    for name, text in BENCH_TEXTS:
-        if args.steady:
-            first_use = measure(text, args.seed, phase="first_use", case=name)
-            case_warmup = [measure(text, args.seed, case=name, index=i) for i in range(args.warmup_per_case)]
-            rows = [measure(text, args.seed, phase="measured", case=name, index=i) for i in range(args.repeats)]
-            assert all(row["new_graphs"] == 0 for row in rows), "Measured steady trials captured new graphs"
-            diagnostics = [measure(text, args.seed, diagnostic=True, phase="diagnostic", case=name, index=i)
-                           for i in range(args.diagnostic_repeats)]
-            cases[name] = dict(text=text, characters=len(text), first_use=first_use, warmup=case_warmup,
-                               summary=summarize(rows), trials=rows, diagnostics=diagnostics,
-                               semantic_variants=len({tuple(row["semantic_hashes"]) for row in rows}))
-        else:
-            rows = [measure(text, args.seed + repeat, phase="measured", case=name, index=repeat) for repeat in range(args.repeats)]
-            cases[name] = dict(text=text, characters=len(text), summary=summarize(rows), trials=rows)
+    with audio_boundary(inferencer, args.audio_boundary):
+        warmup = [] if args.steady else [measure(text, args.seed - index - 1) for index, text in enumerate(WARMUP_TEXTS)]
+        cases = {}
+        for name, text in BENCH_TEXTS:
+            if args.steady:
+                first_use = measure(text, args.seed, phase="first_use", case=name)
+                case_warmup = [measure(text, args.seed, case=name, index=i) for i in range(args.warmup_per_case)]
+                rows = [measure(text, args.seed, phase="measured", case=name, index=i) for i in range(args.repeats)]
+                assert all(row["new_graphs"] == 0 for row in rows), "Measured steady trials captured new graphs"
+                diagnostics = [measure(text, args.seed, diagnostic=True, phase="diagnostic", case=name, index=i)
+                               for i in range(args.diagnostic_repeats)]
+                cases[name] = dict(text=text, characters=len(text), first_use=first_use, warmup=case_warmup,
+                                   summary=summarize(rows), trials=rows, diagnostics=diagnostics,
+                                   semantic_variants=len({tuple(row["semantic_hashes"]) for row in rows}))
+            else:
+                rows = [measure(text, args.seed + repeat, phase="measured", case=name, index=repeat) for repeat in range(args.repeats)]
+                cases[name] = dict(text=text, characters=len(text), summary=summarize(rows), trials=rows)
     if args.engine != "upstream":
         assert decoder.bucket_graphs and decoder.cuda_graph_stats["graph_replay_steps"] > 0
     result = dict(model=inferencer.model_version, engine=args.engine,
@@ -252,7 +256,9 @@ def run_benchmark(args):
                   bigvgan_kernel=getattr(inferencer, "bigvgan_kernel_mode", None),
                   cfm_unpadded=getattr(inferencer, "cfm_unpadded", False),
                   kv_cache_layout=getattr(decoder, "kv_cache_layout", "bucket"),
-                  generated_lead_policy="current product behavior; no timing-only bypass",
+                  audio_boundary=args.audio_boundary,
+                  generated_lead_policy=("historical pre-trim PCM" if args.audio_boundary == "raw-pcm"
+                                         else "current post-trim API output"),
                   warmup_per_case=args.warmup_per_case if args.steady else None,
                   diagnostic_repeats=args.diagnostic_repeats if args.steady else None,
                   protocol="fixed-seed-steady" if args.steady else "paired-seed",
