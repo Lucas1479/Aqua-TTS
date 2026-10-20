@@ -221,6 +221,12 @@ def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int
 
             if not apply_flash_attn_patch(decoder, mode=args.flash_attn):
                 raise RuntimeError(f"FlashAttention2 is unavailable: {get_flash_attn_error()}")
+            # Install before capture: otherwise a captured SDPA fallback can
+            # replay without calling this Python guard during measurement.
+            def reject_fallback(*_args, **_kwargs):
+                raise AssertionError("FA2 benchmark fell back to SDPA")
+            for block in decoder.t2s_transformer_static.blocks:
+                block.sdpa_block.decode_next_token_with_static_cache = reject_fallback
         if graph_enabled:
             results = decoder.precapture_cuda_graph(buckets=buckets)
             failed = [bucket for bucket, ok in results.items() if not ok]
@@ -287,11 +293,6 @@ def main(argv: list[str] | None = None) -> int:
         args, upstream_home, checkpoint, args.buckets
     )
     del model  # decoder retains all references required for inference
-    if args.flash_attn != "off":
-        def reject_fallback(*_args, **_kwargs):
-            raise AssertionError("FA2 benchmark fell back to SDPA")
-        for block in decoder.t2s_transformer_static.blocks:
-            block.sdpa_block.decode_next_token_with_static_cache = reject_fallback
     if not torch.cuda.is_available() or torch.device(args.device).type != "cuda":
         raise RuntimeError("this benchmark requires a CUDA device")
 
