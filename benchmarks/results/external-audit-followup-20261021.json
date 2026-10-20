@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-21",
+  "reviewed_baseline": "26b5c56ce03408d61408751d363c6df4e004a9ef",
+  "validation": {
+    "before_fix": "11 failed, 14 passed: first-next error contract, six streaming HTTP errors, explicit close and GC under a held Lock",
+    "targeted_passed": 46,
+    "runtime_passed": 512,
+    "runtime_skipped": 1,
+    "runtime_command": "from aquatts import TTSInferencer; pytest.main(['tests', '-q', '--tb=short'])",
+    "runtime_scope_note": "Includes test_vendor_paths.py (9 passed, 1 conditional skip); prior 489-test run excluded it. Fourteen new cases added.",
+    "model_less_passed": 228,
+    "model_less_skipped": 23,
+    "model_less_command": "python -m pytest tests -q --ignore=tests/test_vendor_paths.py",
+    "ruff": "passed",
+    "build_twine_wheel_source_match": "passed"
+  },
+  "fixes": [
+    "Prepare and validate references before the initial sample-rate yield; /tts responds with 500 JSON and no PCM headers on reference failure.",
+    "Close the private suspended decode generator without reacquiring the shared Lock; explicit close and GC are tested on a lock-owning thread.",
+    "Document startup pre-capture, possible indefinite capture deferral during overlapping requests, and idle retry."
+  ],
+  "real_v3": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.5.1+cu121",
+    "constructor_capture_deferred": true,
+    "capture_retry_passed": true,
+    "torchcodec_load_blocked": true,
+    "same_instance_http_seconds": 9.174935600000026,
+    "reference_error_http": [
+      {
+        "endpoint": "/tts",
+        "status": 500,
+        "sample_rate_header": false,
+        "active_work_after": 0
+      },
+      {
+        "endpoint": "/tts/file",
+        "status": 500,
+        "sample_rate_header": false,
+        "active_work_after": 0
+      }
+    ],
+    "trials": [
+      {
+        "case": "same_instance_http",
+        "samples": 42592
+      },
+      {
+        "case": "same_instance_http",
+        "samples": 42176
+      },
+      {
+        "case": "separate_instances",
+        "samples": 44688
+      },
+      {
+        "case": "separate_instances",
+        "samples": 42592
+      }
+    ],
+    "sequential_samples": 42832,
+    "active_work_after_completion": 0,
+    "scope": "Functional concurrent real-model smoke, not a performance comparison; all requests use real sampling and CFM randomness."
+  },
+  "default_decisions": {
+    "kv_cache_layout": "bucket retained for independent bucket ownership; nested remains opt-in for shared KV and promotion",
+    "precapture": "only the declared preset or explicitly requested capacities; no implicit memory-budget increase",
+    "cfm_unpadded": "False retained pending further hardware and quality validation"
+  },
+  "integration": {
+    "release": "Integrate and verify the complete repair stack before publishing a release; do not release an intermediate migration head.",
+    "pr12": "Separate main-based PR, not merged or rewritten.",
+    "merge_preview_commits": [
+      "26b5c56",
+      "6d39b7d"
+    ],
+    "merge_preview_conflicts": [
+      "README.md",
+      "README.zh.md"
+    ],
+    "resolution_guidance": "Integrate PR12's newer benchmark data and measurement protocol with the migration stack's runtime mechanism description; do not select one side wholesale."
+  },
+  "limits": [
+    "RTX 4070 Laptop only; RTX 4070 Ti SUPER retesting remains deferred.",
+    "Functional and concurrency checks, not a new performance or perceptual audio-quality claim.",
+    "Reference readiness precedes headers; errors arising later during audio generation can still terminate an already-started stream."
+  ],
+  "source_sha256_lf": {
+    "aquatts/inferencer.py": "8c04d99d20a89cbf8244a4eb4bd1cafff0c4cf9ab4d0e7c4a95a5c1af0f1e238",
+    "aquatts/inference/streaming.py": "cac2520141d1f017cbc8be1f88f45ea5a85f2d7d8828826cae52aa7ba5a2db49",
+    "tests/test_reference_failures.py": "00b8dcd86ddcdc53d55839bdaa638f3c18c9a1d82bcd39f1a337fa0a4c82c5db",
+    "tests/test_http_stream_lifecycle.py": "658dc9693839d867e5ec77e25ec2713573f8f37a1b8d7afe2fac7724793c6266",
+    "benchmarks/audit_concurrency_smoke.py": "2dfd9eb570b11e28f32d78bdd112b629abbb3d208a2a575aca5f614e509bfa7f",
+    "README.md": "c0c9328ed7020b8f92c5dce2207e2f20f2fe0c1542fbe162c2277b2942d551e9",
+    "README.zh.md": "eedb6eb2418f1054df8b19b6e6eaac58b0db2e0eed759a5c490052fb39e3f172"
+  }
+}

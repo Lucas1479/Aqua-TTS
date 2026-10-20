@@ -475,6 +475,22 @@ including lazy capture on an `off` instance. `enable_static_kv=False` always
 disables Graph. `ENABLE_CUDA_GRAPH=0/1` overrides the preset at construction;
 `ENABLE_CUDA_GRAPH_PRECAPTURE` and `CUDA_GRAPH_PRECAPTURE_BUCKETS` override startup
 capture only. Later environment changes do not alter an existing instance.
+
+Complete pre-capture for the buckets you intend to serve **before accepting
+requests**. Capture requires exclusive admission across cooperating CUDA work
+in the process; an active request (including a paused stream) defers it, and
+the requesting decode falls back to eager execution. With continuous overlapping
+requests, an unprepared bucket can remain eager indefinitely. This affects
+`lazy`, buckets omitted by `minimal`, failed startup captures, and instances
+constructed after serving begins. `full` avoids request-time capture for its
+configured buckets only when startup capture succeeds. To prepare deferred
+buckets, drain active streams and call
+`tts.t2s_model.model.precapture_cuda_graph([128, 256, 448, 512, 768, 1024])`,
+choosing the capacities within your memory budget. Check the returned per-bucket
+booleans before reopening traffic. No background capture or fairness guarantee
+forces an idle window. Other CUDA users in the same process must also participate
+in the shared work admission.
+
 Use `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]` after a request
 to verify execution; a successful capture alone does not demonstrate replay.
 
@@ -493,7 +509,11 @@ short attention shapes; all Graph requests on that root share one owner. An omit
 argument reads `AQUATTS_KV_CACHE_LAYOUT` once (default `bucket`). Explicit arguments
 take priority. Captured layout/device/dtype/capacity changes require a new decoder.
 Sparse single-bucket deployments can use less KV with `bucket`; `nested` is not
-universally smaller. Full/minimal capture only their declared bucket sets; lazy/off
+universally smaller. These are deliberate defaults for this release: `bucket`
+keeps per-bucket ownership independent, capture presets bound startup memory,
+and CFM unpadded remains an explicit experiment pending further hardware and
+quality validation. Use `nested` when shared KV residency and prepared-bucket
+promotion fit your workload. Full/minimal capture only their declared bucket sets; lazy/off
 do not allocate a Graph root at startup. A full nested bucket promotes to the
 smallest larger **already captured** bucket, retaining the live KV prefix in place
 and clearing only the newly exposed tail. Promotion never captures or expands the
@@ -580,6 +600,11 @@ Endpoints:
 | `GET` | `/voices` | List registered voices |
 | `POST` | `/voices/add` | Register a new voice |
 | `DELETE` | `/voices/{name}` | Remove a registered voice |
+
+`/tts` prepares and validates the reference before sending success headers.
+Reference preparation failures return HTTP 500 with a JSON `detail`, without
+`X-Sample-Rate`. A cold reference can therefore delay headers until preparation
+finishes; cached references reuse the prepared features.
 
 ```bash
 # Streaming TTS — returns raw float32 PCM (24kHz, mono, little-endian)

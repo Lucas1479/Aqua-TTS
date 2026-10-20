@@ -427,6 +427,16 @@ for sr, chunk, text in tts.infer_stream(
 在 `off` 实例上按需捕获。`enable_static_kv=False` 始终关闭 Graph。
 `ENABLE_CUDA_GRAPH=0/1` 在构造时覆盖 preset；`ENABLE_CUDA_GRAPH_PRECAPTURE`
 和 `CUDA_GRAPH_PRECAPTURE_BUCKETS` 只覆盖启动捕获。构造后修改环境变量不改变该实例。
+
+请在**开始接收请求前**完成服务所需桶的预捕获。捕获需要在进程内协作的 CUDA 工作之间
+取得独占准入；存在其他活跃请求（包括暂停的流）时会推迟捕获，本次解码回退 eager。
+持续重叠的请求可能让未准备的桶一直走 eager。`lazy`、`minimal` 未覆盖的桶、
+启动捕获失败，以及开服后才构造的实例都会遇到这一情况。`full` 只有在启动捕获成功后，
+才能避免其配置桶在请求中临时捕获。需要补捕获时，先停止接收新请求并结束现有流，
+再调用 `tts.t2s_model.model.precapture_cuda_graph([128, 256, 448, 512, 768, 1024])`，
+按显存预算选择桶，确认返回的各桶布尔值后恢复服务。当前没有后台捕获或保证捕获机会
+的调度机制；同进程的其他 CUDA 使用方也需要接入共享工作准入。
+
 请求完成后可查看 `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]`
 确认实际执行；捕获成功不等于已 replay。
 
@@ -441,7 +451,9 @@ for sr, chunk, text in tts.infer_stream(
 短桶 attention 形状。共享根的 Graph 请求共用一个 owner。省略参数时构造器读取
 `AQUATTS_KV_CACHE_LAYOUT`（默认 `bucket`），显式参数优先。捕获后改变布局、设备、
 dtype 或容量需要新建 decoder。只用少量短图时 bucket 可能更省显存，nested 并非始终更小。
-full/minimal 只准备各自声明的桶；lazy/off 不在启动时分配 Graph 根。nested 桶满后，
+本轮保留这些默认策略：`bucket` 维持各桶独立所有权，预设限制启动显存开销，
+CFM unpadded 在进一步硬件与质量验证前仍需显式开启。需要共享 KV 驻留及已准备桶升桶时，
+可显式选择 `nested`。full/minimal 只准备各自声明的桶；lazy/off 不在启动时分配 Graph 根。nested 桶满后，
 切换到最小的、更大的**已捕获**桶，原地保留有效 KV，并清零新暴露的尾区。升桶不捕获
 新图，也不扩大准备集合。没有已准备目标或使用 bucket 存储时，保留完整历史转动态解码。
 
@@ -509,6 +521,10 @@ python -m aquatts.server \
 | `GET` | `/voices` | 列出已注册角色 |
 | `POST` | `/voices/add` | 注册新角色 |
 | `DELETE` | `/voices/{name}` | 移除已注册角色 |
+
+`/tts` 在发送成功响应头前完成参考准备与校验。参考准备失败时返回 HTTP 500，
+响应为带 `detail` 的 JSON，不发送 `X-Sample-Rate`。冷参考会让响应头等待准备完成；
+缓存命中时复用已准备的特征。
 
 ```bash
 # 流式 TTS — 返回 raw float32 PCM（24kHz, 单声道, little-endian）
