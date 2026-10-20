@@ -170,7 +170,8 @@ class TTSInferencer:
                  warmup_strict=True,
                  bigvgan_warmup_shapes=None,
                  bigvgan_warmup_repeats=None,
-                 offline_only=False):
+                 offline_only=False,
+                 cfm_unpadded=False):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -212,12 +213,17 @@ class TTSInferencer:
                 English/Japanese-only requests otherwise leave BERT unloaded.
             offline_only: Require local model resources without changing global Hub policy.
                 Frontend checks cover en/ja/zh with the documented upstream resource layout.
+            cfm_unpadded: Experimental V3 single-item unpadded CFM path; default False.
             kv_cache_layout: "bucket" (independent bucket storage) or "nested"
                 (shared maximum root); None reads AQUATTS_KV_CACHE_LAYOUT once.
         """
         if not isinstance(offline_only, bool):
             raise TypeError("offline_only must be a bool")
         self.offline_only = offline_only
+        if not isinstance(cfm_unpadded, bool):
+            raise TypeError("cfm_unpadded must be a bool")
+        self.cfm_unpadded = cfm_unpadded
+        self._cfm_adapter = None
         self._segmenter = None
         self._bigvgan_warmup_shapes, self._bigvgan_warmup_repeats = resolve_vocoder_warmup(
             bigvgan_warmup_shapes, bigvgan_warmup_repeats)
@@ -582,6 +588,8 @@ class TTSInferencer:
         # 如果是v3模型，还需加载BigVGAN
         if self.model_version == "v3":
             self._load_bigvgan_model()
+        if self.cfm_unpadded:
+            self._prepare_cfm_adapter()
 
     def _load_gpt_model(self):
         """Load GPT T2S model and pre-capture CUDA Graphs.
@@ -932,6 +940,21 @@ class TTSInferencer:
             logger.error(f"加载BigVGAN模型失败: {str(e)}")
             logger.error(traceback.format_exc())
             raise
+
+    def _prepare_cfm_adapter(self):
+        if self.model_version != "v3":
+            raise ValueError("cfm_unpadded requires a V3 model")
+        from aquatts.inference.cfm import UnpaddedCFM
+        self._cfm_adapter = UnpaddedCFM(self.vq_model.cfm)
+
+    def _run_cfm(self, fea, lengths, prompt, steps):
+        cfm = self.vq_model.cfm
+        if not getattr(self, "cfm_unpadded", False):
+            return cfm.inference(fea, lengths, prompt, steps, inference_cfg_rate=0)
+        if self._cfm_adapter is None or self._cfm_adapter.cfm is not cfm:
+            self._prepare_cfm_adapter()
+        return self._cfm_adapter(fea, lengths, prompt, steps,
+                                 unpadded_length=fea.size(1), inference_cfg_rate=0)
 
     def _init_reference_cache(self):
         self._reference_generation = 0
@@ -1634,12 +1657,11 @@ class TTSInferencer:
 
                             # Run CFM inference
                             # CFM推理
-                            cfm_res = self.vq_model.cfm.inference(
+                            cfm_res = self._run_cfm(
                                 fea,
                                 torch.LongTensor([fea.size(1)]).to(fea.device),
                                 mel2,
                                 sample_steps,
-                                inference_cfg_rate=0
                             )
 
                             cfm_res = cfm_res[:, :, mel2.shape[2]:]
@@ -2089,12 +2111,11 @@ class TTSInferencer:
 
                             # Run CFM inference / CFM推理
                             _t0 = time.perf_counter()
-                            cfm_res = self.vq_model.cfm.inference(
+                            cfm_res = self._run_cfm(
                                 fea,
                                 torch.LongTensor([fea.size(1)]).to(fea.device),
                                 mel2,
                                 sample_steps,
-                                inference_cfg_rate=0
                             )
                             if self._stream_sync_timing_enabled and self.device.type == "cuda":
                                 torch.cuda.synchronize(self.device)

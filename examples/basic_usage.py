@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--ref-lang", default="日文")
     parser.add_argument("--no-cuda-graph", action="store_true")
     parser.add_argument("--offline-only", action="store_true", help="Require preinstalled local models/frontend resources")
+    parser.add_argument("--cfm-unpadded", action="store_true", help="Enable the experimental V3 unpadded CFM path")
     parser.add_argument("--gpt-sovits-home", default=os.environ.get("GPT_SOVITS_HOME", ""),
                         help="Path to main GPT-SoVITS repo")
     args = parser.parse_args()
@@ -58,6 +59,7 @@ def main():
         sovits_path=args.sovits_model,
         sv_model_path=args.sv_model,
         offline_only=args.offline_only,
+        cfm_unpadded=args.cfm_unpadded,
     )
 
     print(f"Generating: {args.text}")

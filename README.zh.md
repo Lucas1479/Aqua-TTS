@@ -559,6 +559,23 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### V3 CFM mask 优化实验
+
+`TTSInferencer(cfm_unpadded=True)` 显式启用实验路径，默认 `False`。
+Aqua 构造每个 V3 CFM 块时已掌握完整长度，只有这个单样本、无 padding 的情况省略
+attention mask。未知长度、batch 和有 padding 的输入仍使用 mask，并在扩散循环外
+构建一次。不会把 GPU 长度标量读回 CPU。
+
+实例适配器检查上游接口后，只在内存中调整 DiT 的 mask 赋值。CFM 扩散循环、
+`infer=True` tuple 协议、条件/CFG 文本缓存、时间步缓存和训练分支均保留上游实现，
+不覆盖外部 checkout 文件或修改类/全局函数。不兼容的上游会在启用时报错；关闭参数
+即可恢复普通 mask 路径，非 V3 模型明确拒绝该参数。
+
+`benchmarks/cfm_unpadded_bench.py --config ... --output ...` 提供同噪声的
+4/16/32 步、CFG、FP16/FP32、短尾和长参考测试，以及普通/流式配对测量。
+数值阈值在测量前固定，保留基线重复误差和原始耗时样本。更多硬件和人工听检完成前
+保持默认关闭。
+
 ### 本地资源与离线模型加载
 
 构造时传 `offline_only=True`，或在 `examples/basic_usage.py` 中使用

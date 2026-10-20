@@ -630,6 +630,27 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### Experimental V3 CFM mask optimization
+
+`TTSInferencer(cfm_unpadded=True)` opts into an experimental single-item path;
+the default is `False`. Aqua already knows the complete input length when it
+constructs each V3 CFM chunk. Only that known unpadded case omits the attention
+mask. Unknown lengths, batches and padded inputs retain a mask, prepared once
+outside the diffusion loop. No GPU length scalar is read back to the CPU.
+
+The instance adapter changes only DiT's mask assignment in memory after checking
+the upstream interface. The CFM diffusion loop, `infer=True` tuple protocol,
+conditional/CFG text caches, timestep cache and training branch stay upstream.
+It does not replace external checkout files or class/global functions. Unsupported
+upstream implementations fail explicitly when enabled. Disable the option to
+restore the ordinary masked path; non-V3 models reject it.
+
+Use `benchmarks/cfm_unpadded_bench.py --config ... --output ...` for same-noise
+4/16/32-step, CFG, FP16/FP32 comparisons, short tails, long references and paired
+ordinary/streaming requests. Numerical bounds are fixed in the benchmark before
+measurement; raw repeat noise and timings are retained. This remains disabled
+by default pending broader hardware and listening review.
+
 ### Local resources and offline model loading
 
 Pass `offline_only=True` to `TTSInferencer` (or `--offline-only` in
