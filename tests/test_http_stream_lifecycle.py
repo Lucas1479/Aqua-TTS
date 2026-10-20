@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from aquatts.inference.streaming import locked_chunks
+from aquatts.inference.cuda_execution import cuda_execution, cuda_work
 from aquatts.server import _create_app
 from aquatts.voice_registry import VoiceRegistry
 
@@ -19,6 +20,7 @@ class Decoder:
         self.maximum = 0
         self.closed = 0
 
+    @cuda_work
     def infer_stream(self, **_):
         try:
             yield 24000, None, ""
@@ -47,6 +49,7 @@ def test_two_actual_http_streams_complete_with_mutual_exclusion():
             assert all(r.status_code == 200 and len(r.content) == 5 * 128 * 4 for r in responses)
     asyncio.run(run())
     assert decoder.maximum == 1 and decoder.closed == 2
+    assert not cuda_execution._owners
     assert decoder.lock.acquire(blocking=False)
     decoder.lock.release()
 
@@ -77,5 +80,6 @@ def test_http_disconnect_or_cancellation_closes_generator(cancel):
             await asyncio.wait_for(task, 5)
     asyncio.run(run())
     assert decoder.closed == 1
+    assert not cuda_execution._owners
     assert decoder.lock.acquire(blocking=False)
     decoder.lock.release()

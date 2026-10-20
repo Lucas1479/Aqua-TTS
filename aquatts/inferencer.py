@@ -14,6 +14,7 @@ import numpy as np
 from aquatts.inference.onset import LeadingSilence, leading_cut
 from aquatts.inference.workspace import resolve_kv_cache_layout
 from aquatts.inference.cuda_runtime import resolve_cuda_device, resolve_vocoder_warmup, warmup_vocoder
+from aquatts.inference.cuda_execution import cuda_work
 from aquatts.inference.reference_cache import REFERENCE_LANGUAGE_CODES, ReferenceCache, normalize_reference, reference_key
 from aquatts.inference.offline import check_frontend, require_checkpoint, require_files, require_transformer
 from aquatts.voice_registry import Voice
@@ -150,6 +151,7 @@ def _denormalize_v3_spec(spec):
 
 
 class TTSInferencer:
+    @cuda_work
     def __init__(self,
                  device="cuda",
                  gpt_path=None,
@@ -537,6 +539,7 @@ class TTSInferencer:
             if not self.bert_loaded:
                 self._init_bert_model()
 
+    @cuda_work
     def preload_bert_model(self):
         """Load Chinese features now; return the original successful load duration."""
         self._ensure_bert_model()
@@ -1040,6 +1043,7 @@ class TTSInferencer:
             entry, status, evicted = self._reference_cache.get_or_build(key, build)
             return entry, status, key, evicted
 
+    @cuda_work
     def warm_reference_cache(self, audio_path, text="", language="日文", *, strict=True):
         """Prepare the same normalized reference used by infer/infer_stream.
 
@@ -1423,6 +1427,7 @@ class TTSInferencer:
 
         return spec
 
+    @cuda_work
     def infer(self,
               text,
               ref_audio_path,
@@ -1785,6 +1790,7 @@ class TTSInferencer:
             logger.error(traceback.format_exc())
             raise
 
+    @cuda_work
     def infer_stream(self,
                      text,
                      ref_audio_path,

@@ -630,6 +630,21 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### Concurrent CUDA work and graph capture
+
+Aqua inference, full streaming-generator lifetimes, constructors, reference/BERT
+preload and vocoder preparation participate in one process-wide admission gate.
+Requests may run concurrently. Capture is deferred when another work owner is
+active; the current request uses eager decoding and can retry capture later.
+New work waits while an admitted capture is in progress. Generator ownership
+survives worker-thread migration, and HTTP cancellation closes its lease.
+
+Other GPU clients in the same process should participate with a synchronous
+`with cuda_execution.work():` scope, importing `cuda_execution` from
+`aquatts.inference.cuda_execution`. Arbitrary external CUDA calls bypassing this
+cooperative gate cannot be protected by Aqua. A suspended stream retains its
+lease until exhausted or explicitly closed.
+
 ### V3 semantic and acoustic references
 
 Both `infer()` and `infer_stream()` accept an optional `semantic_reference`,

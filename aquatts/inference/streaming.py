@@ -5,6 +5,9 @@ Aqua package can be structurally inspected without a GPU. / 延迟导入可避�
 """
 
 
+from aquatts.inference.cuda_execution import cuda_work
+
+
 def locked_chunks(iterator, lock):
     """Serialize generator computation without retaining a thread lock at yield."""
     try:
@@ -77,6 +80,7 @@ def finalize_stream_chunk(audio, sr: int, fade_out_ms: int = 15):
     return audio
 
 
+@cuda_work
 def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None, offline_only=False):
     """Load a BigVGAN model from a pretrained directory. / 从预训练目录加载 BigVGAN 模型。
 
