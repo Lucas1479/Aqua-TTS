@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-21",
+  "base_commit": "819948c9fe56cd14d7d3db4a568de4872c79a292",
+  "status": "prepared_pending_hardware",
+  "production_code_changed": false,
+  "validation": {
+    "syntax": "passed",
+    "ruff": "passed",
+    "model_less_passed": 234,
+    "model_less_skipped": 24,
+    "default_paths_block_torch_import": "passed",
+    "timeout_missing_result_worker_failure": "passed",
+    "runtime_physical_gpu_order_reversal": "passed with subprocess doubles; not a GPU execution result"
+  },
+  "hardware": {
+    "executed": false,
+    "multi_gpu_cases_for_two_devices": 24,
+    "scope": [
+      "ordered current/target device pairs with real allocations",
+      "vocoder warmup success/failure, forward, loader and fallback device guards",
+      "caller device and CPU/all-visible-GPU warmup RNG restoration",
+      "bucket/nested capture order, alternating replay and eager token equivalence",
+      "real-sampler concurrent replay on separate GPUs",
+      "cross-device work/capture exclusion and idle retry"
+    ],
+    "limits": [
+      "T2S uses a small random-weight upstream model; vocoder uses a small real Torch module.",
+      "Checkpoint IO/kernel compilation are replaced by a loader factory; CUDA APIs are real.",
+      "No pretrained BigVGAN, perceptual quality or performance claims."
+    ]
+  },
+  "execution": {
+    "gating": "Both selected GPUs must be idle; no GPU tests executed during preparation.",
+    "phases": {
+      "multi_gpu": [
+        "tests/test_multi_gpu_runtime.py",
+        "-q",
+        "-x",
+        "-ra"
+      ],
+      "runtime": [
+        "tests",
+        "--ignore=tests/test_multi_gpu_runtime.py",
+        "-q",
+        "-x",
+        "-ra"
+      ],
+      "runtime_reversed": [
+        "tests",
+        "--ignore=tests/test_multi_gpu_runtime.py",
+        "-q",
+        "-x",
+        "-ra"
+      ]
+    },
+    "device_selection": "Exactly two physical UUIDs; both visible throughout; reverse order for the second full runtime pass.",
+    "evidence": "Per-test JSONL is fsynced; atomic manifest and phase results; streaming logs.",
+    "failure_policy": "Stop on failure/timeout/missing result; never label incomplete work as passed.",
+    "merge": "User explicitly prohibited merging."
+  },
+  "source_sha256_lf": {
+    "tests/test_multi_gpu_runtime.py": "92daf15a30b0435bf056317175e8eb55e47833771d860f6a0a6667ac7c9a4ecd",
+    "tests/test_multi_gpu_validation_runner.py": "28b1092fb459fecfd1516211b0b7ce2a40df98bea1f0ade90da1d7844efe4ea6",
+    "benchmarks/multi_gpu_validation.py": "e231fa0004d3b4194567bb2f29ed4d809dfcc0156c4ea0a21850d84f77137f21",
+    "benchmarks/README.md": "f11426e80244be9a90e172c6575b928b9dc717a93bb8f3f17421a87ab0691389"
+  }
+}

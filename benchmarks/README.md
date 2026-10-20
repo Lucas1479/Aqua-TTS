@@ -378,3 +378,62 @@ benchmark process.
 ```powershell
 python benchmarks/audit_concurrency_smoke.py --config F:/local/v3.json --output F:/local/concurrency.json
 ```
+
+### Real multi-GPU correctness (explicit opt-in)
+
+`tests/test_multi_gpu_runtime.py` is skipped **before importing Torch** unless
+`AQUATTS_RUN_MULTI_GPU=1`. An explicitly requested run fails if fewer than two
+CUDA devices are visible. With two visible GPUs it covers 24 cases, including
+both current/target directions:
+
+- Actual device resolution and allocation with current GPU A and target GPU B.
+- Vocoder warmup success/failure, ordinary forward calls, loader selection and
+  kernel-load fallback; restoration of the caller's current device and warmup's
+  CPU/all-visible-GPU RNG state.
+- T2S capture on A then B and B then A, alternating replay, and Graph/eager
+  greedy-token equivalence for both `bucket` and `nested` layouts.
+- Concurrent prepared replay on separate GPUs using the real sampler, plus
+  capture deferral while another GPU has active work and successful idle retry.
+
+All CUDA device APIs, allocations, synchronization, capture and replay are real.
+The T2S decoder is a small upstream model with random weights. The vocoder is a
+small Torch module; its loader factory replaces checkpoint IO and injects a
+kernel-load failure. These tests do not validate a pretrained BigVGAN checkpoint,
+extension compilation, speech quality, or performance.
+
+Wait until **both selected GPUs are idle**. Do not run this suite alongside a
+benchmark, training job, or inference server. `multi_gpu_validation.py` does not
+decide whether hardware is idle; check utilization and process ownership before
+passing `--execute`. In particular, do not infer availability from one low
+utilization sample while another process still owns the eGPU.
+
+The runner's default invocation only writes a plan and does not import Torch or
+probe CUDA. Use a new output directory for each invocation:
+
+```powershell
+# Safe preparation: no GPU access.
+python benchmarks/multi_gpu_validation.py --output F:/local/multi-gpu-plan
+
+# Only after the selected GPUs are confirmed idle. UUIDs are local physical IDs.
+$env:CUDA_VISIBLE_DEVICES = "<laptop-uuid>,<ti-super-uuid>"
+$env:GPT_SOVITS_HOME = "F:/local/GPT-SoVITS"
+python benchmarks/multi_gpu_validation.py --execute --output F:/local/multi-gpu-run
+```
+
+Execution requires a clean committed checkout and exactly two distinct physical
+GPU UUIDs in `CUDA_VISIBLE_DEVICES`. It runs the dedicated multi-GPU suite first,
+then the remaining full runtime suite twice, reversing the UUID order for the
+second run. Both GPUs remain visible; each physical GPU gets a turn as `cuda:0`
+so existing tests fixed to that index exercise both cards.
+Each phase has a fresh process and a 900-second timeout. A workspace lock prevents
+overlapping invocations of this runner. Do not remove an existing lock until its
+recorded process has been confirmed to have exited.
+
+Every test start and setup/call/teardown result is appended and fsynced to
+`<phase>/events.jsonl`; stdout/stderr stream to `<phase>/output.log`.
+`manifest.json` records the source commit, selected UUIDs, phase status and
+outcomes. A timeout, driver loss, failure or missing result stops the remaining
+phases and cannot produce a passing manifest. Skips are rejected in the dedicated
+multi-GPU phase; conditional skips in the general runtime phase remain visible.
+Preserve incomplete runs for diagnosis. This suite's hardware result stays
+**pending** until an executed run's manifest reports `passed`.
