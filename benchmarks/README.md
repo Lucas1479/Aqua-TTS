@@ -269,3 +269,18 @@ and nested has six graphs and 48 MiB. Preparing only a 448 bucket uses 21 MiB
 with bucket and 48 MiB with nested. These are KV figures; they exclude model
 weights, Graph intermediates and other allocations. A single preparation sample
 does not establish a startup latency distribution or an inference speedup.
+
+### Prepared nested promotion
+
+Run `kv_promotion_bench.py` in separate processes against current source and an
+exported N2 source (`58cbec2347e15357ad50c9e0ab30152476366d70` path
+`aquatts/modeling/t2s_streaming.py`). It forces fixed 51/224/600 decode steps with
+synthetic conditioning, disables EOS, prepares 448/512/768/1024, and records every
+trial plus path counters. FA2 rejects silent SDPA decode fallback during capture
+and runtime; `--flash-attn off` selects SDPA. Use reversed process order to check
+drift. These measurements describe T2S work and exclude acoustic synthesis.
+
+```powershell
+python benchmarks/kv_promotion_bench.py --gpt-model F:/local/gpt.ckpt --output F:/local/current.json
+python benchmarks/kv_promotion_bench.py --gpt-model F:/local/gpt.ckpt --baseline-source F:/local/n2.py --output F:/local/baseline.json
+```

@@ -35,6 +35,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--flash", action="store_true")
+    parser.add_argument("--precapture-buckets", type=int, nargs="+")
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding="utf-8"))
     from aquatts import TTSInferencer
@@ -46,6 +47,8 @@ def main():
     inferencer = TTSInferencer(**config["inferencer"], use_flash_attn=args.flash,
                               cuda_graph_preset="lazy")
     assert inferencer.model_version == config["expected_version"]
+    if args.precapture_buckets:
+        assert all(inferencer.t2s_model.model.precapture_cuda_graph(args.precapture_buckets).values())
     model_load_seconds = time.perf_counter() - started
     texts = config.get("texts", [
         {"text": "今日はいい天気ですね。", "text_language": "日文"},
@@ -91,6 +94,7 @@ def main():
                 before = len(inferencer.t2s_stats)
                 start = time.perf_counter()
                 first = None
+                first_audible = None
                 chunks = []
                 for rate, chunk, _ in inferencer.infer_stream(
                     **shared, **text, enable_cuda_graph=graph, enable_static_kv=static,
@@ -100,6 +104,8 @@ def main():
                     if chunk is not None and chunk.size:
                         if first is None:
                             first = time.perf_counter() - start
+                        if first_audible is None and np.max(np.abs(chunk)) > 0.01:
+                            first_audible = time.perf_counter() - start
                         chunks.append(chunk)
                 total = time.perf_counter() - start
                 assert len(inferencer.t2s_stats) > before, "missing semantic generation stats"
@@ -108,6 +114,10 @@ def main():
                 sf.write(args.output / f"{mode}-{seed}-{index}.wav", audio, rate)
                 rows.append(dict(mode=mode, seed=seed, text_index=index, rate=rate,
                                  duration=audio.size / rate, first_chunk_seconds=first,
+                                 first_audible_chunk_seconds=first_audible,
+                                 audible_threshold=.01, rtf=total / (audio.size / rate),
+                                 t2s_tokens=sum(row["tokens"] for row in inferencer.t2s_stats[before:]),
+                                 last_graph_path=dict(inferencer.t2s_model.model.cuda_graph_stats),
                                  total_seconds=total, chunks=len(chunks)))
     if inferencer.is_v2pro:
         assert len(speaker_calls) == 1, speaker_calls

@@ -5,9 +5,9 @@ Key optimizations:
 1. T2SBlockWithStaticCache — scatter_ instead of torch.cat for KV cache,
    maintaining fixed-size buffers so CUDA Graph can capture the decode step.
 2. Bucketed CUDA Graph — 6 pre-captured graphs (128, 256, 448, 512, 768, 1024)
-   with per-bucket threading locks for concurrency-safe replay.
+   with complete-request workspace ownership and optional shared nested roots.
 3. apply_cuda_graph_patch() — monkey-patches Text2SemanticDecoder to use
-   static cache + optional CUDA Graph during infer_panel_naive.
+   static cache + optional CUDA Graph during infer_panel.
 
 Graceful degradation: CUDA Graph -> static KV -> dynamic KV fallback chain.
 """
@@ -533,6 +533,26 @@ def _precapture_cuda_graph(decoder, buckets=None, kv_len_range=None):
     return results
 
 
+def _promote_prepared_bucket(decoder, current_bucket, valid_length):
+    """Expose a larger prepared root view; valid KV is never copied or reset."""
+    if decoder.kv_cache_layout != "nested" or valid_length != current_bucket:
+        return None
+    for target in sorted(decoder.bucket_graphs):
+        if target <= current_bucket or target <= valid_length:
+            continue
+        inputs = decoder.bucket_static_inputs[target]
+        # SDPA can propagate NaN/Inf even from masked values. Only newly
+        # exposed, unwritten slots are cleared; the live prefix is retained.
+        for key, value in zip(inputs["k_cache"], inputs["v_cache"]):
+            key[:, current_bucket:].zero_()
+            value[:, current_bucket:].zero_()
+        inputs["key_valid_mask"].zero_()
+        inputs["key_valid_mask"][:, :valid_length] = True
+        inputs["pos_idx"].fill_(valid_length)
+        return target
+    return None
+
+
 def _ensure_directories_exist(path):
     """Create parent directories for path if needed."""
     import os
@@ -546,7 +566,8 @@ def _ensure_directories_exist(path):
 @torch.no_grad()
 def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                                 top_k=-100, top_p=100, early_stop_num=-1,
-                                temperature=1.0, repetition_penalty=1.35, **kwargs):
+                                temperature=1.0, repetition_penalty=1.35,
+                                _workspace_wait_seconds=0.0, **kwargs):
     """
     Replacement for Text2SemanticDecoder.infer_panel_naive with static KV cache
     and optional CUDA Graph acceleration.
@@ -618,8 +639,6 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     bucket_captured = False
     current_lens = None
     graph_key = None
-    graph_prompt_len = None   # real contiguous prompt length
-    graph_step_count = 0
     pos_idx_static: Optional[torch.Tensor] = None
     key_valid_mask: Optional[torch.Tensor] = None
 
@@ -627,7 +646,12 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     dynamic_transformer = decoder.t2s_transformer
     static_mode_active = enable_static_kv and static_transformer is not None
 
-    request_stats = {"total_steps": 0, "graph_replay_steps": 0}
+    request_stats = {
+        "total_steps": 0, "graph_replay_steps": 0, "initial_kv": src_len,
+        "start_bucket": None, "final_bucket": None, "promotions": 0,
+        "static_steps": 0, "dynamic_steps": 0, "capture_attempts": 0,
+        "workspace_wait_seconds": _workspace_wait_seconds,
+    }
 
     if static_mode_active:
         transformer = static_transformer
@@ -647,15 +671,16 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
 
                 if selected_bucket is not None:
                     current_bucket = selected_bucket
+                    request_stats["start_bucket"] = request_stats["final_bucket"] = current_bucket
                     batch_size = k_cache[0].shape[0]
                     hidden_dim = k_cache[0].shape[2]
                     device = k_cache[0].device
                     dtype = k_cache[0].dtype
 
                     if graph_run_enabled:
-                        graph_prompt_len = kv_cache_len
                         graph_key = current_bucket
                         if graph_key not in decoder.bucket_graphs:
+                            request_stats["capture_attempts"] += 1
                             _warmup_and_capture_bucket(decoder, current_bucket, x.device)
                         bucket_captured = graph_key in decoder.bucket_graphs
                     if bucket_captured:
@@ -683,105 +708,52 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     transformer = dynamic_transformer
                     graph_run_enabled = False
 
-        elif static_mode_active and current_bucket is not None and current_lens is not None:
-            # Never discard the prompt/text conditioning. When a fixed bucket
-            # fills, preserve its complete prefix and continue with dynamic KV.
-            if current_lens[0] >= current_bucket:
-                dynamic_len = current_lens[0]
-                k_cache = [item[:, :dynamic_len, :].clone() for item in k_cache]
-                v_cache = [item[:, :dynamic_len, :].clone() for item in v_cache]
-                static_mode_active = False
-                graph_run_enabled = False
-                transformer = dynamic_transformer
-                xy_dec, k_cache, v_cache = dynamic_transformer.decode_next_token(
-                    xy_pos, k_cache, v_cache
-                )
-                logits = decoder.ar_predict_layer(xy_dec[:, -1])
-
-            elif graph_run_enabled and bucket_captured and graph_key is not None and graph_key in decoder.bucket_graphs:
-                replay_failed = False
-                bucket_lock = _get_bucket_lock(decoder, graph_key)
-                with bucket_lock:
-                    try:
-                        cuda_graph = decoder.bucket_graphs[graph_key]
-                        static_inputs = decoder.bucket_static_inputs[graph_key]
-                        static_outputs = decoder.bucket_static_outputs[graph_key]
-
-                        static_inputs["xy_pos"].copy_(xy_pos)
-                        static_inputs["pos_idx"].fill_(graph_prompt_len + graph_step_count)
-
-                        _replay_cuda_graph(decoder, cuda_graph, xy_pos.device)
-
-                        logits = static_outputs["logits"]
-                        request_stats["graph_replay_steps"] += 1
-                        graph_step_count += 1
-
-                        if not hasattr(decoder, "_cuda_graph_replay_started"):
-                            decoder._cuda_graph_replay_started = True
-                            print(f"CUDA Graph replay active (key={graph_key})")
-
-                        if graph_prompt_len + graph_step_count >= current_bucket:
-                            graph_run_enabled = False
-                            static_mode_active = False
-                            transformer = dynamic_transformer
-                            print("Graph bucket full; continuing with full-context dynamic KV")
-                            _fallback_len = graph_prompt_len + graph_step_count
-                            static_in_fb = decoder.bucket_static_inputs[graph_key]
-                            k_cache = [
-                                item[:, :_fallback_len, :].clone()
-                                for item in static_in_fb["k_cache"]
-                            ]
-                            v_cache = [
-                                item[:, :_fallback_len, :].clone()
-                                for item in static_in_fb["v_cache"]
-                            ]
-                            current_lens = [_fallback_len] * len(k_cache)
-                    except RuntimeError as e:
-                        replay_failed = True
-                        graph_run_enabled = False
-                        bucket_captured = False
-                        print(f"CUDA Graph replay failed, falling back to static: {e!r}")
-                if replay_failed:
-                    static_inputs = decoder.bucket_static_inputs[graph_key]
-                    for i in range(len(k_cache)):
-                        k_cache[i].copy_(static_inputs["k_cache"][i])
-                        v_cache[i].copy_(static_inputs["v_cache"][i])
-                    if key_valid_mask is not None:
-                        key_valid_mask.copy_(static_inputs["key_valid_mask"])
-                    _fallback_len = graph_prompt_len + graph_step_count
-                    current_lens = [_fallback_len] * len(k_cache)
-                    if pos_idx_static is not None:
-                        pos_idx_static.fill_(_fallback_len)
-                    else:
-                        pos_idx_static = k_cache[0].new_full(
-                            (k_cache[0].shape[0], 1, k_cache[0].shape[2]),
-                            _fallback_len, dtype=torch.long)
-                    xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
-                        xy_pos, k_cache, v_cache, pos_idx_static, key_valid_mask,
-                        _fallback_len + 1
-                    )
-                    current_lens = [length + 1 for length in current_lens]
-                    logits = decoder.ar_predict_layer(xy_dec[:, -1])
-            else:
-                if pos_idx_static is not None:
-                    pos_idx_static.fill_(current_lens[0])
-                else:
-                    pos_idx_static = k_cache[0].new_full(
-                        (k_cache[0].shape[0], 1, k_cache[0].shape[2]),
-                        current_lens[0], dtype=torch.long)
-                xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
-                    xy_pos, k_cache, v_cache, pos_idx_static, key_valid_mask,
-                    current_lens[0] + 1
-                )
-                current_lens = [length + 1 for length in current_lens]
-                logits = decoder.ar_predict_layer(xy_dec[:, -1])
         else:
-            if transformer is not dynamic_transformer:
-                transformer = dynamic_transformer
-            xy_dec, k_cache, v_cache = dynamic_transformer.decode_next_token(
-                xy_pos, k_cache, v_cache
-            )
-            logits = decoder.ar_predict_layer(xy_dec[:, -1])
+            if static_mode_active and current_bucket is not None and current_lens is not None:
+                if current_lens[0] >= current_bucket:
+                    target = (_promote_prepared_bucket(decoder, current_bucket, current_lens[0])
+                              if graph_run_enabled and bucket_captured else None)
+                    if target is not None:
+                        current_bucket = graph_key = target
+                        inputs = decoder.bucket_static_inputs[target]
+                        k_cache, v_cache = inputs["k_cache"], inputs["v_cache"]
+                        key_valid_mask, pos_idx_static = inputs["key_valid_mask"], inputs["pos_idx"]
+                        request_stats["promotions"] += 1
+                        request_stats["final_bucket"] = target
+                    else:
+                        length = current_lens[0]
+                        k_cache = [item[:, :length].clone() for item in k_cache]
+                        v_cache = [item[:, :length].clone() for item in v_cache]
+                        static_mode_active = graph_run_enabled = False
+
+            if static_mode_active and current_bucket is not None and current_lens is not None:
+                position = current_lens[0]
+                replayed = False
+                if graph_run_enabled and bucket_captured:
+                    with _get_bucket_lock(decoder, graph_key):
+                        inputs = decoder.bucket_static_inputs[graph_key]
+                        inputs["xy_pos"].copy_(xy_pos)
+                        inputs["pos_idx"].fill_(position)
+                        try:
+                            _replay_cuda_graph(decoder, decoder.bucket_graphs[graph_key], xy_pos.device)
+                            logits = decoder.bucket_static_outputs[graph_key]["logits"]
+                            replayed = True
+                        except RuntimeError as error:
+                            graph_run_enabled = bucket_captured = False
+                            logger.warning("CUDA Graph replay failed; continuing eager: %s", error)
+                if replayed:
+                    request_stats["graph_replay_steps"] += 1
+                else:
+                    pos_idx_static.fill_(position)
+                    xy_dec, k_cache, v_cache = static_transformer.decode_next_token_with_static_cache(
+                        xy_pos, k_cache, v_cache, pos_idx_static, key_valid_mask, position + 1)
+                    logits = decoder.ar_predict_layer(xy_dec[:, -1])
+                    request_stats["static_steps"] += 1
+                current_lens = [position + 1] * len(k_cache)
+            else:
+                xy_dec, k_cache, v_cache = dynamic_transformer.decode_next_token(xy_pos, k_cache, v_cache)
+                logits = decoder.ar_predict_layer(xy_dec[:, -1])
+                request_stats["dynamic_steps"] += 1
 
         if idx == 0:
             xy_attn_mask = None
@@ -823,7 +795,18 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                   * decoder.ar_audio_position.pe[:, y_len + idx].to(
                       dtype=y_emb.dtype, device=y_emb.device))
 
+    request_stats["total_steps"] = idx + 1
+    request_stats["generated_tokens"] = max(0, y.shape[1] - prefix_len - 1)
+    request_stats["final_kv"] = src_len + request_stats["graph_replay_steps"] + request_stats["static_steps"] + request_stats["dynamic_steps"]
     decoder.cuda_graph_stats.update(request_stats)
+    logger.info("T2S request layout=%s initial_kv=%d start_bucket=%s final_bucket=%s "
+                "promotions=%d generated_tokens=%d graph_steps=%d static_steps=%d "
+                "dynamic_steps=%d capture_attempts=%d final_kv=%d workspace_wait_seconds=%.6f",
+                decoder.kv_cache_layout, src_len, request_stats["start_bucket"],
+                request_stats["final_bucket"], request_stats["promotions"],
+                request_stats["generated_tokens"], request_stats["graph_replay_steps"],
+                request_stats["static_steps"], request_stats["dynamic_steps"],
+                request_stats["capture_attempts"], request_stats["final_kv"], _workspace_wait_seconds)
     if ref_free:
         return y[:, :-1], 0
     return y[:, :-1], idx
@@ -963,10 +946,11 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
                 repetition_penalty,
                 **kwargs,
             )
-        def run_request():
+        def run_request(wait_seconds=0.0):
             return _patched_infer_panel_naive(
                 decoder, x, x_lens, prompts, bert_feature,
-                top_k, top_p, early_stop_num, temperature, repetition_penalty, **kwargs
+                top_k, top_p, early_stop_num, temperature, repetition_penalty,
+                _workspace_wait_seconds=wait_seconds, **kwargs
             )
 
         graph_enabled = resolve_cuda_graph_request(
@@ -986,7 +970,7 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
         with decoder._graph_workspaces.lease(_workspace_owner(decoder, bucket), x.device) as wait_seconds:
             logger.debug("Graph workspace request wait=%.6fs bucket=%s layout=%s",
                          wait_seconds, bucket, decoder.kv_cache_layout)
-            return run_request()
+            return run_request(wait_seconds)
 
     decoder.infer_panel = patched_infer_panel
     decoder._aquatts_cuda_graph_patched = True

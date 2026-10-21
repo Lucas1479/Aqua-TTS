@@ -429,8 +429,15 @@ argument reads `AQUATTS_KV_CACHE_LAYOUT` once (default `bucket`). Explicit argum
 take priority. Captured layout/device/dtype/capacity changes require a new decoder.
 Sparse single-bucket deployments can use less KV with `bucket`; `nested` is not
 universally smaller. Full/minimal capture only their declared bucket sets; lazy/off
-do not allocate a Graph root at startup. Bucket overflow still preserves the full
-prefix and continues dynamically; prepared-target promotion is a separate change.
+do not allocate a Graph root at startup. A full nested bucket promotes to the
+smallest larger **already captured** bucket, retaining the live KV prefix in place
+and clearing only the newly exposed tail. Promotion never captures or expands the
+preparation set. Without a prepared target (or with bucket storage), decoding
+preserves the full prefix and continues dynamically.
+
+`decoder.cuda_graph_stats` describes the last completed request: initial/final KV,
+start/final bucket, promotions, Graph/static/dynamic steps, capture attempts and
+workspace wait seconds. Numeric request logs expose the same path without text.
 
 **Adaptive FlashAttention2 T2S path** (preferred automatically when available):
 
