@@ -16,6 +16,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import json
 import os
@@ -153,7 +154,7 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
     x, x_lens, prompts, bert = inputs
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.cuda.synchronize()
+    torch.cuda.synchronize(x.device)
     started = time.perf_counter()
     with torch.inference_mode():
         _semantic, reported_steps = decoder.infer_panel(
@@ -169,7 +170,7 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
             enable_static_kv=True,
         )
     wall_elapsed = time.perf_counter() - started
-    torch.cuda.synchronize()
+    torch.cuda.synchronize(x.device)
     sync_elapsed = time.perf_counter() - started
     steps = int(reported_steps)
     if steps != case.generated_steps:
@@ -184,6 +185,31 @@ def _run_once(torch, decoder, inputs, case: BenchmarkCase, *, graph_enabled: boo
         "wall_it_s": steps / wall_elapsed,
         "sync_it_s": steps / sync_elapsed,
     }
+
+
+@contextmanager
+def _fixed_length_eos(decoder, *, eos_module=None):
+    """Ignore stopping without changing Aqua's EOS vocabulary/host-read work."""
+    if eos_module is None:
+        # The unpatched upstream path owns its inline EOS checks.
+        original_eos = decoder.EOS
+        decoder.EOS = -1
+        try:
+            yield
+        finally:
+            decoder.EOS = original_eos
+    else:
+        original_check = eos_module._should_stop_on_eos
+
+        def ignore_stop(logits, samples, eos):
+            original_check(logits, samples, eos)
+            return False
+
+        eos_module._should_stop_on_eos = ignore_stop
+        try:
+            yield
+        finally:
+            eos_module._should_stop_on_eos = original_check
 
 
 def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int]):
@@ -202,6 +228,7 @@ def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int
     import torch
     from AR.models.t2s_lightning_module import Text2SemanticLightningModule
 
+    torch.cuda.set_device(args.device)
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     config = payload["config"]
     model = Text2SemanticLightningModule(config, "****", is_train=False)
@@ -221,6 +248,12 @@ def _load_decoder(args, upstream_home: Path, checkpoint: Path, buckets: list[int
 
             if not apply_flash_attn_patch(decoder, mode=args.flash_attn):
                 raise RuntimeError(f"FlashAttention2 is unavailable: {get_flash_attn_error()}")
+            # Install before capture: otherwise a captured SDPA fallback can
+            # replay without calling this Python guard during measurement.
+            def reject_fallback(*_args, **_kwargs):
+                raise AssertionError("FA2 benchmark fell back to SDPA")
+            for block in decoder.t2s_transformer_static.blocks:
+                block.sdpa_block.decode_next_token_with_static_cache = reject_fallback
         if graph_enabled:
             results = decoder.precapture_cuda_graph(buckets=buckets)
             failed = [bucket for bucket, ok in results.items() if not ok]
@@ -276,6 +309,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"checkpoint={checkpoint}")
     print("=" * 88)
 
+    sys.path.insert(0, str(ROOT))
+    from benchmarks.evidence import BenchmarkJournal, file_identity, source_identity
+    journal = BenchmarkJournal(args.json_output)
+    metadata = {"source": source_identity(ROOT), "checkpoint_identity": file_identity(checkpoint),
+                "seed": args.seed}
+    journal.record("started", engine=args.engine, flash_attn=args.flash_attn, **metadata)
+
     torch, model, decoder, config, graph_enabled = _load_decoder(
         args, upstream_home, checkpoint, args.buckets
     )
@@ -285,9 +325,10 @@ def main(argv: list[str] | None = None) -> int:
 
     device = next(decoder.parameters()).device
     inputs = {case.name: _make_inputs(torch, config, case, device) for case in DEFAULT_CASES}
-    original_eos = decoder.EOS
-    decoder.EOS = -1
-    try:
+    eos_module = None
+    if args.engine.startswith("aqua"):
+        import aquatts.modeling.t2s_streaming as eos_module
+    with _fixed_length_eos(decoder, eos_module=eos_module):
         conversation = next(case for case in DEFAULT_CASES if case.name == "conversation")
         cold = _run_once(
             torch,
@@ -297,6 +338,7 @@ def main(argv: list[str] | None = None) -> int:
             graph_enabled=graph_enabled,
             seed=args.seed,
         )
+        journal.record("trial", phase="cold", case=conversation.name, index=0, result=cold)
         print(
             f"cold/conversation  initial={conversation.initial_len:>3} "
             f"bucket={conversation.expected_bucket:>3} steps={cold['reported_steps']:>3} "
@@ -304,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         for index in range(args.warmup):
-            _run_once(
+            warmup_row = _run_once(
                 torch,
                 decoder,
                 inputs[conversation.name],
@@ -312,6 +354,7 @@ def main(argv: list[str] | None = None) -> int:
                 graph_enabled=graph_enabled,
                 seed=args.seed + index,
             )
+            journal.record("trial", phase="warmup", case=conversation.name, index=index, result=warmup_row)
 
         summaries: dict[str, Any] = {}
         for case in DEFAULT_CASES:
@@ -326,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
                     seed=args.seed + repeat,
                 )
                 rows.append(row)
+                journal.record("trial", phase="measured", case=case.name, index=repeat, result=row)
             summary = _summarize(rows)
             summaries[case.name] = {
                 **asdict(case),
@@ -338,11 +382,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"wall={summary['median_wall_it_s']:>7.1f} it/s "
                 f"range={summary['min_sync_it_s']:.1f}-{summary['max_sync_it_s']:.1f}"
             )
-    finally:
-        decoder.EOS = original_eos
 
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
+        **metadata,
+        "flash_fallback_forbidden": args.flash_attn != "off",
+        "kv_cache_layout": getattr(decoder, "kv_cache_layout", "bucket"),
+        "eos_protocol": "native-predicate-ignore-stop" if eos_module else "disabled-upstream-eos-id",
         "engine": args.engine,
         "flash_attn": args.flash_attn,
         "device": str(device),
@@ -361,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"json={destination}")
+    journal.record("completed", cases=list(summaries))
     return 0
 
 
