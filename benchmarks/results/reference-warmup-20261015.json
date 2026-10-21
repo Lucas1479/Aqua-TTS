@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "61dbab0",
+  "upstream_commit": "08d627c3338173c3229286d8787060d6559fe0f8",
+  "source_sha256_lf": "bef434779ecc901809cdd27e757371f48b8bc705e970536c71cc35a484a861d4",
+  "cache_module_sha256_lf": "6b46d72a7c7c45541923bc0c287357284443a026e8d30671b4fabe07cfdb1ee7",
+  "validation": {
+    "runtime_passed": 369,
+    "model_less_passed": 193,
+    "model_less_skipped": 14,
+    "ruff": "passed",
+    "build_twine_wheel_contents": "passed"
+  },
+  "contracts": [
+    "Path/language/punctuation normalization",
+    "V2 reference-free and V3 empty-text fallback",
+    "File replacement and in-build mutation rejection",
+    "Model generation and actual dtype/device identity",
+    "Atomic same-key construction and retry",
+    "FIFO capacity and batch capacity rejection",
+    "Strict/best-effort readiness",
+    "CUDA-stream handoff without normal-hit device synchronization"
+  ],
+  "real_weight_checks": {
+    "v3": {
+      "version": "v3",
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "torch": "2.5.1+cu121",
+      "generation_at_ready": 2,
+      "constructor_with_warmup_seconds": 9.368808499999886,
+      "warm_hit_seconds": 0.00044200000002092565,
+      "reference_encoders_after_warmup": {
+        "ssl": 1,
+        "spectrum": 1,
+        "reference_decode_encp": 1,
+        "speaker": 0
+      },
+      "trials": [
+        {
+          "streaming": false,
+          "sample_rate": 24000,
+          "samples": 30896,
+          "first_nonempty_seconds": null,
+          "total_seconds": 1.1008723999998438,
+          "reference_encoders": {
+            "ssl": 1,
+            "spectrum": 1,
+            "reference_decode_encp": 1,
+            "speaker": 0
+          }
+        },
+        {
+          "streaming": true,
+          "sample_rate": 24000,
+          "samples": 30656,
+          "first_nonempty_seconds": 0.9543701000002329,
+          "total_seconds": 1.8813212000000021,
+          "reference_encoders": {
+            "ssl": 1,
+            "spectrum": 1,
+            "reference_decode_encp": 1,
+            "speaker": 0
+          }
+        }
+      ],
+      "reference_encoders_after_clear_and_rebuild": {
+        "ssl": 2,
+        "spectrum": 2,
+        "reference_decode_encp": 2,
+        "speaker": 0
+      },
+      "source_sha256_lf": "bef434779ecc901809cdd27e757371f48b8bc705e970536c71cc35a484a861d4",
+      "scope": "Single-run functional and timing observations; no latency distribution claim."
+    },
+    "pro": {
+      "version": "v2Pro",
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "torch": "2.5.1+cu121",
+      "generation_at_ready": 2,
+      "constructor_with_warmup_seconds": 5.153694800000267,
+      "warm_hit_seconds": 0.002404899999874033,
+      "reference_encoders_after_warmup": {
+        "ssl": 1,
+        "spectrum": 1,
+        "reference_decode_encp": 0,
+        "speaker": 1
+      },
+      "trials": [
+        {
+          "streaming": false,
+          "sample_rate": 32000,
+          "samples": 42560,
+          "first_nonempty_seconds": null,
+          "total_seconds": 1.0228501000001415,
+          "reference_encoders": {
+            "ssl": 1,
+            "spectrum": 1,
+            "reference_decode_encp": 0,
+            "speaker": 1
+          }
+        },
+        {
+          "streaming": true,
+          "sample_rate": 32000,
+          "samples": 42560,
+          "first_nonempty_seconds": 0.19969380000020465,
+          "total_seconds": 0.19978949999995166,
+          "reference_encoders": {
+            "ssl": 1,
+            "spectrum": 1,
+            "reference_decode_encp": 0,
+            "speaker": 1
+          }
+        }
+      ],
+      "reference_encoders_after_clear_and_rebuild": {
+        "ssl": 2,
+        "spectrum": 2,
+        "reference_decode_encp": 0,
+        "speaker": 2
+      },
+      "source_sha256_lf": "bef434779ecc901809cdd27e757371f48b8bc705e970536c71cc35a484a861d4",
+      "scope": "Single-run functional and timing observations; no latency distribution claim."
+    }
+  },
+  "scope": "Provisional validation on RTX 4070 Laptop GPU. Single-run timings, no distribution or speech-quality claim. RTX 4070 Ti SUPER retest deferred by user."
+}

@@ -16,6 +16,9 @@ def inferencer():
     value.is_half = False
     value.is_v2pro = True
     value.model_version = "v2Pro"
+    value.dict_language = {"英文": "en", "日文": "all_ja"}
+    value.splits = {".", "。", ",", "，"}
+    value._init_reference_cache()
     value.sv_model = SimpleNamespace(encode=Mock(return_value=torch.ones(1, 20480)))
     value.get_spepc = Mock(return_value=torch.ones(1, 1025, 8))
     value.vq_model = SimpleNamespace(
@@ -132,18 +135,19 @@ def test_generated_lead_is_trimmed_per_item_without_removing_requested_pauses(in
     np.testing.assert_array_equal(audio, np.tile(expected_item, 2))
 
 
-def test_session_caches_each_reference_speaker_once(inferencer, monkeypatch):
-    inferencer._session_cache = {}
-    inferencer._session_cache_max = 8
+def test_session_caches_each_reference_speaker_once(inferencer, monkeypatch, tmp_path):
     inferencer.ssl_model = SimpleNamespace(model=Mock(return_value={"last_hidden_state": torch.zeros(1, 10, 768)}))
     inferencer.get_phones_and_bert = Mock(return_value=([1], torch.zeros(1024, 1), "Reference."))
     monkeypatch.setattr(module.librosa, "load", lambda *a, **kw: (np.zeros(16000, dtype=np.float32), 16000))
-    first = inferencer._build_session_cache("one.wav", "Reference.", "en")
+    one, two = tmp_path / "one.wav", tmp_path / "two.wav"
+    one.write_bytes(b"first reference")
+    two.write_bytes(b"second reference")
+    first = inferencer._build_session_cache(str(one), "Reference.", "en")
     assert "sv_embedding" in first
-    assert inferencer._build_session_cache("one.wav", "Reference.", "en") is first
-    second = inferencer._build_session_cache("two.wav", "Reference.", "en")
+    assert inferencer._build_session_cache(str(one), "Reference.", "en") is first
+    second = inferencer._build_session_cache(str(two), "Reference.", "en")
     assert second is not first
-    assert [call.args[0] for call in inferencer.sv_model.encode.call_args_list] == ["one.wav", "two.wav"]
+    assert [call.args[0] for call in inferencer.sv_model.encode.call_args_list] == [str(one), str(two)]
 
 
 @pytest.mark.parametrize("stream", [False, True])

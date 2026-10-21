@@ -208,6 +208,36 @@ successful load duration. Concurrent first use loads once; a failed load can ret
 AP-BWE's module and model load only when super-resolution is requested. Missing
 optional dependencies or weights retain the existing audio fallback and warning.
 
+### Reference readiness
+
+Prepare a reference through the same normalization and cache used by both APIs:
+
+```python
+result = tts.warm_reference_cache("/voices/reference.wav", "こんにちは。", "日文")
+assert result["ready"]  # status is "built" or "hit"
+```
+
+The constructor also accepts `warmup_references=[voice, ...]`, where entries are
+`Voice` objects or dictionaries with `ref_audio_path`, `prompt_text` and
+`prompt_language`. Only supplied references are prepared. Results are available
+as `tts.reference_warmup_results`. Strict warmup raises on failure; use
+`warmup_strict=False` for constructor best effort, or `strict=False` on the public
+method, to receive an explicit `failed` result.
+
+Keys include the canonical path, file mtime/size, normalized text/language, model
+generation and actual device/dtype. File replacement causes a miss; explicit
+`tts.clear_reference_cache()` invalidates entries. V3 empty-reference fallback
+and ordinary inference share the same key. Non-V3 reference-free requests cache
+acoustic features without encoding an unused semantic prompt. Concurrent builds
+publish complete entries once, and CUDA events order reuse across streams.
+Explicit warmup synchronizes its selected device before reporting readiness.
+
+`AQUA_SESSION_CACHE_MAX` is a positive capacity (default 8), with FIFO eviction.
+A constructor list with more distinct normalized references than capacity is
+rejected. A successful warmup result also reports its key, resident count and any
+evicted key. Device/dtype changes require a new inferencer when CUDA Graphs are
+captured. Omitting warmup keeps on-demand reference preparation.
+
 ## Supported Languages
 
 Aqua-TTS uses the selected GPT-SoVITS checkpoint's text frontend. Pass the code to `text_language` / `prompt_language` — reference audio and target text can use different languages.

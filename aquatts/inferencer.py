@@ -12,6 +12,8 @@ import torch
 import numpy as np
 from aquatts.inference.onset import LeadingSilence, leading_cut
 from aquatts.inference.workspace import resolve_kv_cache_layout
+from aquatts.inference.reference_cache import ReferenceCache, normalize_reference, reference_key
+from aquatts.voice_registry import Voice
 
 from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
 from aquatts.inference.semantic_stability import (
@@ -160,7 +162,9 @@ class TTSInferencer:
                  flash_attn_mode=None,
                  sv_model_path=None,
                  kv_cache_layout=None,
-                 preload_bert=False):
+                 preload_bert=False,
+                 warmup_references=None,
+                 warmup_strict=True):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -191,6 +195,9 @@ class TTSInferencer:
                 then auto-enable when FlashAttention2 is available.
             flash_attn_mode: "valid" (fused KV update) or "bucket" (explicit
                 scatter); both attend only the true contiguous KV prefix.
+            warmup_references: Optional Voice/reference dictionaries to prepare before readiness.
+                Only supplied references are warmed; unique entries must fit the cache capacity.
+            warmup_strict: Raise on warmup failure (default); False reports best-effort results.
             preload_bert: Load Chinese BERT during construction instead of first use.
                 English/Japanese-only requests otherwise leave BERT unloaded.
             kv_cache_layout: "bucket" (independent bucket storage) or "nested"
@@ -202,6 +209,7 @@ class TTSInferencer:
         self._bert_load_lock = threading.Lock()
         self.sr_model = None
         self._sr_load_lock = threading.Lock()
+        self._init_reference_cache()
         self._cuda_graph_preset = cuda_graph_preset
         self._cuda_graph_config = _resolve_cg_config(cuda_graph_preset)
         self._kv_cache_layout = resolve_kv_cache_layout(kv_cache_layout)
@@ -290,16 +298,12 @@ class TTSInferencer:
             # 加载GPT和SoVITS模型
             self._load_models()
 
-            logger.info("⭐️ TTS推理器初始化完成")
-
-            # 会话级缓存：按(ref_audio_path, prompt_text, prompt_language_code, model_version, is_half)键控
-            # 最多保留 AQUA_SESSION_CACHE_MAX 个音色条目，超出时 FIFO 淘汰最旧的。
-            self._session_cache = {}
-            self._session_cache_max = int(os.environ.get("AQUA_SESSION_CACHE_MAX", "8"))
-            self._sovits_decode_lock = threading.Lock()
             # 仅在需要做性能剖析时开启；默认关闭以避免流式首句每块都强制同步 GPU。
             self._stream_sync_timing_enabled = os.environ.get("TTS_STREAM_SYNC_TIMING", "0") == "1"
             self.t2s_stats = []
+            if warmup_references is not None:
+                self.reference_warmup_results = self._warm_reference_list(warmup_references, strict=warmup_strict)
+            logger.info("⭐️ TTS推理器初始化完成")
 
         except Exception as e:
             logger.error(f"❌ 初始化TTS推理器失败: {str(e)}")
@@ -571,6 +575,8 @@ class TTSInferencer:
         self._apply_aqua_t2s_patch()
         self._maybe_enable_flash_attn_t2s()
         self._maybe_precapture_t2s_graph()
+        if hasattr(self, "_reference_cache"):
+            self.clear_reference_cache()
 
     def _apply_aqua_t2s_patch(self):
         """Patch the selected upstream decoder without replacing its module."""
@@ -826,6 +832,8 @@ class TTSInferencer:
             from aquatts.inference.speaker import SpeakerEncoder
 
             self.sv_model = SpeakerEncoder(self.sv_model_path, self.device, self.is_half)
+        if hasattr(self, "_reference_cache"):
+            self.clear_reference_cache()
 
     def _load_bigvgan_model(self):
         """Load BigVGAN vocoder model (required for v3).
@@ -906,15 +914,152 @@ class TTSInferencer:
             logger.error(traceback.format_exc())
             raise
 
-    def _build_session_cache(self, ref_audio_path: str, prompt_text: str, prompt_language_code: str):
-        """Build a session-level reference cache (SSL, phones, BERT, mel, prompt features).
-        构建会话级参考缓存。"""
-        key = (ref_audio_path, prompt_text or "", prompt_language_code or "", self.model_version, self.is_half)
-        if key in self._session_cache:
-            return self._session_cache[key]
+    def _init_reference_cache(self):
+        self._reference_generation = 0
+        self._reference_state_lock = threading.RLock()
+        self._sovits_decode_lock = threading.RLock()
+        self._reference_cache = ReferenceCache(
+            int(os.environ.get("AQUA_SESSION_CACHE_MAX", "8")),
+            record_ready=self._record_reference_ready, wait_ready=self._wait_reference_ready)
+        self.reference_warmup_results = []
 
-        cache_item = {}
+    def _normalize_reference_prompt(self, audio_path, text, language, *, ref_free=False):
+        return normalize_reference(
+            audio_path, text, language, model_version=self.model_version,
+            languages=self.dict_language, splits=self.splits,
+            fallback_text=_default_ref_free_prompt(),
+            fallback_language="en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja",
+            ref_free=ref_free)
+
+    def _reference_runtime_identity(self):
         try:
+            parameter = next(self.vq_model.parameters())
+            return parameter.device, parameter.dtype
+        except (AttributeError, StopIteration):
+            device = torch.device(self.device)
+            if device.type == "cuda" and device.index is None:
+                device = torch.device("cuda", torch.cuda.current_device())
+            return device, torch.float16 if self.is_half else torch.float32
+
+    def _reference_key(self, reference):
+        device, dtype = self._reference_runtime_identity()
+        return reference_key(reference, generation=self._reference_generation,
+                             version=self.model_version, device=device, dtype=dtype,
+                             is_pro=self.is_v2pro)
+
+    def _record_reference_ready(self):
+        device, _ = self._reference_runtime_identity()
+        if device.type != "cuda":
+            return None
+        with torch.cuda.device(device):
+            event = torch.cuda.Event()
+            event.record(torch.cuda.current_stream(device))
+        return device, event
+
+    @staticmethod
+    def _wait_reference_ready(ready):
+        if ready is not None:
+            device, event = ready
+            torch.cuda.current_stream(device).wait_event(event)
+
+    def clear_reference_cache(self):
+        """Invalidate references after explicit clearing or model replacement."""
+        with self._reference_state_lock:
+            count = self._reference_cache.clear()
+            self._reference_generation += 1
+            return count
+
+    def _validate_reference_features(self, reference, entry):
+        required = {"refer_spec"}
+        if not reference.ref_free:
+            required.update(("prompt", "phones1", "bert1"))
+        if self.is_v2pro:
+            required.add("sv_embedding")
+        if self.model_version == "v3":
+            required.update(("mel2_norm", "prompt_fea_ref", "prompt_ge"))
+        missing = sorted(key for key in required if entry.get(key) is None)
+        if missing:
+            raise RuntimeError(f"Incomplete reference features: {', '.join(missing)}")
+        for key in required:
+            value = entry[key]
+            if (torch.is_tensor(value) and value.numel() == 0) or (isinstance(value, list) and not value):
+                raise RuntimeError(f"Empty reference feature: {key}")
+
+    def _get_reference_entry(self, reference):
+        with self._reference_state_lock:
+            key = self._reference_key(reference)
+            def build():
+                with self._sovits_decode_lock, torch.no_grad():
+                    entry = self._build_reference_features(reference)
+                self._validate_reference_features(reference, entry)
+                if self._reference_key(reference) != key:
+                    raise RuntimeError("Reference changed during preparation; retry with a stable file")
+                return entry
+            entry, status, evicted = self._reference_cache.get_or_build(key, build)
+            return entry, status, key, evicted
+
+    def warm_reference_cache(self, audio_path, text="", language="日文", *, strict=True):
+        """Prepare the same normalized reference used by infer/infer_stream.
+
+        Returns status/ready/key/resident_count/evicted_key. Strict failure raises;
+        best-effort failure returns status='failed' and never publishes partial data.
+        """
+        try:
+            reference = self._normalize_reference_prompt(audio_path, text, language)
+            _, status, key, evicted = self._get_reference_entry(reference)
+            device, _ = self._reference_runtime_identity()
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            ready = self._reference_cache.contains(key)
+            result = {"status": status if ready else "evicted", "ready": ready,
+                      "key": key, "resident_count": len(self._reference_cache),
+                      "evicted_key": evicted}
+            if strict and not ready:
+                raise RuntimeError("Reference was evicted before warmup completed")
+            return result
+        except Exception as error:
+            if strict:
+                raise
+            logger.warning("Reference warmup failed: %s", error)
+            return {"status": "failed", "ready": False, "error": str(error)}
+
+    def _warm_reference_list(self, references, *, strict):
+        arguments = []
+        normalized = set()
+        for reference in references:
+            if isinstance(reference, Voice):
+                reference = reference.to_dict()
+            if not isinstance(reference, dict):
+                raise TypeError("warmup_references entries must be Voice objects or reference dictionaries")
+            args = (reference["ref_audio_path"], reference.get("prompt_text", ""),
+                    reference.get("prompt_language", "日文"))
+            item = self._normalize_reference_prompt(*args)
+            normalized.add((os.path.normcase(item.audio_path), item.text, item.language, item.ref_free))
+            arguments.append(args)
+        if len(normalized) > self._reference_cache.capacity:
+            raise ValueError("warmup_references exceeds reference cache capacity")
+        results = [self.warm_reference_cache(*args, strict=strict) for args in arguments]
+        for result in results:
+            if result["ready"] and not self._reference_cache.contains(result["key"]):
+                result.update(status="evicted", ready=False)
+                if strict:
+                    raise RuntimeError("Reference was evicted during batch warmup")
+        return results
+
+    def _build_session_cache(self, ref_audio_path: str, prompt_text: str, prompt_language_code: str):
+        try:
+            reference = self._normalize_reference_prompt(ref_audio_path, prompt_text, prompt_language_code)
+            return self._get_reference_entry(reference)[0]
+        except Exception:
+            logger.warning("构建会话缓存失败，回退到逐句计算。", exc_info=True)
+            return {}
+
+
+    @torch.no_grad()
+    def _build_reference_features(self, reference):
+        ref_audio_path, prompt_text, prompt_language_code = reference.audio_path, reference.text, reference.language
+        cache_item = {}
+        if not reference.ref_free:
             # 1) Prompt 相关（SSL → prompt）
             with torch.no_grad():
                 wav16k, _ = librosa.load(ref_audio_path, sr=16000)
@@ -936,53 +1081,45 @@ class TTSInferencer:
             cache_item["phones1"] = phones1
             cache_item["bert1"] = bert1
 
-            # 3) 参考频谱（所有版本可用）
-            refer = self.get_spepc(ref_audio_path).to(self.device)
+        # 3) 参考频谱（所有版本可用）
+        refer = self.get_spepc(ref_audio_path).to(self.device)
+        if self.is_half:
+            refer = refer.half()
+        else:
+            refer = refer.float()
+        cache_item["refer_spec"] = refer
+        if self.is_v2pro:
+            cache_item["sv_embedding"] = self.sv_model.encode(ref_audio_path)
+
+        # 4) v3 额外缓存：ref_audio 24k 的 mel2（归一化后）
+        if self.model_version == "v3":
+            import torchaudio
+            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
+            ref_audio = ref_audio.to(self.device)
             if self.is_half:
-                refer = refer.half()
+                ref_audio = ref_audio.half()
             else:
-                refer = refer.float()
-            cache_item["refer_spec"] = refer
-            if self.is_v2pro:
-                cache_item["sv_embedding"] = self.sv_model.encode(ref_audio_path)
+                ref_audio = ref_audio.float()
+            if ref_audio.shape[0] == 2:
+                ref_audio = ref_audio.mean(0).unsqueeze(0)
+            if ref_sr != 24000:
+                ref_audio = self._resample(ref_audio, ref_sr)
 
-            # 4) v3 额外缓存：ref_audio 24k 的 mel2（归一化后）
-            if self.model_version == "v3":
-                import torchaudio
-                ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-                ref_audio = ref_audio.to(self.device)
-                if self.is_half:
-                    ref_audio = ref_audio.half()
-                else:
-                    ref_audio = ref_audio.float()
-                if ref_audio.shape[0] == 2:
-                    ref_audio = ref_audio.mean(0).unsqueeze(0)
-                if ref_sr != 24000:
-                    ref_audio = self._resample(ref_audio, ref_sr)
+            mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
+            cache_item["mel2_norm"] = mel2
 
-                mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
-                cache_item["mel2_norm"] = mel2
+            # 5) v3 额外缓存：prompt 侧 decode_encp 结果，避免每句重复做同一份参考编码
+            phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+            with torch.no_grad():
+                prompt_fea_ref, prompt_ge = self.vq_model.decode_encp(
+                    cache_item["prompt"].unsqueeze(0),
+                    phoneme_ids0,
+                    refer,
+                )
+            cache_item["prompt_fea_ref"] = prompt_fea_ref
+            cache_item["prompt_ge"] = prompt_ge
 
-                # 5) v3 额外缓存：prompt 侧 decode_encp 结果，避免每句重复做同一份参考编码
-                phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
-                with torch.no_grad():
-                    prompt_fea_ref, prompt_ge = self.vq_model.decode_encp(
-                        cache_item["prompt"].unsqueeze(0),
-                        phoneme_ids0,
-                        refer,
-                    )
-                cache_item["prompt_fea_ref"] = prompt_fea_ref
-                cache_item["prompt_ge"] = prompt_ge
-
-            if len(self._session_cache) >= self._session_cache_max:
-                oldest = next(iter(self._session_cache))
-                del self._session_cache[oldest]
-            self._session_cache[key] = cache_item
-            return cache_item
-        except Exception:
-            logger.warning("构建会话缓存失败，回退到逐句计算。")
-            logger.warning(traceback.format_exc())
-            return {}
+        return cache_item
 
     def _clone_cached_value(self, value):
         """Clone cached tensors to avoid mutation by downstream inference paths.
@@ -1263,36 +1400,10 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
-            # Use ref_free mode if no prompt text is provided
-            # 如果没有提供参考文本，则使用无参考模式
-            if prompt_text is None or prompt_text.strip() == "":
-                ref_free = True
-                logger.info("未提供参考文本，使用无参考模式")
-            else:
-                prompt_text = prompt_text.strip()
-                # Ensure prompt text ends with punctuation
-                # 确保参考文本以标点符号结尾
-                if prompt_text and prompt_text[-1] not in self.splits:
-                    prompt_text += "。" if prompt_language != "英文" else "."
-
-                if prompt_language in self.dict_language:
-                    prompt_language_code = self.dict_language[prompt_language]
-                else:
-                    prompt_language_code = _default_lang_code()
-
-                logger.info(f"参考文本: '{prompt_text}'")
-
-            # v3 doesn't support ref_free mode
-            # v3模型不支持ref_free模式
-            if self.model_version == "v3" and ref_free:
-                logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
-                ref_free = False
-
-                # Use default prompt text for the current language
-                # 如果没有参考文本，使用当前语言的默认文本
-                if not prompt_text:
-                    prompt_text = _default_ref_free_prompt()
-                    prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
+            reference = self._normalize_reference_prompt(
+                ref_audio_path, prompt_text, prompt_language, ref_free=ref_free)
+            ref_audio_path, prompt_text = reference.audio_path, reference.text
+            prompt_language_code, ref_free = reference.language, reference.ref_free
 
             # Segment text according to selected strategy
             # 根据选择的切分方式处理文本
@@ -1410,9 +1521,10 @@ class TTSInferencer:
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
-                    audio = self._decode_v2(
-                        pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
-                    )
+                    with self._sovits_decode_lock:
+                        audio = self._decode_v2(
+                            pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
+                        )
 
                     # Prevent audio clipping
                     # 防止爆音
@@ -1426,126 +1538,116 @@ class TTSInferencer:
                     audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
                 else:
-                    # Decode for v3 model
-                    # v3模型解码
-                    import torchaudio
+                    with self._sovits_decode_lock:
+                        # Decode for v3 model
+                        # v3模型解码
+                        import torchaudio
 
-                    # Prefer session-cached reference spectrogram
-                    # 优先使用会话缓存的参考频谱
-                    refer = sess.get("refer_spec")
-                    if refer is None:
-                        refer = self.get_spepc(ref_audio_path).to(self.device)
-                        refer = refer.half() if self.is_half else refer.float()
+                        # Prefer session-cached reference spectrogram
+                        # 优先使用会话缓存的参考频谱
+                        refer = sess.get("refer_spec")
+                        if refer is None:
+                            refer = self.get_spepc(ref_audio_path).to(self.device)
+                            refer = refer.half() if self.is_half else refer.float()
 
-                    phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
-                    phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                        phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+                        phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
 
-                    # Extract reference audio features (prefer session cache)
-                    # 提取参考音频特征（优先使用会话缓存）
-                    fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
-                    ge = self._clone_cached_value(sess.get("prompt_ge"))
-                    if fea_ref is None or ge is None:
-                        fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
+                        # Extract reference audio features (prefer session cache)
+                        # 提取参考音频特征（优先使用会话缓存）
+                        fea_ref = self._clone_cached_value(sess.get("prompt_fea_ref"))
+                        ge = self._clone_cached_value(sess.get("prompt_ge"))
+                        if fea_ref is None or ge is None:
+                            fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
 
-                    # Load and process reference audio
-                    # 加载并处理参考音频
-                    ref_audio, ref_sr = torchaudio.load(ref_audio_path)
-                    ref_audio = ref_audio.to(self.device)
-                    # 根据is_half决定是否使用half
-                    if self.is_half:
-                        ref_audio = ref_audio.half()
-                    else:
-                        ref_audio = ref_audio.float()
+                        # Load and process reference audio
+                        # 加载并处理参考音频
+                        mel2 = sess.get("mel2_norm")
+                        if mel2 is None:
+                            ref_audio, ref_sr = torchaudio.load(ref_audio_path)
+                            ref_audio = ref_audio.to(self.device)
+                            ref_audio = ref_audio.half() if self.is_half else ref_audio.float()
+                            if ref_audio.shape[0] == 2:
+                                ref_audio = ref_audio.mean(0).unsqueeze(0)
+                            if ref_sr != 24000:
+                                ref_audio = self._resample(ref_audio, ref_sr)
+                            mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
 
-                    if ref_audio.shape[0] == 2:  # Convert to mono / 转单声道
-                        ref_audio = ref_audio.mean(0).unsqueeze(0)
+                        # Align lengths to T_min
+                        # 调整长度
+                        T_min = min(mel2.shape[2], fea_ref.shape[2])
+                        mel2 = mel2[:, :, :T_min]
+                        fea_ref = fea_ref[:, :, :T_min]
+                        if (T_min > 468):
+                            mel2 = mel2[:, :, -468:]
+                            fea_ref = fea_ref[:, :, -468:]
+                            T_min = 468
 
-                    # Resample to 24 kHz
-                    # 重采样到24kHz
-                    if ref_sr != 24000:
-                        ref_audio = self._resample(ref_audio, ref_sr)
+                        # Set chunk length
+                        # 设置块长度
+                        chunk_len = 934 - T_min
+                        # 根据is_half决定是否使用half
+                        if self.is_half:
+                            mel2 = mel2.half()
+                        else:
+                            mel2 = mel2.float()
 
-                    # Extract mel features (prefer session cache)
-                    # 提取mel特征（优先使用会话缓存）
-                    mel2 = sess.get("mel2_norm")
-                    if mel2 is None:
-                        mel2 = _normalize_v3_spec(_v3_mel_spectrogram(ref_audio))
+                        # Decode
+                        # Decode target features
+                        # 解码目标特征
+                        fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
 
-                    # Align lengths to T_min
-                    # 调整长度
-                    T_min = min(mel2.shape[2], fea_ref.shape[2])
-                    mel2 = mel2[:, :, :T_min]
-                    fea_ref = fea_ref[:, :, :T_min]
-                    if (T_min > 468):
-                        mel2 = mel2[:, :, -468:]
-                        fea_ref = fea_ref[:, :, -468:]
-                        T_min = 468
+                        # Process in chunks
+                        # 分块处理
+                        cfm_resss = []
+                        idx = 0
+                        while True:
+                            fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
+                            if fea_todo_chunk.shape[-1] == 0:
+                                break
 
-                    # Set chunk length
-                    # 设置块长度
-                    chunk_len = 934 - T_min
-                    # 根据is_half决定是否使用half
-                    if self.is_half:
-                        mel2 = mel2.half()
-                    else:
-                        mel2 = mel2.float()
+                            idx += chunk_len
+                            fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
 
-                    # Decode
-                    # Decode target features
-                    # 解码目标特征
-                    fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
+                            # Run CFM inference
+                            # CFM推理
+                            cfm_res = self.vq_model.cfm.inference(
+                                fea,
+                                torch.LongTensor([fea.size(1)]).to(fea.device),
+                                mel2,
+                                sample_steps,
+                                inference_cfg_rate=0
+                            )
 
-                    # Process in chunks
-                    # 分块处理
-                    cfm_resss = []
-                    idx = 0
-                    while True:
-                        fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
-                        if fea_todo_chunk.shape[-1] == 0:
-                            break
+                            cfm_res = cfm_res[:, :, mel2.shape[2]:]
+                            mel2 = cfm_res[:, :, -T_min:]
+                            fea_ref = fea_todo_chunk[:, :, -T_min:]
+                            cfm_resss.append(cfm_res)
 
-                        idx += chunk_len
-                        fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+                        # Concatenate chunk results
+                        # 合并结果
+                        cmf_res = torch.cat(cfm_resss, 2)
+                        cmf_res = _denormalize_v3_spec(cmf_res)
 
-                        # Run CFM inference
-                        # CFM推理
-                        cfm_res = self.vq_model.cfm.inference(
-                            fea,
-                            torch.LongTensor([fea.size(1)]).to(fea.device),
-                            mel2,
-                            sample_steps,
-                            inference_cfg_rate=0
-                        )
+                        # BigVGAN generates waveform / BigVGAN生成波形
+                        # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
+                        # inside the fused CUDA kernel uses the correct device stream,
+                        # preventing CUDNN_STATUS_MAPPING_ERROR on non-default GPUs.
+                        with torch.cuda.device(self._tts_device_idx):
+                            with torch.inference_mode():
+                                wav_gen = self.bigvgan_model(cmf_res)
+                                audio = wav_gen[0][0]
 
-                        cfm_res = cfm_res[:, :, mel2.shape[2]:]
-                        mel2 = cfm_res[:, :, -T_min:]
-                        fea_ref = fea_todo_chunk[:, :, -T_min:]
-                        cfm_resss.append(cfm_res)
+                        # Prevent audio clipping
+                        # 防止爆音
+                        max_audio = torch.abs(audio).max()
+                        if max_audio > 1:
+                            audio = audio / max_audio
 
-                    # Concatenate chunk results
-                    # 合并结果
-                    cmf_res = torch.cat(cfm_resss, 2)
-                    cmf_res = _denormalize_v3_spec(cmf_res)
-
-                    # BigVGAN generates waveform / BigVGAN生成波形
-                    # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
-                    # inside the fused CUDA kernel uses the correct device stream,
-                    # preventing CUDNN_STATUS_MAPPING_ERROR on non-default GPUs.
-                    with torch.cuda.device(self._tts_device_idx):
-                        with torch.inference_mode():
-                            wav_gen = self.bigvgan_model(cmf_res)
-                            audio = wav_gen[0][0]
-
-                    # Prevent audio clipping
-                    # 防止爆音
-                    max_audio = torch.abs(audio).max()
-                    if max_audio > 1:
-                        audio = audio / max_audio
-
-                    # Add to output list
-                    # 添加到输出列表
-                    audio_outputs.append(self._trim_generated_lead(audio, sr))
-                    audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
+                        # Add to output list
+                        # 添加到输出列表
+                        audio_outputs.append(self._trim_generated_lead(audio, sr))
+                        audio_outputs.append(zero_wav)  # Inter-sentence pause / 句间停顿
 
             # Concatenate all audio segments
             # 合并所有音频片段
@@ -1689,36 +1791,10 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
-            # Use ref_free mode if no prompt text is provided
-            # 如果没有提供参考文本，则使用无参考模式
-            if prompt_text is None or prompt_text.strip() == "":
-                ref_free = True
-                logger.info("未提供参考文本，使用无参考模式")
-            else:
-                prompt_text = prompt_text.strip()
-                # Ensure prompt text ends with punctuation
-                # 确保参考文本以标点符号结尾
-                if prompt_text and prompt_text[-1] not in self.splits:
-                    prompt_text += "。" if prompt_language != "英文" else "."
-
-                if prompt_language in self.dict_language:
-                    prompt_language_code = self.dict_language[prompt_language]
-                else:
-                    prompt_language_code = _default_lang_code()
-
-                logger.info(f"参考文本: '{prompt_text}'")
-
-            # v3 doesn't support ref_free mode
-            # v3模型不支持ref_free模式
-            if self.model_version == "v3" and ref_free:
-                logger.warning("v3模型不支持无参考模式，强制使用有参考模式")
-                ref_free = False
-
-                # Use default prompt text for the current language
-                # 如果没有参考文本，使用当前语言的默认文本
-                if not prompt_text:
-                    prompt_text = _default_ref_free_prompt()
-                    prompt_language_code = "en" if _TTS_OUTPUT_LANGUAGE == "英文" else "all_ja"
+            reference = self._normalize_reference_prompt(
+                ref_audio_path, prompt_text, prompt_language, ref_free=ref_free)
+            ref_audio_path, prompt_text = reference.audio_path, reference.text
+            prompt_language_code, ref_free = reference.language, reference.ref_free
 
             # Segment text according to selected strategy
             # 根据选择的切分方式处理文本
@@ -1866,9 +1942,10 @@ class TTSInferencer:
                 logger.info("执行SoVITS解码...")
 
                 if self.model_version != "v3":
-                    audio = self._decode_v2(
-                        pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
-                    )
+                    with self._sovits_decode_lock:
+                        audio = self._decode_v2(
+                            pred_semantic, phones2, ref_audio_path, sess, inp_refs, speed
+                        )
 
                     # Prevent audio clipping
                     # 防止爆音

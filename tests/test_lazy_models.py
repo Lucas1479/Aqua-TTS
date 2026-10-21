@@ -88,13 +88,15 @@ def test_chinese_and_mixed_segments_load_once(construct, loaders, monkeypatch, l
     assert all(loader.call_count == 1 for loader in loaders)
 
 
-def test_chinese_reference_loads_bert_before_english_target(construct, loaders, monkeypatch):
+def test_chinese_reference_loads_bert_before_english_target(construct, loaders, monkeypatch, tmp_path):
     value = construct()
     monkeypatch.setattr(module.librosa, "load", lambda *_args, **_kwargs: (np.ones(8000), 16000))
     value.ssl_model = SimpleNamespace(model=lambda _: {"last_hidden_state": torch.ones(1, 8, 4)})
     value.vq_model = SimpleNamespace(extract_latent=lambda _: torch.ones(1, 1, 4, dtype=torch.long))
     value.get_spepc = lambda _: torch.ones(1, 4, 8)
-    entry = value._build_session_cache("unused.wav", "中文参考文本。", "all_zh")
+    reference = tmp_path / "reference.wav"
+    reference.write_bytes(b"fixture")
+    entry = value._build_session_cache(str(reference), "中文参考文本。", "all_zh")
     assert entry["bert1"].any() and value.bert_loaded
     value.get_phones_and_bert("English text.", "en")
     assert all(loader.call_count == 1 for loader in loaders)

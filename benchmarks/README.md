@@ -302,3 +302,15 @@ The selected upstream Chinese frontend also needs its G2PW resources. If it uses
 cwd-relative paths, `--frontend-cwd F:/local/existing-upstream-assets` selects an
 existing resource root for this standalone benchmark process. The result records
 that condition; it does not establish arbitrary-cwd or fully offline frontend support.
+
+### Reference warmup
+
+`reference_warmup_smoke.py` supplies a `Voice` at construction, then checks the
+public warmup hit and both inference APIs. It counts SSL, reference spectrum,
+reference `decode_encp` and Pro speaker encoding, and verifies that explicit clear
+causes exactly one rebuild. Timings are single-run observations.
+
+```powershell
+python benchmarks/reference_warmup_smoke.py --config F:/local/v3.json --output F:/local/reference-v3
+python benchmarks/reference_warmup_smoke.py --config F:/local/v2Pro.json --output F:/local/reference-pro
+```

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Public reference warmup, optional constructor reference lists and explicit cache
+  clearing, with shared normalization, bounded residency and strict/best-effort results.
+- Reference file/model/device/dtype invalidation, atomic builds and CUDA-stream
+  readiness handoff; cached V3 references avoid repeated file loading in both APIs.
 - Lazy Chinese BERT loading with `preload_bert=True` / `preload_bert_model()`,
   observable readiness and load duration, concurrent first-use protection and retry.
 - AP-BWE imports and model construction are deferred to super-resolution requests.
