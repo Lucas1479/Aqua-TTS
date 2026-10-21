@@ -9,7 +9,11 @@ from aquatts.inference.cuda_execution import cuda_work
 
 
 def locked_chunks(iterator, lock):
-    """Serialize generator computation without retaining a thread lock at yield."""
+    """Serialize a private generator's computation, releasing the lock at yield.
+
+    The caller exclusively owns this iterator and serializes next/close. Its
+    close cleanup must not access shared decoder state.
+    """
     try:
         while True:
             with lock:
@@ -19,8 +23,9 @@ def locked_chunks(iterator, lock):
                     return
             yield chunk
     finally:
-        with lock:
-            iterator.close()
+        # The private iterator is suspended here. Reacquiring a shared Lock can
+        # deadlock if GC finalizes this stream on a thread already holding it.
+        iterator.close()
 
 
 class SerializedIterator:

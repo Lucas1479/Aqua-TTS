@@ -1914,7 +1914,11 @@ class TTSInferencer:
             # 初始化结果
             sr = self.hps.data.sampling_rate if self.model_version != "v3" else 24000
 
-            # 首先返回采样率
+            # Validate reference readiness before HTTP commits success headers.
+            # 先准备并校验参考，再发送采样率，保证参考错误能返回 HTTP 500。
+            sess = self._reference_session_for_request(reference, semantic)
+            prompt = sess.get("prompt")
+
             yield sr, None, ""
 
             # Create silence gap between sentences
@@ -1944,11 +1948,6 @@ class TTSInferencer:
                     yield sr, sub_chunk, text_payload if first_chunk else ""
                     first_chunk = False
                     start = end
-
-            # Process reference audio (prefer session-level cache)
-            # 处理参考音频（会话级缓存优先）
-            sess = self._reference_session_for_request(reference, semantic)
-            prompt = sess.get("prompt")
 
             # Extract phones and BERT features from reference audio
             # 获取参考音频的音素和BERT特征（会话级缓存优先）

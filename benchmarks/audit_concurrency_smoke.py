@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import sys
+import tempfile
 import threading
 import time
 
@@ -53,6 +54,28 @@ def main():
                                top_p=1., temperature=.6, pause_second=0)
     first.infer_stream = http_stream
     app = _create_app(first, VoiceRegistry())
+    async def reference_errors():
+        failures = []
+        # A real decoder failure after normalization, rather than a missing path
+        # rejected before reference preparation begins.
+        with tempfile.TemporaryDirectory() as directory:
+            corrupt = Path(directory) / "corrupt.wav"
+            corrupt.write_bytes(b"not an audio container")
+            params = {**config["reference"], "ref_audio_path": str(corrupt),
+                      "text": common["text"], "text_language": "英文"}
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                for endpoint in ("/tts", "/tts/file"):
+                    response = await asyncio.wait_for(client.post(endpoint, params=params), 30)
+                    assert response.status_code == 500, (endpoint, response.status_code)
+                    assert "x-sample-rate" not in response.headers
+                    assert "detail" in response.json()
+                    assert not cuda_execution._owners
+                    failures.append({"endpoint": endpoint, "status": response.status_code,
+                                     "sample_rate_header": False, "active_work_after": 0})
+        return failures
+    reference_error_results = asyncio.run(reference_errors())
+
     async def http_requests():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             start = time.perf_counter()
@@ -87,6 +110,7 @@ def main():
     report = {"gpu": torch.cuda.get_device_name(first.device), "torch": torch.__version__,
               "constructor_capture_deferred": True, "capture_retry_passed": True,
               "torchcodec_load_blocked": True, "same_instance_http_seconds": http_seconds,
+              "reference_error_http": reference_error_results,
               "trials": rows, "sequential_samples": int(sequential.size),
               "active_work_after_completion": len(cuda_execution._owners),
               "scope": "Functional concurrent real-model smoke, not a performance comparison; all requests use real sampling and CFM randomness."}
