@@ -57,13 +57,14 @@ k_cache.scatter_(1, pos_idx, k)  # shape stays [B, bucket_size, hidden]
 
 ### Why Buckets?
 
-A CUDA Graph captures a specific tensor shape. Different prompt lengths produce different initial KV cache lengths, which would require a separate graph for each length. Instead, we:
+A CUDA Graph captures a specific tensor shape. The bucket fixes the computation
+shape; actual prefix length remains mutable GPU position/mask data. We:
 
 1. Round up the prompt KV length to the nearest stride (32) boundary.
 2. Select the smallest bucket that fits `aligned_kv + 96 generation slots`.
-3. Capture one graph per `(bucket_size, initial_len)` pair.
+3. Capture one graph per `bucket_size`, independent of actual initial length.
 
-The aligned `initial_len` is a graph-cache key only. Persistent `pos_idx` and
+Alignment is used for routing only. Persistent `pos_idx` and
 the validity mask are reset from the real prompt length for each sentence.
 Warmup/capture tensors use fixed non-zero constants so graph creation does not
 advance the caller's sampling RNG.
@@ -72,30 +73,39 @@ advance the caller's sampling RNG.
 
 | Bucket | Use case |
 |--------|----------|
-| 128 | Very short prompts (< 32 tokens) |
-| 256 | Short turns (~64-128 tokens) |
-| 448 | Single sentence (~256-352 tokens) |
-| 512 | Typical single sentence (~330-416 tokens) |
-| 768 | Multi-sentence merge (~420-672 tokens) |
-| 1024 | Long compound turns |
+| 128 | Configured capacity; not selected for a positive prefix under the current reserve rule |
+| 256 | Initial KV 1–128 |
+| 448 | Initial KV 129–320 |
+| 512 | Initial KV 321–384 |
+| 768 | Initial KV 385–640 |
+| 1024 | Initial KV 641–896 |
+
+Initial KV includes text and reference semantic tokens, not character count.
+The strict routing inequality rejects initial KV >=897 with these settings.
 
 ### Pre-capture Strategy
 
-At model load time, common `(bucket, initial_len)` pairs are enumerated and captured eagerly. The initial_len range per bucket is computed as:
+The resolved full/minimal preset selects preparation targets; each target gets
+at most one Graph, using synthetic inputs. Full prepares six graphs and minimal
+prepares 256/512/1024. Lazy skips startup capture and off skips Graph entirely.
+Explicit target lists are not expanded automatically. The direct preparation
+API treats `None` as all available buckets and an empty list as no targets.
 
-```python
-lo = max(stride * 8, prev_bucket - generation_reserve)
-hi = min(bucket - generation_reserve - 1, int(bucket * 0.75))
-```
-
-With the default six bucket sizes this currently produces **15 pre-captured
-graphs**: 3 for bucket 448, 2 for 512, 6 for 768, and 4 for 1024. Very short or
-uncommon aligned lengths are captured lazily on first use. This bounds startup
-work while keeping the ordinary conversation shapes warm.
+`bucket` storage gives each prepared bucket independent K/V. Optional `nested`
+stores K/V in roots shaped `[layers, 1, max_capacity, hidden]`; per-layer prefix
+views keep the short bucket computation shape and stable captured addresses.
+The default remains bucket. Layout, device, dtype or capacity changes require a
+new decoder. At 24 layers/hidden512/FP16, full bucket uses 147 MiB unique KV and
+nested uses 48 MiB; a single 448 bucket instead uses 21 MiB versus 48 MiB.
 
 ### Thread Safety
 
-Each `(bucket, initial_len)` pair gets its own `threading.Lock`. Multi-threaded servers (e.g., FastAPI with multiple workers) can safely replay different graphs concurrently. Only threads hitting the same bucket+initial_len key serialize.
+Each bucket storage owner holds a reentrant lease for the complete AR request,
+including prompt installation and sampling. Nested layouts share one root
+owner across all buckets. Completion events order ownership transfer between
+CUDA streams. Different independent owners may progress concurrently, while
+capture itself is serialized process-wide. Graph-disabled or batch>1 requests
+do not enter the shared batch-one workspace.
 
 CUDA stream dependencies order graph replay before sampling, so Aqua does not
 perform a device-wide synchronization after every token. Set
@@ -129,7 +139,7 @@ The `[graph]` log at each decode step follows this format:
 At end-of-sequence, a single summary line aggregates all stats:
 
 ```
-[graph] EOS stats: bucket=512 graph_key=(512,288) total_steps=187 replay_steps=186 replay_pct=99.5% bucket_misses=0 fallback=none
+[graph] EOS stats: bucket=512 graph_key=512 total_steps=187 replay_steps=186 replay_pct=99.5% bucket_misses=0 fallback=none
 ```
 
 ## BigVGAN Pre-compiled CUDA Kernel
@@ -199,7 +209,7 @@ recorded in `benchmarks/results/4070ti-super-win-py312-torch251-cu124-upstream-o
 Key reasons Aqua outperforms the current upstream path:
 
 - **Static KV buffers** — no per-step `torch.cat` growth or allocation.
-- **Pre-captured graphs** — stable bucket/initial-length graph keys are ready before the first request.
+- **Pre-captured graphs** — each prepared computation bucket is reusable across initial lengths.
 - **No device-wide replay sync in production** — stream ordering handles graph replay; `CUDA_GRAPH_REPLAY_SYNC=1` is diagnostic-only.
 - **One EOS synchronization** — greedy and sampled EOS conditions are combined into one device-to-host read.
 - **Bucketed sizing** — selection based on aligned initial length reserves generation space without routing ordinary conversation shapes to an unnecessarily large bucket.

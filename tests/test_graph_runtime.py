@@ -9,16 +9,18 @@ streaming = pytest.importorskip("aquatts.modeling.t2s_streaming")
 from aquatts.inference.presets import resolve_cuda_graph_config  # noqa: E402
 
 
-def make_decoder(device="cpu", preset="lazy"):
+def make_decoder(device="cpu", preset="lazy", layout="bucket", dtype=None):
     torch.manual_seed(73)
     model = upstream.Text2SemanticDecoder({"model": {
         "hidden_dim": 64, "embedding_dim": 64, "head": 2, "n_layer": 2,
         "vocab_size": 64, "phoneme_vocab_size": 64, "dropout": 0., "EOS": 63,
     }}).eval().to(device)
-    if str(device).startswith("cuda"):
+    if dtype is not None:
+        model.to(dtype=dtype)
+    elif str(device).startswith("cuda"):
         model.half()
     return streaming.apply_cuda_graph_patch(
-        model, graph_config=resolve_cuda_graph_config(preset, {}))
+        model, graph_config=resolve_cuda_graph_config(preset, {}), kv_cache_layout=layout)
 
 
 @pytest.mark.parametrize("preset", ["full", "minimal", "lazy", "off"])
@@ -40,7 +42,7 @@ def test_real_request_inherits_default_and_replays(monkeypatch, device, preset, 
         model = make_decoder(device, preset)
         # Full/minimal preparation does not decide whether this request replays.
         if model.cuda_graph_enabled and preset in {"full", "minimal"}:
-            assert model._warmup_and_capture_bucket(256, 32, device)
+            assert model._warmup_and_capture_bucket(256, device)
         x = torch.arange(1, 17, device=device).unsqueeze(0)
         prompt = x.clone()
         bert = torch.zeros(1, 1024, 16, device=device, dtype=torch.float16)

@@ -243,3 +243,29 @@ recorded first. The tool does not close other applications or change GPU power
 settings; telemetry therefore describes the actual desktop environment, not an
 isolated GPU. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
 the previous measurements and documents the changed measurement protocol.
+
+### Graph KV storage layouts
+
+Use a fresh process for each layout. The probe loads an existing GPT checkpoint,
+captures synthetic SDPA decode steps, and reports Graph count, KV storage deduplicated
+by backing storage, allocator totals and one preparation duration. It requires
+`GPT_SOVITS_HOME`; it does not download weights or need reference voice material.
+
+```powershell
+python benchmarks/kv_layout_bench.py --gpt-model F:/local/gpt.ckpt --layout bucket --output F:/local/bucket.json
+python benchmarks/kv_layout_bench.py --gpt-model F:/local/gpt.ckpt --layout nested --output F:/local/nested.json
+python benchmarks/kv_layout_bench.py --gpt-model F:/local/gpt.ckpt --layout nested --precapture-buckets 448 --output F:/local/sparse.json
+```
+
+`--preset full|minimal|lazy|off` uses that preset's startup policy. An explicit
+`--precapture-buckets` changes preparation targets, while the declared capacity
+buckets remain unchanged. To compare the pre-change implementation, export
+`37825477a8adb480d6ef02b37fc77bbad6fa7444:aquatts/modeling/t2s_streaming.py`
+as UTF-8 and pass `--layout legacy --baseline-source path/to/snapshot.py`.
+
+With the validated 24-layer, hidden-512 FP16 checkpoint and full preparation,
+legacy has 15 graphs and 519 MiB unique KV, bucket has six graphs and 147 MiB,
+and nested has six graphs and 48 MiB. Preparing only a 448 bucket uses 21 MiB
+with bucket and 48 MiB with nested. These are KV figures; they exclude model
+weights, Graph intermediates and other allocations. A single preparation sample
+does not establish a startup latency distribution or an inference speedup.

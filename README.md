@@ -41,6 +41,10 @@ they predate the [generated-lead trimming and onset fields](#speaker-demo).
 
 <sub>**Latency definitions:** TTFP benchmark = model-side first audio latency under warm-cache (table below). E2E first-audio = full pipeline including audio buffer and playback startup, typically **0.4–0.7 s** in practice. Cold start = init + model load + first inference, dominated by BigVGAN CUDA kernel compilation (~2 min on first run, then cached).</sub>
 
+The timing rows retain the published measurements from before the KV-layout
+update. Mechanism rows describe the current runtime; new storage measurements
+are documented in [the KV layout probe](benchmarks/README.md#graph-kv-storage-layouts).
+
 | | Upstream T2S execution* | Aqua Graph + SDPA | Aqua default (FA2 `valid`) |
 |---|---|---|---|
 | T2S short / bucket 448 | 145.5 it/s | **490.0 it/s** | **568.5 it/s** |
@@ -53,10 +57,10 @@ they predate the [generated-lead trimming and onset fields](#speaker-demo).
 | Decode attention | Native PyTorch, dynamic KV | SDPA over static bucket | **FA2 over true KV length** |
 | KV-cache writes | Per-token `torch.cat` | **In-place `scatter_`** | **FA2 KV-cache update** |
 | KV allocation | Grows per token | **Pre-allocated and bounded per bucket** | **Pre-allocated and bounded per bucket** |
-| CUDA Graph | None in the standard entry point | **15 common graph keys / 6 configured buckets + lazy capture** | **15 common graph keys / 6 configured buckets + lazy capture** |
+| CUDA Graph | None in the standard entry point | **One per prepared bucket, up to 6 + lazy capture** | **One per prepared bucket, up to 6 + lazy capture** |
 | Replay synchronization | Eager launches | **Stream-ordered; no per-token device sync** | **Stream-ordered; no per-token device sync** |
 | EOS host read | Native condition checks | **Greedy + sampled EOS combined once** | **Greedy + sampled EOS combined once** |
-| Graph concurrency | N/A | **Lock per `(bucket, initial_len)` key** | **Lock per `(bucket, initial_len)` key** |
+| Graph concurrency | N/A | **Full AR lease per bucket, or shared nested root** | **Full AR lease per bucket, or shared nested root** |
 | Failure path | Dynamic decoder | **Graph → static KV → dynamic** | **FA2 → SDPA; Graph → static KV → dynamic** |
 | BigVGAN activation | Runtime extension/JIT path | **ABI-keyed CUDA cache → PyTorch fallback** | **ABI-keyed CUDA cache → PyTorch fallback** |
 | Streaming contract | Native upstream generators | **Generators preserved; only direct `infer_panel()` patched** | **Generators preserved; only direct `infer_panel()` patched** |
@@ -79,7 +83,7 @@ https://github.com/user-attachments/assets/581cef5f-f8ce-4570-81ae-a6c092698223
 
 - **Static KV cache** — pre-allocated scatter buffers eliminate per-step `torch.cat` overhead
 - **Semantic stability guard** — rejects repeated-token collapse before the vocoder and retries once
-- **Bucketed CUDA Graph** — 15 common graph keys pre-captured across 6 configured bucket sizes, with lazy capture for uncommon shapes
+- **Bucketed CUDA Graph** — one graph per prepared bucket across six configured capacities, with optional nested KV storage and lazy capture
 - **Cached BigVGAN CUDA extension** — NVIDIA kernel cached by GPU/Python/Torch/CUDA ABI, with torch fallback
 - **Adaptive FlashAttention2 KV cache** — `flash_attn_with_kvcache` `valid` mode is preferred automatically, with SDPA fallback
 - **Streaming API** — generator-based `infer_stream()` with early first-audio yield
@@ -412,9 +416,21 @@ to verify execution; a successful capture alone does not demonstrate replay.
 Requests sharing a decoder Graph workspace are serialized for their complete
 T2S AR generation, including prompt installation and sampling. CUDA events order
 handoff between streams; this does not add per-token device synchronization.
-Different Graph keys and separate decoder instances retain independent ownership.
+Different storage owners and separate decoder instances retain independent ownership.
 Graph-disabled requests use private KV. Counters describe the last completed AR
 request; they are not an aggregate across concurrent requests.
+
+Each computation bucket now captures one Graph, reused across real prefix lengths.
+`TTSInferencer(kv_cache_layout="bucket")` keeps independent KV per bucket and is
+the default. Opt in to `kv_cache_layout="nested"` to share a maximum-capacity root
+across shorter bucket views. This reduces multi-bucket KV residency while retaining
+short attention shapes; all Graph requests on that root share one owner. An omitted
+argument reads `AQUATTS_KV_CACHE_LAYOUT` once (default `bucket`). Explicit arguments
+take priority. Captured layout/device/dtype/capacity changes require a new decoder.
+Sparse single-bucket deployments can use less KV with `bucket`; `nested` is not
+universally smaller. Full/minimal capture only their declared bucket sets; lazy/off
+do not allocate a Graph root at startup. Bucket overflow still preserves the full
+prefix and continues dynamically; prepared-target promotion is a separate change.
 
 **Adaptive FlashAttention2 T2S path** (preferred automatically when available):
 

@@ -1,0 +1,323 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "37825477a8adb480d6ef02b37fc77bbad6fa7444",
+  "final_source_sha256_working_tree": "605138d0666bd8172502eb9f4d747c408a0e8778b24f6e6df7bf9eb3f6b41a0c",
+  "final_source_sha256_canonical_lf": "b6b931b61993954534d824ceea7dc2f42cfad856e49a98db02481f18c46e244b",
+  "validation": {
+    "runtime_passed": 311,
+    "model_less_passed": 180,
+    "model_less_skipped": 11,
+    "lint": "passed",
+    "build_twine": "passed"
+  },
+  "grad_regression": {
+    "before": "4 direct grad-enabled request cases failed on shared-view mutation",
+    "after": "FP16/FP32, bucket/nested and grad/no_grad/inference request contexts pass"
+  },
+  "legacy_control": {
+    "layout": "legacy",
+    "preset": "full",
+    "python": "3.12.10",
+    "torch": "2.5.1+cu121",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "dtype": "torch.float16",
+    "layers": 24,
+    "hidden": 512,
+    "buckets": [
+      128,
+      256,
+      448,
+      512,
+      768,
+      1024
+    ],
+    "prepared": {
+      "128": true,
+      "256": true,
+      "448": true,
+      "512": true,
+      "768": true,
+      "1024": true
+    },
+    "graph_count": 15,
+    "graph_keys": [
+      [
+        448,
+        256
+      ],
+      [
+        448,
+        288
+      ],
+      [
+        448,
+        320
+      ],
+      [
+        512,
+        352
+      ],
+      [
+        512,
+        384
+      ],
+      [
+        768,
+        416
+      ],
+      [
+        768,
+        448
+      ],
+      [
+        768,
+        480
+      ],
+      [
+        768,
+        512
+      ],
+      [
+        768,
+        544
+      ],
+      [
+        768,
+        576
+      ],
+      [
+        1024,
+        672
+      ],
+      [
+        1024,
+        704
+      ],
+      [
+        1024,
+        736
+      ],
+      [
+        1024,
+        768
+      ]
+    ],
+    "unique_kv_storage_bytes": 544210944,
+    "unique_kv_storage_count": 720,
+    "allocated_before_capture": 157379584,
+    "allocated_after_capture": 836322304,
+    "reserved_after_capture": 1203765248,
+    "peak_allocated_capture": 888996864,
+    "preparation_seconds": 4.233963400001812,
+    "checkpoint_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+    "source_sha256": "5ee4323b4be4c2712ceac7b0ad9a1f1d5b10b23e6a9de26c5a23cb065fa02559",
+    "scope": "One fresh process; SDPA synthetic capture; no inference latency or voice quality claim"
+  },
+  "current_measurements": {
+    "full_bucket": {
+      "layout": "bucket",
+      "preset": "full",
+      "python": "3.12.10",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "dtype": "torch.float16",
+      "layers": 24,
+      "hidden": 512,
+      "buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "prepared": {
+        "128": true,
+        "256": true,
+        "448": true,
+        "512": true,
+        "768": true,
+        "1024": true
+      },
+      "requested_capture_buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "graph_count": 6,
+      "graph_keys": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "unique_kv_storage_bytes": 154140672,
+      "unique_kv_storage_count": 12,
+      "allocated_before_capture": 157379584,
+      "allocated_after_capture": 363743232,
+      "reserved_after_capture": 465567744,
+      "peak_allocated_capture": 364803072,
+      "preparation_seconds": 1.7075026999991678,
+      "checkpoint_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+      "source_sha256": "605138d0666bd8172502eb9f4d747c408a0e8778b24f6e6df7bf9eb3f6b41a0c",
+      "scope": "One fresh process; SDPA synthetic capture; no inference latency or voice quality claim"
+    },
+    "full_nested": {
+      "layout": "nested",
+      "preset": "full",
+      "python": "3.12.10",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "dtype": "torch.float16",
+      "layers": 24,
+      "hidden": 512,
+      "buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "prepared": {
+        "128": true,
+        "256": true,
+        "448": true,
+        "512": true,
+        "768": true,
+        "1024": true
+      },
+      "requested_capture_buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "graph_count": 6,
+      "graph_keys": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "unique_kv_storage_bytes": 50331648,
+      "unique_kv_storage_count": 2,
+      "allocated_before_capture": 157379584,
+      "allocated_after_capture": 258886656,
+      "reserved_after_capture": 356515840,
+      "peak_allocated_capture": 259946496,
+      "preparation_seconds": 1.6784310000002733,
+      "checkpoint_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+      "source_sha256": "605138d0666bd8172502eb9f4d747c408a0e8778b24f6e6df7bf9eb3f6b41a0c",
+      "scope": "One fresh process; SDPA synthetic capture; no inference latency or voice quality claim"
+    },
+    "sparse_bucket": {
+      "layout": "bucket",
+      "preset": "full",
+      "python": "3.12.10",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "dtype": "torch.float16",
+      "layers": 24,
+      "hidden": 512,
+      "buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "prepared": {
+        "448": true
+      },
+      "requested_capture_buckets": [
+        448
+      ],
+      "graph_count": 1,
+      "graph_keys": [
+        448
+      ],
+      "unique_kv_storage_bytes": 22020096,
+      "unique_kv_storage_count": 2,
+      "allocated_before_capture": 157379584,
+      "allocated_after_capture": 187929600,
+      "reserved_after_capture": 213909504,
+      "peak_allocated_capture": 188989440,
+      "preparation_seconds": 0.38571909999882337,
+      "checkpoint_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+      "source_sha256": "605138d0666bd8172502eb9f4d747c408a0e8778b24f6e6df7bf9eb3f6b41a0c",
+      "scope": "One fresh process; SDPA synthetic capture; no inference latency or voice quality claim"
+    },
+    "sparse_nested": {
+      "layout": "nested",
+      "preset": "full",
+      "python": "3.12.10",
+      "torch": "2.5.1+cu121",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "dtype": "torch.float16",
+      "layers": 24,
+      "hidden": 512,
+      "buckets": [
+        128,
+        256,
+        448,
+        512,
+        768,
+        1024
+      ],
+      "prepared": {
+        "448": true
+      },
+      "requested_capture_buckets": [
+        448
+      ],
+      "graph_count": 1,
+      "graph_keys": [
+        448
+      ],
+      "unique_kv_storage_bytes": 50331648,
+      "unique_kv_storage_count": 2,
+      "allocated_before_capture": 157379584,
+      "allocated_after_capture": 216241152,
+      "reserved_after_capture": 239075328,
+      "peak_allocated_capture": 217300992,
+      "preparation_seconds": 0.3729304000007687,
+      "checkpoint_sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36",
+      "source_sha256": "605138d0666bd8172502eb9f4d747c408a0e8778b24f6e6df7bf9eb3f6b41a0c",
+      "scope": "One fresh process; SDPA synthetic capture; no inference latency or voice quality claim"
+    }
+  },
+  "real_v3_smoke": {
+    "layout_requested": "nested",
+    "attention_requested": "FA2 valid",
+    "nonstream_passed": true,
+    "stream_trials": 18,
+    "graph_count": 2,
+    "last_graph_replay_steps": 114,
+    "sample_rate": 24000,
+    "gpt": {
+      "name": "xxx-e15.ckpt",
+      "sha256": "5b0d0d9c4453ddfc76d6d39ceb9284d61b8fece4467a5d7ace4391283a93ba36"
+    },
+    "sovits": {
+      "name": "xxx_e2_s174_l32.pth",
+      "sha256": "8f979cfe86f8193ba03c767bb8905b44b3b78858bf3225b71c03c56e69b31916"
+    }
+  },
+  "limits": [
+    "One fresh process/preparation per reported layout; no long-run startup or inference latency claim.",
+    "Unique KV bytes exclude model weights, Graph intermediate pools, other static inputs and transient buffers.",
+    "This PR preserves full-context dynamic overflow; prepared-target promotion is a later PR.",
+    "Nested remains opt-in; sparse capture and same-decoder concurrency have different tradeoffs."
+  ]
+}

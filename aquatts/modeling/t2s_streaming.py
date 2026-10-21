@@ -25,7 +25,7 @@ from aquatts.inference.presets import (
     resolve_cuda_graph_config,
     resolve_cuda_graph_request,
 )
-from aquatts.inference.workspace import GraphWorkspaceRegistry
+from aquatts.inference.workspace import GraphWorkspaceRegistry, resolve_kv_cache_layout
 
 # ---------------------------------------------------------------------------
 # Upstream GPT-SoVITS imports. Aqua patches these objects in-place and does not
@@ -343,18 +343,59 @@ def _select_bucket(decoder, kv_cache_len):
 
 
 def _get_bucket_lock(decoder, bucket_key):
-    return decoder._graph_workspaces.lock_for(bucket_key)
+    return decoder._graph_workspaces.lock_for(_workspace_owner(decoder, bucket_key))
 
 
-def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
-    key = (bucket_size, initial_len)
-    with decoder._graph_workspaces.lease(key, device), _CAPTURE_LOCK:
-        return _capture_bucket(decoder, bucket_size, initial_len, device)
+def _workspace_owner(decoder, bucket):
+    return None if decoder.kv_cache_layout == "nested" else bucket
 
 
-def _capture_bucket(decoder, bucket_size, initial_len, device):
-    """Warm up and capture a CUDA Graph for a specific (bucket_size, initial_len) pair."""
-    graph_key = (bucket_size, initial_len)
+def _check_graph_storage(decoder, device, dtype):
+    signature = (tuple(decoder.kv_cache_buckets), torch.device(device), dtype,
+                 decoder.num_layers, decoder.model_dim)
+    if decoder._graph_storage_signature is not None and decoder._graph_storage_signature != signature:
+        raise RuntimeError("KV device/dtype/capacity changes require a new decoder")
+    return signature
+
+
+def _graph_kv_buffers(decoder, bucket, device, dtype):
+    """Return short computation views without replacing captured storage."""
+    if tuple(decoder.kv_cache_buckets) != decoder._kv_bucket_signature:
+        raise RuntimeError("KV capacity changes require a new decoder")
+    if bucket not in decoder.kv_cache_buckets:
+        raise ValueError(f"Unknown KV bucket: {bucket}")
+    device = torch.device(device)
+    if device.type == "cuda" and device.index is None:
+        device = torch.device("cuda", torch.cuda.current_device())
+    signature = _check_graph_storage(decoder, device, dtype)
+    owner = _workspace_owner(decoder, bucket)
+    capacity = max(decoder.kv_cache_buckets) if decoder.kv_cache_layout == "nested" else bucket
+    shape = (decoder.num_layers, 1, capacity, decoder.model_dim)
+    roots = decoder._graph_kv_roots.get(owner)
+    if roots is None:
+        roots = (torch.zeros(shape, device=device, dtype=dtype),
+                 torch.zeros(shape, device=device, dtype=dtype))
+        decoder._graph_kv_roots[owner] = roots
+        decoder._graph_storage_signature = signature
+    if any(tuple(root.shape) != shape or root.device != device or root.dtype != dtype for root in roots):
+        raise RuntimeError("KV device/dtype/capacity changes require a new decoder")
+    return tuple([layer[:, :bucket, :] for layer in root.unbind(0)] for root in roots)
+
+
+def _warmup_and_capture_bucket(decoder, bucket_size, device):
+    owner = _workspace_owner(decoder, bucket_size)
+    with decoder._graph_workspaces.lease(owner, device), _CAPTURE_LOCK:
+        if bucket_size in decoder.bucket_graphs:
+            return True
+        return _capture_bucket(decoder, bucket_size, device)
+
+
+@torch.inference_mode(False)
+@torch.no_grad()
+def _capture_bucket(decoder, bucket_size, device):
+    """Capture one graph per bucket; real prefix length is mutable GPU data."""
+    graph_key = bucket_size
+    initial_len = bucket_size // 2
     print(f"Capturing CUDA Graph for bucket={bucket_size}, initial_len={initial_len}...")
     warmup_start = time.perf_counter()
 
@@ -364,16 +405,11 @@ def _capture_bucket(decoder, bucket_size, initial_len, device):
 
         model_dtype = next(decoder.ar_predict_layer.parameters()).dtype
 
-        k_cache = [
-            torch.zeros(batch_size, bucket_size, hidden_dim, dtype=model_dtype, device=device)
-            for _ in range(decoder.num_layers)
-        ]
-        v_cache = [
-            torch.zeros(batch_size, bucket_size, hidden_dim, dtype=model_dtype, device=device)
-            for _ in range(decoder.num_layers)
-        ]
+        k_cache, v_cache = _graph_kv_buffers(decoder, bucket_size, device, model_dtype)
 
         for i in range(decoder.num_layers):
+            k_cache[i].zero_()
+            v_cache[i].zero_()
             # Capture is an implementation detail and must not consume the
             # caller's sampling RNG.
             k_cache[i][:, :initial_len, :].fill_(0.01)
@@ -408,15 +444,9 @@ def _capture_bucket(decoder, bucket_size, initial_len, device):
         print(f"  Warmup complete: {warmup_time:.4f}s")
 
         # Reset buffers to fixed state
-        k_cache = [
-            torch.zeros(batch_size, bucket_size, hidden_dim, dtype=model_dtype, device=device)
-            for _ in range(decoder.num_layers)
-        ]
-        v_cache = [
-            torch.zeros(batch_size, bucket_size, hidden_dim, dtype=model_dtype, device=device)
-            for _ in range(decoder.num_layers)
-        ]
         for i in range(decoder.num_layers):
+            k_cache[i].zero_()
+            v_cache[i].zero_()
             k_cache[i][:, :initial_len, :].fill_(0.01)
             v_cache[i][:, :initial_len, :].fill_(0.02)
         key_valid_mask = torch.zeros(
@@ -480,7 +510,7 @@ def _capture_bucket(decoder, bucket_size, initial_len, device):
 
 
 def _precapture_cuda_graph(decoder, buckets=None, kv_len_range=None):
-    """Pre-capture CUDA Graphs for expected kv_cache_len ranges."""
+    """Prepare at most one graph per bucket; prefix ranges are unnecessary."""
     if not getattr(decoder, "cuda_graph_enabled", False):
         print("CUDA Graph not enabled, skipping precapture")
         return {}
@@ -490,41 +520,15 @@ def _precapture_cuda_graph(decoder, buckets=None, kv_len_range=None):
         return {}
 
     device = next(decoder.parameters()).device
-    target_buckets = buckets or [available[0]]
+    target_buckets = available if buckets is None else buckets
     results = {}
 
-    _s = _GRAPH_INITIAL_LEN_STRIDE
-
-    for bucket in target_buckets:
+    for bucket in dict.fromkeys(target_buckets):
         if bucket not in available:
             results[bucket] = False
             continue
 
-        if kv_len_range:
-            lo, hi = kv_len_range
-        else:
-            G = _BUCKET_MIN_GEN_SLOTS
-            _sb = sorted(available)
-            _bi = _sb.index(bucket)
-            prev_b = _sb[_bi - 1] if _bi > 0 else 0
-            lo = max(_s * 8, prev_b - G)
-            hi = min(bucket - G - 1, int(bucket * 0.75))
-
-        min_il = ((lo + _s - 1) // _s) * _s
-        max_il = (hi // _s) * _s
-        initial_lens = [il for il in range(min_il, max_il + 1, _s) if il < bucket]
-
-        bucket_ok = True
-        for initial_len in initial_lens:
-            graph_key = (bucket, initial_len)
-            lock = _get_bucket_lock(decoder, graph_key)
-            with lock:
-                if graph_key in decoder.bucket_graphs:
-                    continue
-                success = _warmup_and_capture_bucket(decoder, bucket, initial_len, device)
-                if not success:
-                    bucket_ok = False
-        results[bucket] = bucket_ok
+        results[bucket] = _warmup_and_capture_bucket(decoder, bucket, device)
 
     return results
 
@@ -539,6 +543,7 @@ def _ensure_directories_exist(path):
 # Patched infer_panel_naive — static KV + optional CUDA Graph
 # ===========================================================================
 
+@torch.no_grad()
 def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                                 top_k=-100, top_p=100, early_stop_num=-1,
                                 temperature=1.0, repetition_penalty=1.35, **kwargs):
@@ -613,7 +618,6 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     bucket_captured = False
     current_lens = None
     graph_key = None
-    graph_initial_len = None  # graph reuse key only
     graph_prompt_len = None   # real contiguous prompt length
     graph_step_count = 0
     pos_idx_static: Optional[torch.Tensor] = None
@@ -648,72 +652,32 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
                     device = k_cache[0].device
                     dtype = k_cache[0].dtype
 
-                    k_cache_static = [
-                        torch.zeros(batch_size, current_bucket, hidden_dim, dtype=dtype, device=device)
-                        for _ in range(len(k_cache))
-                    ]
-                    v_cache_static = [
-                        torch.zeros(batch_size, current_bucket, hidden_dim, dtype=dtype, device=device)
-                        for _ in range(len(v_cache))
-                    ]
-
-                    for i in range(len(k_cache)):
-                        k_cache_static[i][:, :kv_cache_len, :] = k_cache[i]
-                        v_cache_static[i][:, :kv_cache_len, :] = v_cache[i]
-
-                    k_cache = k_cache_static
-                    v_cache = v_cache_static
-                    current_lens = [kv_cache_len] * len(k_cache)
-                    key_valid_mask = torch.zeros(
-                        batch_size, current_bucket, dtype=torch.bool, device=device
-                    )
-                    key_valid_mask[:, :kv_cache_len] = True
-
-                    pos_idx_static = torch.full(
-                        (batch_size, 1, hidden_dim), kv_cache_len,
-                        dtype=torch.long, device=device
-                    )
-
                     if graph_run_enabled:
                         graph_prompt_len = kv_cache_len
-                        if kv_cache_len >= current_bucket - 1:
-                            graph_run_enabled = False
-                        else:
-                            _aligned = ((kv_cache_len + _GRAPH_INITIAL_LEN_STRIDE - 1)
-                                        // _GRAPH_INITIAL_LEN_STRIDE * _GRAPH_INITIAL_LEN_STRIDE)
-                            if _aligned >= current_bucket:
-                                graph_run_enabled = False
-                            else:
-                                graph_initial_len = _aligned
-                                graph_key = (current_bucket, graph_initial_len)
-                                if graph_key not in decoder.bucket_graphs:
-                                    bucket_lock = _get_bucket_lock(decoder, graph_key)
-                                    with bucket_lock:
-                                        if graph_key not in decoder.bucket_graphs:
-                                            success = _warmup_and_capture_bucket(
-                                                decoder, current_bucket, graph_initial_len, x.device
-                                            )
-                                            if success:
-                                                bucket_captured = True
-                                        else:
-                                            bucket_captured = True
-                                else:
-                                    bucket_captured = True
-
-                                if bucket_captured and graph_key in decoder.bucket_graphs:
-                                    static_in = decoder.bucket_static_inputs[graph_key]
-                                    for _i in range(len(static_in["k_cache"])):
-                                        static_in["k_cache"][_i][:, :kv_cache_len, :].copy_(
-                                            k_cache[_i][:, :kv_cache_len, :]
-                                        )
-                                        static_in["v_cache"][_i][:, :kv_cache_len, :].copy_(
-                                            v_cache[_i][:, :kv_cache_len, :]
-                                        )
-                                        static_in["k_cache"][_i][:, kv_cache_len:, :].zero_()
-                                        static_in["v_cache"][_i][:, kv_cache_len:, :].zero_()
-                                    static_in["key_valid_mask"].zero_()
-                                    static_in["key_valid_mask"][:, :kv_cache_len] = True
-                                    static_in["pos_idx"].fill_(kv_cache_len)
+                        graph_key = current_bucket
+                        if graph_key not in decoder.bucket_graphs:
+                            _warmup_and_capture_bucket(decoder, current_bucket, x.device)
+                        bucket_captured = graph_key in decoder.bucket_graphs
+                    if bucket_captured:
+                        static_in = decoder.bucket_static_inputs[graph_key]
+                        k_cache_static, v_cache_static = static_in["k_cache"], static_in["v_cache"]
+                        key_valid_mask, pos_idx_static = static_in["key_valid_mask"], static_in["pos_idx"]
+                    else:
+                        k_cache_static = [torch.zeros(batch_size, current_bucket, hidden_dim,
+                                                     dtype=dtype, device=device) for _ in k_cache]
+                        v_cache_static = [torch.zeros_like(item) for item in k_cache_static]
+                        key_valid_mask = torch.zeros(batch_size, current_bucket, dtype=torch.bool, device=device)
+                        pos_idx_static = torch.empty(batch_size, 1, hidden_dim, dtype=torch.long, device=device)
+                    for k_target, v_target, k_prompt, v_prompt in zip(k_cache_static, v_cache_static, k_cache, v_cache):
+                        k_target[:, :kv_cache_len].copy_(k_prompt)
+                        v_target[:, :kv_cache_len].copy_(v_prompt)
+                        k_target[:, kv_cache_len:].zero_()
+                        v_target[:, kv_cache_len:].zero_()
+                    k_cache, v_cache = k_cache_static, v_cache_static
+                    current_lens = [kv_cache_len] * len(k_cache)
+                    key_valid_mask.zero_()
+                    key_valid_mask[:, :kv_cache_len] = True
+                    pos_idx_static.fill_(kv_cache_len)
                 else:
                     static_mode_active = False
                     transformer = dynamic_transformer
@@ -869,7 +833,8 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
 # Public API: apply_cuda_graph_patch
 # ===========================================================================
 
-def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph_config=None):
+def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph_config=None,
+                           kv_cache_layout=None):
     """
     Monkey-patch a Text2SemanticDecoder instance for static KV cache + CUDA Graph.
 
@@ -887,6 +852,8 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
     """
     _validate_decoder_contract(decoder)
     if getattr(decoder, "_aquatts_cuda_graph_patched", False):
+        if kv_cache_layout is not None and resolve_kv_cache_layout(kv_cache_layout) != decoder.kv_cache_layout:
+            raise RuntimeError("Changing KV layout requires a new decoder")
         return decoder
 
     if buckets is None:
@@ -924,7 +891,11 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
     )
 
     # --- Bucket configuration ---
-    decoder.kv_cache_buckets = buckets
+    decoder.kv_cache_buckets = list(buckets)
+    decoder._kv_bucket_signature = tuple(buckets)
+    decoder.kv_cache_layout = resolve_kv_cache_layout(kv_cache_layout)
+    decoder._graph_kv_roots = {}
+    decoder._graph_storage_signature = None
     decoder.bucket_graphs = {}
     decoder.bucket_static_inputs = {}
     decoder.bucket_static_outputs = {}
@@ -966,8 +937,8 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
     # --- Bind methods ---
     decoder.precapture_cuda_graph = lambda buckets=None, kv_range=None: \
         _precapture_cuda_graph(decoder, buckets, kv_range)
-    decoder._warmup_and_capture_bucket = lambda bs, il, dev: \
-        _warmup_and_capture_bucket(decoder, bs, il, dev)
+    decoder._warmup_and_capture_bucket = lambda bs, dev: \
+        _warmup_and_capture_bucket(decoder, bs, dev)
 
     # --- Replace only infer_panel. Upstream infer_panel_naive is a generator
     # used by its batching/streaming entry points and must retain that contract.
@@ -1010,10 +981,11 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
             bucket = _select_bucket(decoder, prefix)
         if bucket is None:
             return run_request()
-        aligned = ((prefix + _GRAPH_INITIAL_LEN_STRIDE - 1)
-                   // _GRAPH_INITIAL_LEN_STRIDE * _GRAPH_INITIAL_LEN_STRIDE)
-        with decoder._graph_workspaces.lease((bucket, aligned), x.device) as wait_seconds:
-            logger.debug("Graph workspace request wait=%.6fs key=%s", wait_seconds, (bucket, aligned))
+        parameter = next(decoder.parameters())
+        _check_graph_storage(decoder, parameter.device, parameter.dtype)
+        with decoder._graph_workspaces.lease(_workspace_owner(decoder, bucket), x.device) as wait_seconds:
+            logger.debug("Graph workspace request wait=%.6fs bucket=%s layout=%s",
+                         wait_seconds, bucket, decoder.kv_cache_layout)
             return run_request()
 
     decoder.infer_panel = patched_infer_panel

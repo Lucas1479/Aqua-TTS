@@ -3,6 +3,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 import threading
 import time
+import os
+
+
+def resolve_kv_cache_layout(value=None):
+    """Snapshot the caller's explicit layout or the Aqua environment default."""
+    layout = os.environ.get("AQUATTS_KV_CACHE_LAYOUT", "bucket") if value is None else value
+    if not isinstance(layout, str) or layout.strip().lower() not in {"bucket", "nested"}:
+        raise ValueError("kv_cache_layout must be bucket or nested")
+    return layout.strip().lower()
 
 
 @dataclass
