@@ -628,7 +628,7 @@ BERT 和两个 BigVGAN 加载器会传 `local_files_only=True`；CNHuBERT 上游
 本地加载。缺文件错误给出组件和预期目录。BERT 仍在首次中文使用或显式
 `preload_bert_model()` 时才检查。语言识别使用各实例独立的 detector，以及
 `fast_langdetect_path/lid.176.bin`，离线实例不会回退下载。在线实例保留原有
-下载行为，不共享另一实例的 detector。
+下载行为及全局 detector，不再要求私有分词适配接口；离线 detector 仍为实例独立。
 
 前端资源需在首次导入前准备：
 
@@ -642,16 +642,18 @@ BERT 和两个 BigVGAN 加载器会传 `local_files_only=True`；CNHuBERT 上游
   前设置），默认是 `GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large`。
   这与构造参数 `bert_path` 是两个入口，都必须指向本地资源。进程启动时配置好
   资源布局；Aqua 推理期间不会切换 cwd。
-- 可选 AP-BWE：工作目录下的 `AP_BWE_main/24kto48k/{config.json,g_24kto48k.zip}`。
-  缺组件时保留既有不执行超分的回退行为。
+- 可选 AP-BWE：所选上游 `tools/audio_sr.py` 旁的
+  `AP_BWE_main/24kto48k/{config.json,g_24kto48k.zip}`。检查和加载使用同一路径，
+  不依赖工作目录。缺组件时保留既有不执行超分的回退行为。
 
 本轮检查边界覆盖英、日、中及其混合，离线韩语/粤语请求会明确拒绝。这是模型资源
 约束，不是网络沙箱；不会设置 Hub 环境开关或修改 Hub 私有状态，可在 Hub/Transformers
 已导入后使用。上游 LangSegmenter 首次导入仍会设置其进程默认 detector；应先初始化
 该上游模块，再初始化其他使用它全局默认值的调用方，或使用显式 detector 实例。
-此后每个 Aqua 构造器绑定私有函数，不改写上游函数和全局默认值。已核对上游
+离线构造器绑定私有函数，不改写上游函数和全局默认值；在线构造器保留上游全局
+detector 配置方式。已核对上游
 `08d627c`、fast-langdetect 1.0.1、split-lang 2.1.1、g2p-en 2.1.0、pyopenjtalk
-0.4.1；分词接口不兼容时在构造阶段报错。
+0.4.1；私有分词适配接口不兼容仅影响离线模式。
 
 `benchmarks/optional_models_smoke.py --offline-only --config ... --output ...
 --frontend-cwd ...` 会在独立进程拦截网络连接，使用本地真实权重测试英日中和混合推理。

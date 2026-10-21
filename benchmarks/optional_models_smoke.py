@@ -86,6 +86,7 @@ def main():
     assert startup["bert_loads"] == int(args.preload_bert)
     missing_resources = []
     if args.offline_only:
+        assert before_detector is fast_langdetect.infer._default_detector
         from tempfile import TemporaryDirectory
         from aquatts.inference.offline import OfflineResourceError
         from aquatts.inference.streaming import load_bigvgan
@@ -120,6 +121,8 @@ def main():
         online.fast_langdetect_path = inferencer.fast_langdetect_path
         online._configure_fast_langdetect()
         assert online._language_detector.config.custom_model_path is None
+        before_detector = online._language_detector
+        assert fast_langdetect.infer._default_detector is before_detector
         for text in ("This is a test.", "今日は晴れです。", "你好，世界。", "你好，welcome to this voice test。"):
             assert online._segment_text(text) == inferencer._segment_text(text)
     rows = []

@@ -714,7 +714,8 @@ already uses local-only Transformers loading. Missing files name their component
 and expected directory. BERT checks remain lazy until Chinese use or explicit
 `preload_bert_model()`. FastText uses an instance-owned detector and the local
 `fast_langdetect_path/lid.176.bin`, with no download fallback. Online instances
-keep their download behavior and do not share another instance's detector.
+keep upstream's global detector and download behavior, without requiring the
+private splitter adapter. Offline detectors remain instance-owned.
 
 Install frontend resources before their first import:
 
@@ -729,8 +730,9 @@ Install frontend resources before their first import:
   `GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large`. This is separate
   from the constructor's `bert_path`; both must resolve locally. Configure the
   process resource layout once; Aqua does not change cwd during inference.
-- Optional AP-BWE: `AP_BWE_main/24kto48k/{config.json,g_24kto48k.zip}` under the
-  working directory. Its existing missing-component fallback remains unchanged.
+- Optional AP-BWE: `AP_BWE_main/24kto48k/{config.json,g_24kto48k.zip}` beside the
+  selected upstream `tools/audio_sr.py`. Checks and loading use that same path,
+  independently of cwd. Its existing missing-component fallback remains unchanged.
 
 The checked frontend boundary covers English, Japanese, Chinese and mixtures
 of these; offline Korean/Cantonese requests fail explicitly. This is a model
@@ -738,10 +740,11 @@ resource contract, not a network sandbox. It does not set Hub environment flags
 or mutate Hub private state, and works after Hub/Transformers have been imported.
 Upstream's initial LangSegmenter import still sets its own process default;
 initialize that upstream module before other users of its global default, or use
-explicit detector instances. Each Aqua constructor then binds private functions
-without modifying the upstream functions or that default. Tested with upstream
+explicit detector instances. Offline constructors bind private functions without
+modifying the upstream functions or that default. Online constructors retain the
+upstream global-detector configuration. Tested with upstream
 `08d627c`, fast-langdetect 1.0.1, split-lang 2.1.1, g2p-en 2.1.0 and pyopenjtalk
-0.4.1; incompatible splitter interfaces fail at construction.
+0.4.1; incompatible private splitter interfaces fail only in offline mode.
 
 `benchmarks/optional_models_smoke.py --offline-only --config ... --output ...
 --frontend-cwd ...` blocks network connections in a fresh process and exercises

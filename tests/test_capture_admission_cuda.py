@@ -100,3 +100,40 @@ def test_admitted_capture_blocks_new_cuda_work_until_exit(monkeypatch):
             release.set()
         assert capturing.result(timeout=10)
         assert torch.isfinite(work.result(timeout=10)).all()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA required")
+def test_direct_precapture_waits_before_workspace_cuda_events(monkeypatch):
+    monkeypatch.setattr(streaming, "_CUDA_GRAPH_WARMUP_STEPS", 2)
+    decoder = make_decoder("cuda:0")
+    entered, release, launched = (threading.Event() for _ in range(3))
+    original_graph = torch.cuda.graph
+    @contextmanager
+    def held_graph(*args, **kwargs):
+        with original_graph(*args, **kwargs):
+            entered.set()
+            assert release.wait(10)
+            yield
+    monkeypatch.setattr(torch.cuda, "graph", held_graph)
+    def second_capture():
+        launched.set()
+        return decoder.precapture_cuda_graph([448])
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(decoder.precapture_cuda_graph, [256])
+        assert entered.wait(10)
+        second = pool.submit(second_capture)
+        try:
+            assert launched.wait(5)
+            # Direct precapture must not record/wait workspace CUDA events
+            # outside the gate while the first CUDA capture is active.
+            import time
+            time.sleep(.05)
+            assert not second.done()
+        finally:
+            release.set()
+        assert first.result(timeout=10) == {256: True}
+        result = second.result(timeout=10)
+        # The first owner's event/lease cleanup may still be active after the
+        # capture ends. Deferral in that short window is correct and retryable.
+        assert result in ({448: True}, {448: False})
+        assert decoder.precapture_cuda_graph([448]) == {448: True}

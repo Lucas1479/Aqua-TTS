@@ -16,7 +16,7 @@ from aquatts.inference.workspace import resolve_kv_cache_layout
 from aquatts.inference.cuda_runtime import resolve_cuda_device, resolve_vocoder_warmup, warmup_vocoder
 from aquatts.inference.cuda_execution import cuda_work
 from aquatts.inference.reference_cache import REFERENCE_LANGUAGE_CODES, ReferenceCache, normalize_reference, reference_key
-from aquatts.inference.offline import check_frontend, require_checkpoint, require_files, require_transformer
+from aquatts.inference.offline import audio_sr_resource_dir, check_frontend, require_checkpoint, require_files, require_transformer
 from aquatts.voice_registry import Voice
 
 from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
@@ -334,12 +334,11 @@ class TTSInferencer:
             raise
 
     def _configure_fast_langdetect(self):
-        """Bind this instance to its cache without changing the global detector."""
+        """Isolate offline detection; retain the upstream online configuration."""
 
         import fast_langdetect
 
         infer = fast_langdetect.infer
-        from aquatts.inference.language_detector import bind_segmenter
         config = {"cache_dir": Path(self.fast_langdetect_path)}
         if self.offline_only:
             root = require_files("fast-langdetect", self.fast_langdetect_path, ["lid.176.bin"])
@@ -347,7 +346,14 @@ class TTSInferencer:
             # deletion fails locally rather than entering load_with_download.
             config["custom_model_path"] = str(root / "lid.176.bin")
         self._language_detector = infer.LangDetector(infer.LangDetectConfig(**config))
-        self._segmenter = bind_segmenter(LangSegmenter.getTexts, self._language_detector)
+        if self.offline_only:
+            from aquatts.inference.language_detector import bind_segmenter
+            self._segmenter = bind_segmenter(LangSegmenter.getTexts, self._language_detector)
+        else:
+            # Preserve the upstream online path without requiring the private
+            # split-lang adapter interface. Offline instances never write this.
+            infer._default_detector = self._language_detector
+            self._segmenter = None
 
     def _segment_text(self, text):
         return (getattr(self, "_segmenter", None) or LangSegmenter.getTexts)(text)
@@ -1340,10 +1346,12 @@ class TTSInferencer:
             return self.sr_model
         with self._sr_load_lock:
             if self.sr_model is None:
+                options = {}
                 if getattr(self, "offline_only", False):
-                    require_files("AP-BWE", "AP_BWE_main/24kto48k", ["config.json", "g_24kto48k.zip"])
+                    root = require_files("AP-BWE", audio_sr_resource_dir(), ["config.json", "g_24kto48k.zip"])
+                    options["checkpoint_file"] = str(root / "g_24kto48k.zip")
                 from tools.audio_sr import AP_BWE
-                self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
+                self.sr_model = AP_BWE(self.device, DictToAttrRecursive, **options)
         return self.sr_model
 
     def _audio_sr(self, audio, sr):
@@ -1630,7 +1638,7 @@ class TTSInferencer:
                     with self._sovits_decode_lock:
                         # Decode for v3 model
                         # v3模型解码
-    
+
                         # Prefer session-cached reference spectrogram
                         # 优先使用会话缓存的参考频谱
                         refer = sess.get("refer_spec")
