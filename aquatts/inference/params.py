@@ -6,11 +6,12 @@ import os
 def get_sovits_params(text: str, is_first_sentence: bool = False):
     """Return inference parameters tuned for the given text length. / 返回根据给定文本长度调整的推理参数。
 
-    CUDA Graph is controlled by ENABLE_CUDA_GRAPH env var; static KV Cache is
-    always enabled. / CUDA Graph 由 ENABLE_CUDA_GRAPH 环境变量控制；静态 KV Cache 始终启用。
+    Omitted Graph configuration inherits the inferencer default; an explicit
+    ENABLE_CUDA_GRAPH=0/1 is preserved. Static KV Cache is always enabled.
     """
     length = len(text.strip())
-    cuda_graph_env = os.environ.get("ENABLE_CUDA_GRAPH", "0") == "1"
+    raw_graph = os.environ.get("ENABLE_CUDA_GRAPH", "").strip()
+    cuda_graph_env = raw_graph == "1" if raw_graph in {"0", "1"} else None
 
     if is_first_sentence:
         max_sec_override = max(3.5, min(8.0, length * 0.25 or 3.5))

@@ -1,5 +1,15 @@
 ﻿# Changelog
 
+## Unreleased
+
+### Fixed
+
+- Inference requests inherit the instance CUDA Graph policy by default. Preset,
+  environment overrides and explicit per-request choices share one resolution
+  path; `off` no longer leaves the decoder enabled.
+- Warm up and capture on an explicit stream for the selected CUDA device,
+  avoiding reuse of Torch's implicit capture stream across different GPUs.
+
 ## [0.2.1] — 2026-10-06
 
 ### Added

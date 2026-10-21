@@ -16,10 +16,15 @@ import threading
 import time
 import inspect as _inspect
 import os
+import logging
 from typing import List, Optional, Tuple
 
 import torch
 from torch.nn import functional as F
+from aquatts.inference.presets import (
+    resolve_cuda_graph_config,
+    resolve_cuda_graph_request,
+)
 
 # ---------------------------------------------------------------------------
 # Upstream GPT-SoVITS imports. Aqua patches these objects in-place and does not
@@ -30,6 +35,8 @@ from AR.models.t2s_model import (
     Text2SemanticDecoder,
     scaled_dot_product_attention,
 )
+
+logger = logging.getLogger(__name__)
 
 
 _GRAPH_INITIAL_LEN_STRIDE = 32
@@ -383,12 +390,17 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
             (batch_size, 1, hidden_dim), initial_len, dtype=torch.long, device=device
         )
 
-        # Warmup
-        for _ in range(_CUDA_GRAPH_WARMUP_STEPS):
-            xy_dec, k_cache, v_cache = decoder.t2s_transformer_static.decode_next_token_with_static_cache(
-                xy_pos, k_cache, v_cache, pos_idx, key_valid_mask
-            )
-            logits = decoder.ar_predict_layer(xy_dec[:, -1])
+        # Torch's implicit capture stream can belong to another GPU. Warm up
+        # and capture on a stream owned by this decoder's actual device.
+        capture_stream = torch.cuda.Stream(device=device)
+        capture_stream.wait_stream(torch.cuda.current_stream(device))
+        with torch.cuda.stream(capture_stream):
+            for _ in range(_CUDA_GRAPH_WARMUP_STEPS):
+                xy_dec, k_cache, v_cache = decoder.t2s_transformer_static.decode_next_token_with_static_cache(
+                    xy_pos, k_cache, v_cache, pos_idx, key_valid_mask
+                )
+                logits = decoder.ar_predict_layer(xy_dec[:, -1])
+        torch.cuda.current_stream(device).wait_stream(capture_stream)
 
         warmup_time = time.perf_counter() - warmup_start
         decoder.cuda_graph_stats["warmup_time"][graph_key] = warmup_time
@@ -430,11 +442,13 @@ def _warmup_and_capture_bucket(decoder, bucket_size, initial_len, device):
         _graph_extra = {"capture_error_mode": "relaxed"} if _has_capture_error_mode else {}
         with torch.cuda.device(device):
             cuda_graph = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(cuda_graph, **_graph_extra):
+            capture_stream.wait_stream(torch.cuda.current_stream(device))
+            with torch.cuda.graph(cuda_graph, stream=capture_stream, **_graph_extra):
                 xy_dec, k_cache_out, v_cache_out = decoder.t2s_transformer_static.decode_next_token_with_static_cache(
                     xy_pos, k_cache, v_cache, pos_idx, key_valid_mask
                 )
                 logits = decoder.ar_predict_layer(xy_dec[:, -1])
+            torch.cuda.current_stream(device).wait_stream(capture_stream)
 
         capture_time = time.perf_counter() - capture_start
         decoder.cuda_graph_stats["capture_time"][graph_key] = capture_time
@@ -579,14 +593,18 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
         .view(bsz, decoder.num_head, src_len, src_len) \
         .to(device=x.device, dtype=torch.bool)
 
-    enable_cuda_graph = kwargs.get("enable_cuda_graph",
-                                    getattr(decoder, "cuda_graph_enabled", False))
     enable_static_kv = kwargs.get("enable_static_kv",
                                    getattr(decoder, "use_static_kv_cache", False))
-    if enable_cuda_graph and not getattr(decoder, "use_static_kv_cache", False):
-        enable_cuda_graph = False
-    if not enable_static_kv:
-        enable_cuda_graph = False
+    enable_static_kv = bool(enable_static_kv and getattr(decoder, "use_static_kv_cache", False))
+    enable_cuda_graph = resolve_cuda_graph_request(
+        kwargs.get("enable_cuda_graph"),
+        default=getattr(decoder, "cuda_graph_enabled", False),
+        available=getattr(decoder, "cuda_graph_available", False),
+        static_kv=enable_static_kv,
+    )
+    logger.debug("Graph requested=%s default=%s available=%s enabled=%s",
+                 kwargs.get("enable_cuda_graph"), decoder.cuda_graph_enabled,
+                 decoder.cuda_graph_available, enable_cuda_graph)
     graph_run_enabled = enable_cuda_graph and bool(getattr(decoder, "kv_cache_buckets", []))
 
     current_bucket = None
@@ -849,7 +867,7 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
 # Public API: apply_cuda_graph_patch
 # ===========================================================================
 
-def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
+def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph_config=None):
     """
     Monkey-patch a Text2SemanticDecoder instance for static KV cache + CUDA Graph.
 
@@ -936,8 +954,9 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None):
     decoder.use_static_kv_cache = (
         torch.cuda.is_available() and decoder_device.type == "cuda"
     )
-    cuda_graph_env = os.environ.get("ENABLE_CUDA_GRAPH", "1")
-    decoder.cuda_graph_enabled = decoder.use_static_kv_cache and (cuda_graph_env == "1")
+    config = resolve_cuda_graph_config("full") if graph_config is None else graph_config
+    decoder.cuda_graph_available = decoder.use_static_kv_cache and not bool(torch.version.hip)
+    decoder.cuda_graph_enabled = bool(config["enable"] and decoder.cuda_graph_available)
     # CUDA stream dependencies already order replay before sampling. A
     # device-wide synchronize after every token is useful only for diagnosis.
     decoder.cuda_graph_replay_sync = _env_flag_enabled(

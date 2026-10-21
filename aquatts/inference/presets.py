@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 # ── Generation presets (生成预设) ──────────────────────────────────────────
@@ -111,8 +112,42 @@ def apply_cuda_graph_preset(
     return {
         "enable": cfg.get("enable", True),
         "precapture": cfg.get("precapture", False),
-        "buckets": cfg.get("buckets"),
+        "buckets": list(cfg["buckets"]) if "buckets" in cfg else None,
     }
+
+
+def resolve_cuda_graph_config(preset: str, environ=None) -> Dict[str, Any]:
+    """Resolve instance defaults once, without changing process environment."""
+    config = apply_cuda_graph_preset(preset)
+    env = os.environ if environ is None else environ
+    for name, field in (("ENABLE_CUDA_GRAPH", "enable"),
+                        ("ENABLE_CUDA_GRAPH_PRECAPTURE", "precapture")):
+        value = env.get(name, "").strip()
+        if value in {"0", "1"}:
+            config[field] = value == "1"
+    raw = env.get("CUDA_GRAPH_PRECAPTURE_BUCKETS", "").strip()
+    if raw:
+        buckets = []
+        for item in raw.split(","):
+            try:
+                bucket = int(item.strip())
+            except ValueError:
+                continue
+            if bucket > 0 and bucket not in buckets:
+                buckets.append(bucket)
+        if not buckets:
+            raise ValueError("CUDA_GRAPH_PRECAPTURE_BUCKETS needs positive integer buckets")
+        config["buckets"] = buckets
+    return config
+
+
+def resolve_cuda_graph_request(requested, *, default: bool, available: bool,
+                               static_kv: bool) -> bool:
+    """None inherits the instance; explicit choices still require CUDA/static KV."""
+    if requested is not None and not isinstance(requested, bool):
+        raise TypeError("enable_cuda_graph must be None, True or False")
+    preference = default if requested is None else requested
+    return bool(preference and available and static_kv)
 
 
 def list_cuda_graph_presets() -> List[str]:

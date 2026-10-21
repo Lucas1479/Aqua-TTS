@@ -367,6 +367,14 @@ for sr, chunk, text in tts.infer_stream(
 | `lazy` | 否 | 即时生成 | 较低内存，TTFP 较慢 |
 | `off` | 禁用 | 无 | 仅静态 KV，无图 |
 
+`infer()` 和 `infer_stream()` 省略 `enable_cuda_graph` 或传入 `None` 时继承实例配置。
+显式 `False` 关闭本次 replay；`True` 在 NVIDIA CUDA 与静态 KV 可用时开启，包括
+在 `off` 实例上按需捕获。`enable_static_kv=False` 始终关闭 Graph。
+`ENABLE_CUDA_GRAPH=0/1` 在构造时覆盖 preset；`ENABLE_CUDA_GRAPH_PRECAPTURE`
+和 `CUDA_GRAPH_PRECAPTURE_BUCKETS` 只覆盖启动捕获。构造后修改环境变量不改变该实例。
+请求完成后可查看 `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]`
+确认实际执行；捕获成功不等于已 replay。
+
 **自适应 FlashAttention2 T2S 路径**（兼容时自动优先）：
 
 Aqua-TTS 可以用 `flash_attn_with_kvcache` 替换 q_len=1 的 T2S 静态 KV attention 步骤。`valid` 模式按真实 KV 长度参与注意力，而不是读取完整零填充 bucket；现在只要能导入兼容的 FlashAttention2 就默认使用。如果 FA2 不存在，或者内核拒绝当前 shape/device，Aqua 会回退到 SDPA。
