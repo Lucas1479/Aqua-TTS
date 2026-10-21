@@ -4,6 +4,9 @@
 
 ### Added
 
+- Lazy Chinese BERT loading with `preload_bert=True` / `preload_bert_model()`,
+  observable readiness and load duration, concurrent first-use protection and retry.
+- AP-BWE imports and model construction are deferred to super-resolution requests.
 - One CUDA Graph per computation bucket, shared across real prefix lengths.
 - Optional `kv_cache_layout="nested"` shares a maximum KV root across short
   bucket views; the default `bucket` layout retains independent bucket storage.

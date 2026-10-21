@@ -19,6 +19,16 @@ Text → BERT → T2S AR Decoder → Speech Tokens → SoVITS CFM → Mel Spec �
          Static KV + CUDA Graph                               Pre-compiled .pyd cache
 ```
 
+## Optional model lifecycle
+
+The BERT tokenizer/model begin unset. Chinese feature extraction enters a
+double-checked per-instance lock and builds both components locally, including
+dtype/device conversion and eval mode, before publishing them together. Failed
+loads leave the state unset and can retry. Explicit preload uses the same entry.
+The language frontend selects Chinese segments for both target and reference text;
+English/Japanese zero BERT features do not invoke the loader. AP-BWE import and
+construction similarly happen only at the requested super-resolution boundary.
+
 ## Static KV Cache
 
 ### Problem

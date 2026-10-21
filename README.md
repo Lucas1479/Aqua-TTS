@@ -175,8 +175,8 @@ and `GPT_SoVITS/eres2net/` (validated against `08d627c`). If `sv_model_path` is
 omitted, Aqua uses `GPT_SOVITS_HOME/GPT_SoVITS/pretrained_models/sv/`
 `pretrained_eres2netv2w24s4ep4.ckpt`. The speaker weight remains external; Aqua
 loads it only for Pro/Plus. Plain v2 does not need it. V2-family inference does
-not load a v3 base model or BigVGAN. Existing BERT, CNHuBERT, and text frontend
-assets are still required.
+not load a v3 base model or BigVGAN. CNHuBERT and the relevant text frontend
+assets are required; BERT assets are needed when Chinese features are requested.
 
 Both `infer()` and `infer_stream()` accept these models. The main reference's
 speaker embedding is cached per session; additional references receive matched
@@ -194,6 +194,19 @@ failures propagate instead of being replaced with a silent audio block.
 
 See [the model validation report](benchmarks/results/v2-model-support.md) for
 exact tested weights and limits. This change adds no MPS or ROCm support.
+
+### Optional model loading
+
+BERT is lazy by default: the first Chinese target or reference segment loads its
+tokenizer and model. English/Japanese-only targets **and references** leave BERT
+unloaded. Mixed-language input loads it if the frontend produces a Chinese segment.
+The first Chinese request pays the loading cost. Set `preload_bert=True` in the
+constructor, or call `tts.preload_bert_model()` during application preparation.
+`tts.bert_loaded` and `tts.bert_load_seconds` expose the current state and the first
+successful load duration. Concurrent first use loads once; a failed load can retry.
+
+AP-BWE's module and model load only when super-resolution is requested. Missing
+optional dependencies or weights retain the existing audio fallback and warning.
 
 ## Supported Languages
 
