@@ -330,3 +330,23 @@ python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup def
 python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup custom --output F:/local/custom.json
 python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup off --kernel pytorch --graph-preset off --output F:/local/off.json
 ```
+
+### CFM unpadded experiment
+
+`cfm_unpadded_bench.py` compares the original masked estimator with the instance
+adapter using identical weights, inputs and seeded noise. It records baseline
+repeat error before candidate measurement, mel/PCM errors against fixed bounds,
+and three alternating timing samples after warmup. The matrix covers FP16/FP32,
+4/16/32 steps, CFG off/on, short tails and long references. FP32 computation uses
+the same loaded FP16 weights converted to FP32. Long-reference feature repetition
+is a numerical stress case, not an intelligible-speech fixture.
+
+It also runs three paired warmed requests for ordinary synthesis and
+0.1/0.25/0.5-second streaming, retaining samples, first nonempty/audible PCM,
+total duration and RTF. These small samples do not establish P95 or perceptual
+equivalence. Listen to the locally saved pairs separately; no voice assets are
+committed. Run GPU measurements without concurrent GPU tests.
+
+```powershell
+python benchmarks/cfm_unpadded_bench.py --config F:/local/v3.json --output F:/local/cfm
+```
