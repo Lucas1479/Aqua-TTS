@@ -559,6 +559,10 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+所有版本的在线请求都会在语义生成前传播参考准备错误，只复用完整参考缓存。
+显式可选预热仍可使用 `strict=False` 返回失败状态。V3 本地参考音频改用 SoundFile
+解码；TorchAudio 仅用于重采样，该路径无需 TorchCodec。
+
 ### 并发 CUDA 工作与 Graph 捕获
 
 Aqua 推理、流式生成器完整生命周期、构造器、参考/BERT 预加载和 vocoder 预热

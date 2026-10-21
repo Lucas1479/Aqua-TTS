@@ -30,7 +30,9 @@ class _FakeSemanticDecoder:
             if self.reported_counts is not None
             else len(tokens)
         )
-        return torch.tensor([tokens], dtype=torch.long), count
+        prompt = _args[2]
+        prefix = [] if prompt is None else prompt.reshape(-1).tolist()
+        return torch.tensor([prefix + tokens], dtype=torch.long), count
 
 
 def _inferencer(candidates, reported_counts=None):
@@ -43,13 +45,13 @@ def _inferencer(candidates, reported_counts=None):
     return inferencer, decoder
 
 
-def _call(inferencer):
+def _call(inferencer, *, prompted=True):
     return inferencer._infer_semantic_with_guard(
         text_item="うーん……正直、まだ完全には分からないわ。",
         target_phone_count=48,
         all_phoneme_ids=torch.zeros(1, 4, dtype=torch.long),
         all_phoneme_len=torch.tensor([4]),
-        prompt=torch.zeros(1, 2, dtype=torch.long),
+        prompt=torch.zeros(1, 2, dtype=torch.long) if prompted else None,
         bert=torch.zeros(1, 1024, 4),
         top_k=5,
         top_p=1.0,
@@ -102,7 +104,7 @@ def test_ref_free_zero_index_keeps_the_complete_candidate():
         good = [index % 23 for index in range(70)]
         inferencer, decoder = _inferencer([good], reported_counts=[0])
 
-        candidate, count, attempts = _call(inferencer)
+        candidate, count, attempts = _call(inferencer, prompted=False)
 
     assert attempts == 1
     assert count == len(good)
