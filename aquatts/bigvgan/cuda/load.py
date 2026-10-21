@@ -17,12 +17,9 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = ""
 
 
 def _get_tts_device_index() -> int:
-    """Parse device index from TTS_DEVICE env var, defaulting to 0."""
-    tts_device = os.environ.get("TTS_DEVICE", "cuda:0")
-    try:
-        return int(tts_device.split(":")[-1])
-    except (ValueError, IndexError):
-        return 0
+    """Use the active CUDA context selected by the model loader/caller."""
+    import torch
+    return torch.cuda.current_device() if torch.cuda.is_available() else 0
 
 
 def _sanitize_cache_token(value: str) -> str:
@@ -186,7 +183,7 @@ def load():
     srcpath = pathlib.Path(__file__).parent.absolute()
     buildpath = _get_cache_root() / f"build_{_get_gpu_cache_suffix(device_idx)}"
     _create_build_dir(buildpath)
-    print(f"[BigVGAN] CUDA kernel cache dir: {buildpath} (TTS_DEVICE=cuda:{device_idx})")
+    print(f"[BigVGAN] CUDA kernel cache dir: {buildpath} (device=cuda:{device_idx})")
 
     # Helper function to build the kernels.
     def _cpp_extention_load_helper(name, sources, extra_cuda_flags):

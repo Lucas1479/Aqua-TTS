@@ -43,27 +43,33 @@ def finalize_stream_chunk(audio, sr: int, fade_out_ms: int = 15):
     return audio
 
 
-def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False):
+def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None):
     """Load a BigVGAN model from a pretrained directory. / 从预训练目录加载 BigVGAN 模型。
 
     Args: / 参数：
         model_dir: Path to the BigVGAN pretrained model directory. / BigVGAN 预训练模型目录的路径。
         use_cuda_kernel: If True, attempt to use the fused CUDA kernel
             (requires Ninja + MSVC on Windows). / 如果为 True，尝试使用融合 CUDA kernel（在 Windows 上需要 Ninja + MSVC）。
+        device: Explicit Torch device; None selects the current CUDA device when available.
 
     Returns: / 返回值：
         BigVGAN model (eval mode, weight norm removed). / BigVGAN 模型（评估模式，已移除 weight norm）。
     """
     import torch
-    from GPT_SoVITS.BigVGAN import bigvgan
+    from contextlib import nullcontext
+    from aquatts.inference.cuda_runtime import resolve_cuda_device
 
-    model = bigvgan.BigVGAN.from_pretrained(model_dir, use_cuda_kernel=use_cuda_kernel)
-    model.remove_weight_norm()
-    model = model.eval()
-
-    if torch.cuda.is_available():
-        model = model.half().cuda()
-    else:
-        model = model.cpu()
+    resolved = resolve_cuda_device(device if device is not None else
+                                   ("cuda" if torch.cuda.is_available() else "cpu"))
+    if use_cuda_kernel and resolved.type != "cuda":
+        raise ValueError("BigVGAN CUDA kernel requires a CUDA device")
+    with torch.cuda.device(resolved) if resolved.type == "cuda" else nullcontext():
+        from GPT_SoVITS.BigVGAN import bigvgan
+        model = bigvgan.BigVGAN.from_pretrained(model_dir, use_cuda_kernel=use_cuda_kernel)
+        model.remove_weight_norm()
+        model = model.eval()
+        if resolved.type == "cuda":
+            model = model.half()
+        model = model.to(resolved)
 
     return model

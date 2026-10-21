@@ -4,6 +4,8 @@
 
 ### Added
 
+- Bounded, configurable BigVGAN warmup shapes/repeats with RNG preservation,
+  preparation status and actual request shape counts.
 - Public reference warmup, optional constructor reference lists and explicit cache
   clearing, with shared normalization, bounded residency and strict/best-effort results.
 - Reference file/model/device/dtype invalidation, atomic builds and CUDA-stream
@@ -23,6 +25,10 @@
 
 ### Fixed
 
+- Resolve unindexed CUDA against the actual current device, validate unavailable
+  indexes before model loading, and keep extension caches/calls on that device.
+- Synchronize the selected device for diagnostic timing only; ordinary complete
+  V3 stream chunks no longer force device synchronization for unused timing output.
 - Inference requests inherit the instance CUDA Graph policy by default. Preset,
   environment overrides and explicit per-request choices share one resolution
   path; `off` no longer leaves the decoder enabled.

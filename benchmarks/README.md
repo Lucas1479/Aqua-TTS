@@ -314,3 +314,19 @@ causes exactly one rebuild. Timings are single-run observations.
 python benchmarks/reference_warmup_smoke.py --config F:/local/v3.json --output F:/local/reference-v3
 python benchmarks/reference_warmup_smoke.py --config F:/local/v2Pro.json --output F:/local/reference-pro
 ```
+
+### CUDA vocoder preparation
+
+Run `vocoder_warmup_smoke.py` in fresh processes for `--warmup default`, `custom`
+or `off`; add `--kernel pytorch --graph-preset off` for the explicit fallback
+configuration. It checks real-model warmup RNG preservation, records the first
+and two subsequent calls for six mel lengths, and synthesizes 0.1/0.25/0.5-second
+and complete chunks. Request checks reject explicit device synchronization when
+diagnostic timing is off. Request timings follow synthetic shape probes and
+reference warmup, so they are not cold end-to-end measurements.
+
+```powershell
+python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup default --output F:/local/default.json
+python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup custom --output F:/local/custom.json
+python benchmarks/vocoder_warmup_smoke.py --config F:/local/v3.json --warmup off --kernel pytorch --graph-preset off --output F:/local/off.json
+```

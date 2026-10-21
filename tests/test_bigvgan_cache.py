@@ -32,6 +32,15 @@ def test_cuda_package_exports_loader_module():
     assert hasattr(cuda.load, "load")
 
 
+def test_extension_cache_uses_active_device_instead_of_unrelated_env(monkeypatch):
+    torch = pytest.importorskip("torch")
+    from aquatts.bigvgan.cuda.load import _get_tts_device_index
+    monkeypatch.setenv("TTS_DEVICE", "cuda:0")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 1)
+    assert _get_tts_device_index() == 1
+
+
 @pytest.mark.skipif(
     os.environ.get("CI") == "true",
     reason="_get_gpu_cache_suffix requires torch; tested locally",

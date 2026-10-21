@@ -238,6 +238,28 @@ rejected. A successful warmup result also reports its key, resident count and an
 evicted key. Device/dtype changes require a new inferencer when CUDA Graphs are
 captured. Omitting warmup keeps on-demand reference preparation.
 
+### CUDA device and vocoder preparation
+
+`device="cuda"` resolves the current CUDA device during construction; `cuda:N`
+selects a visible process index. Unavailable CUDA/index selections fail before
+model loading. `CUDA_VISIBLE_DEVICES` remapping is respected. BigVGAN extension
+cache selection and calls follow the selected CUDA context.
+
+BigVGAN keeps the default 40/70/128 mel-frame warmup, five calls each. Override
+`bigvgan_warmup_shapes=[9, 23, 47]` and `bigvgan_warmup_repeats=2`, or pass an empty
+shape list to disable it. Omitted arguments read `AQUATTS_BIGVGAN_WARMUP_SHAPES`
+(comma-separated; empty disables) and `AQUATTS_BIGVGAN_WARMUP_REPEATS`; explicit
+arguments win. Shapes are deduplicated and must be positive integers. Limits are
+16 distinct shapes, 4096 frames per shape, 20 repeats and 65536 total warmed frames.
+
+Warmup uses the model's dtype/device/mel channels in inference mode and preserves
+CPU and selected-device RNG state. `tts.vocoder_warmup_stats` reports completion,
+disablement or failure; failures are logged. `tts.vocoder_shape_counts` records
+actual request mel lengths. With 24 kHz V3 output, 0.1/0.25/0.5-second chunks can
+use 9/23/47 mel frames plus shorter tails, so defaults do not cover every workload.
+Normal vocoder calls add no device-wide synchronization; diagnostic timing remains
+opt-in. `load_bigvgan(..., device="cuda:N")` also accepts an explicit device.
+
 ## Supported Languages
 
 Aqua-TTS uses the selected GPT-SoVITS checkpoint's text frontend. Pass the code to `text_language` / `prompt_language` — reference audio and target text can use different languages.

@@ -6,12 +6,14 @@ import logging
 import traceback
 import inspect
 from pathlib import Path
+from contextlib import nullcontext
 from string import punctuation
 
 import torch
 import numpy as np
 from aquatts.inference.onset import LeadingSilence, leading_cut
 from aquatts.inference.workspace import resolve_kv_cache_layout
+from aquatts.inference.cuda_runtime import resolve_cuda_device, resolve_vocoder_warmup, warmup_vocoder
 from aquatts.inference.reference_cache import ReferenceCache, normalize_reference, reference_key
 from aquatts.voice_registry import Voice
 
@@ -164,7 +166,9 @@ class TTSInferencer:
                  kv_cache_layout=None,
                  preload_bert=False,
                  warmup_references=None,
-                 warmup_strict=True):
+                 warmup_strict=True,
+                 bigvgan_warmup_shapes=None,
+                 bigvgan_warmup_repeats=None):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -195,6 +199,10 @@ class TTSInferencer:
                 then auto-enable when FlashAttention2 is available.
             flash_attn_mode: "valid" (fused KV update) or "bucket" (explicit
                 scatter); both attend only the true contiguous KV prefix.
+            bigvgan_warmup_shapes: Optional positive mel lengths; [] disables warmup.
+                None reads AQUATTS_BIGVGAN_WARMUP_SHAPES (default 40,70,128).
+            bigvgan_warmup_repeats: Positive repeat count; None reads
+                AQUATTS_BIGVGAN_WARMUP_REPEATS (default 5). Explicit arguments win.
             warmup_references: Optional Voice/reference dictionaries to prepare before readiness.
                 Only supplied references are warmed; unique entries must fit the cache capacity.
             warmup_strict: Raise on warmup failure (default); False reports best-effort results.
@@ -203,6 +211,12 @@ class TTSInferencer:
             kv_cache_layout: "bucket" (independent bucket storage) or "nested"
                 (shared maximum root); None reads AQUATTS_KV_CACHE_LAYOUT once.
         """
+        self._bigvgan_warmup_shapes, self._bigvgan_warmup_repeats = resolve_vocoder_warmup(
+            bigvgan_warmup_shapes, bigvgan_warmup_repeats)
+        self.vocoder_warmup_stats = {"status": "not_applicable"}
+        self.vocoder_shape_counts = {}
+        self.bigvgan_kernel_mode = None
+        self.bigvgan_kernel_fallback_reason = None
         self.tokenizer = None
         self.bert_model = None
         self.bert_load_seconds = None
@@ -224,19 +238,9 @@ class TTSInferencer:
         try:
             # 确定模型路径
             base_dir = _gpt_sovits_home() or _PACKAGE_DIR
-            self.device = device
-            device_name = str(device).lower()
-            self.is_half = torch.cuda.is_available() and device_name.startswith("cuda")
-
-            # CUDA device index — used to set the current CUDA device before custom
-            # CUDA kernel calls (BigVGAN's fused anti-alias activation), which rely on
-            # at::cuda::getCurrentCUDAStream() internally.  Without explicitly setting
-            # the device, that function defaults to device 0 even when all tensors live
-            # on a different device, causing CUDNN_STATUS_MAPPING_ERROR.
-            try:
-                self._tts_device_idx = int(device_name.split(":")[-1])
-            except (ValueError, IndexError):
-                self._tts_device_idx = 0
+            self.device = resolve_cuda_device(device)
+            self.is_half = self.device.type == "cuda"
+            self._tts_device_idx = self.device.index if self.is_half else None
 
             # 默认模型路径
             default_gpt_path = os.path.join(base_dir, "GPT_weights_v3", "xxx-e15.ckpt")
@@ -336,7 +340,7 @@ class TTSInferencer:
     def _sync_t2s_timing(self):
         if self.is_half and str(self.device).lower().startswith("cuda") and torch.cuda.is_available():
             with torch.cuda.device(self._tts_device_idx):
-                torch.cuda.synchronize()
+                torch.cuda.synchronize(self.device)
 
     def _record_t2s_stat(self, text_item: str, tokens: int, elapsed_sec: float):
         rate = float(tokens) / elapsed_sec if elapsed_sec > 0 else 0.0
@@ -600,30 +604,19 @@ class TTSInferencer:
         logger.info("[Aqua] patched upstream GPT-SoVITS decoder: %s", source)
 
     def _warmup_bigvgan_shapes(self):
-        """Warm BigVGAN + cuDNN for common streaming chunk mel_T sizes.
+        self.vocoder_warmup_stats = warmup_vocoder(
+            self.bigvgan_model, self._bigvgan_warmup_shapes, self._bigvgan_warmup_repeats)
+        if self.vocoder_warmup_stats["status"] == "failed":
+            logger.warning("BigVGAN warmup failed: %s", self.vocoder_warmup_stats["error"])
+        else:
+            logger.info("BigVGAN warmup: %s", self.vocoder_warmup_stats)
 
-        Without this, the first real inference pays cuDNN autotune cost
-        (~30-60ms per new shape).  A few warmup forward passes at common
-        chunk sizes (mel_T ≈ 40, 70, 128) settle the autotune cache so that
-        the first real stream chunk hits a warm kernel.
-        """
-        if self.bigvgan_model is None or str(self.device) == "cpu":
-            return
-        try:
-            model = self.bigvgan_model
-            dtype = next(model.parameters()).dtype
-            device = next(model.parameters()).device
-            num_mels = model.h.num_mels
-            warmup_sizes = [40, 70, 128]
-            logger.info(f"[warmup] BigVGAN shape warmup: mel_T={warmup_sizes}")
-            for mel_t in warmup_sizes:
-                mel = torch.randn(1, num_mels, mel_t, device=device, dtype=dtype)
-                for _ in range(5):
-                    _ = model(mel)
-                torch.cuda.synchronize()
-            logger.info("[warmup] BigVGAN shape warmup complete")
-        except Exception:
-            pass  # warmup is best-effort; never block startup
+    def _run_bigvgan(self, mel):
+        frames = int(mel.shape[-1])
+        self.vocoder_shape_counts[frames] = self.vocoder_shape_counts.get(frames, 0) + 1
+        context = torch.cuda.device(mel.device) if mel.is_cuda else nullcontext()
+        with context, torch.inference_mode():
+            return self.bigvgan_model(mel)
 
     def _maybe_enable_flash_attn_t2s(self):
         """Prefer FlashAttention2 KV-cache decoding before graph capture."""
@@ -856,50 +849,43 @@ class TTSInferencer:
                 _get_gpu_cache_suffix,
             )
 
-            # Use the device index that was resolved at __init__ time.
-            _tts_device_idx = self._tts_device_idx
-            _cache_suffix = _get_gpu_cache_suffix(_tts_device_idx)
-            _cuda_pyd = (
-                _get_cache_root()
-                / f"build_{_cache_suffix}"
-                / "anti_alias_activation_cuda.pyd"
-            )
             _use_cuda_kernel = False
-            if _cuda_pyd.exists():
-                _use_cuda_kernel = True
-                logger.info("[BigVGAN] 检测到已编译 CUDA kernel 缓存，直接加载")
-            else:
-                try:
-                    import subprocess as _sp
-                    _nvcc = _sp.run(["nvcc", "--version"], capture_output=True, timeout=5)
-                    if _nvcc.returncode == 0:
-                        _use_cuda_kernel = True
-                        logger.info("[BigVGAN] nvcc 可用，尝试编译 CUDA kernel 加速")
-                except Exception:
-                    logger.info("[BigVGAN] nvcc 不可用，使用 PyTorch 实现")
-
             kernel_override = os.environ.get("BIGVGAN_USE_CUDA_KERNEL", "").strip().lower()
-            if kernel_override in {"0", "false", "off", "no"}:
-                _use_cuda_kernel = False
-                logger.info("[BigVGAN] BIGVGAN_USE_CUDA_KERNEL=0, forcing PyTorch path")
-            elif kernel_override in {"1", "true", "on", "yes"}:
-                _use_cuda_kernel = True
-                logger.info("[BigVGAN] BIGVGAN_USE_CUDA_KERNEL=1, forcing CUDA kernel path")
+            if self.device.type == "cuda" and kernel_override not in {"0", "false", "off", "no"}:
+                if kernel_override in {"1", "true", "on", "yes"}:
+                    _use_cuda_kernel = True
+                else:
+                    cache_binary = (_get_cache_root()
+                                    / f"build_{_get_gpu_cache_suffix(self._tts_device_idx)}"
+                                    / "anti_alias_activation_cuda.pyd")
+                    if cache_binary.exists():
+                        _use_cuda_kernel = True
+                        logger.info("[BigVGAN] Loading cached CUDA kernel")
+                    else:
+                        try:
+                            import subprocess
+                            probe = subprocess.run(["nvcc", "--version"], capture_output=True, timeout=5)
+                            _use_cuda_kernel = probe.returncode == 0
+                        except (OSError, subprocess.TimeoutExpired):
+                            logger.info("[BigVGAN] nvcc unavailable; using PyTorch")
 
             # activation1d.py 在首次 import 时执行模块级 load.load()，
             # 若此时无设备上下文则 CUDA kernel 内部状态绑定到 cuda:0，
             # 之后模型移到 cuda:1 会触发 CUDNN_STATUS_MAPPING_ERROR。
             # 用 torch.cuda.device() 确保 kernel 初始化在正确设备上进行。
             try:
-                with torch.cuda.device(_tts_device_idx):
+                with torch.cuda.device(self.device) if self.is_half else nullcontext():
                     self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=_use_cuda_kernel)
             except Exception as _kernel_err:
                 if _use_cuda_kernel:
+                    self.bigvgan_kernel_fallback_reason = str(_kernel_err)
+                    _use_cuda_kernel = False
                     logger.warning(f"[BigVGAN] CUDA kernel 编译失败，回退到 PyTorch 实现: {_kernel_err}")
-                    with torch.cuda.device(_tts_device_idx):
+                    with torch.cuda.device(self.device) if self.is_half else nullcontext():
                         self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=False)
                 else:
                     raise
+            self.bigvgan_kernel_mode = "cuda" if _use_cuda_kernel else "pytorch"
             self.bigvgan_model.remove_weight_norm()
             self.bigvgan_model = self.bigvgan_model.eval()
 
@@ -1633,10 +1619,8 @@ class TTSInferencer:
                         # torch.cuda.device() ensures at::cuda::getCurrentCUDAStream()
                         # inside the fused CUDA kernel uses the correct device stream,
                         # preventing CUDNN_STATUS_MAPPING_ERROR on non-default GPUs.
-                        with torch.cuda.device(self._tts_device_idx):
-                            with torch.inference_mode():
-                                wav_gen = self.bigvgan_model(cmf_res)
-                                audio = wav_gen[0][0]
+                        wav_gen = self._run_bigvgan(cmf_res)
+                        audio = wav_gen[0][0]
 
                         # Prevent audio clipping
                         # 防止爆音
@@ -2075,8 +2059,8 @@ class TTSInferencer:
                                 sample_steps,
                                 inference_cfg_rate=0
                             )
-                            if self._stream_sync_timing_enabled and str(self.device) != "cpu":
-                                torch.cuda.synchronize()
+                            if self._stream_sync_timing_enabled and self.device.type == "cuda":
+                                torch.cuda.synchronize(self.device)
                             _t_cfm_chunk = (
                                 time.perf_counter() - _t0
                                 if self._stream_sync_timing_enabled
@@ -2094,12 +2078,10 @@ class TTSInferencer:
                                 is_last_stream_chunk = idx >= total_todo_frames
                                 chunk_mel = _denormalize_v3_spec(cfm_res)
                                 _t1 = time.perf_counter()
-                                with torch.cuda.device(self._tts_device_idx):
-                                    with torch.inference_mode():
-                                        wav_gen = self.bigvgan_model(chunk_mel)
-                                        audio = wav_gen[0][0]
-                                if self._stream_sync_timing_enabled and str(self.device) != "cpu":
-                                    torch.cuda.synchronize()
+                                wav_gen = self._run_bigvgan(chunk_mel)
+                                audio = wav_gen[0][0]
+                                if self._stream_sync_timing_enabled and self.device.type == "cuda":
+                                    torch.cuda.synchronize(self.device)
                                 if self._stream_sync_timing_enabled:
                                     logger.info(
                                         "[v3-stream] chunk=%s cfm=%.1fms bigvgan=%.1fms mel_T=%s"
@@ -2144,20 +2126,18 @@ class TTSInferencer:
 
                             # Drain prior async CFM work before timing BigVGAN,
                             # otherwise the synchronize below would count CFM+BigVGAN together.
-                            if str(self.device) != "cpu":
-                                torch.cuda.synchronize()
+                            if self._stream_sync_timing_enabled and self.device.type == "cuda":
+                                torch.cuda.synchronize(self.device)
                             _t1 = time.perf_counter()
-                            with torch.cuda.device(self._tts_device_idx):
-                                with torch.inference_mode():
-                                    wav_gen = self.bigvgan_model(cmf_res)
-                                    audio = wav_gen[0][0]
-                            if str(self.device) != "cpu":
-                                torch.cuda.synchronize()
+                            wav_gen = self._run_bigvgan(cmf_res)
+                            audio = wav_gen[0][0]
+                            if self._stream_sync_timing_enabled and self.device.type == "cuda":
+                                torch.cuda.synchronize(self.device)
                             _bigvgan_ms = (time.perf_counter() - _t1) * 1000.0
                             _cfm_ms = _t_cfm_total * 1000.0 if self._stream_sync_timing_enabled else 0.0
-                            print("[sovits-timing] cfm=%.1fms  bigvgan=%.1fms  mel_T=%s" % (
-                                _cfm_ms, _bigvgan_ms, cmf_res.shape[2],
-                            ))
+                            if self._stream_sync_timing_enabled:
+                                logger.info("[sovits-timing] cfm=%.1fms bigvgan=%.1fms mel_T=%s",
+                                            _cfm_ms, _bigvgan_ms, cmf_res.shape[2])
 
                             # Prevent clipping / 防止爆音
                             max_audio = torch.abs(audio).max()
