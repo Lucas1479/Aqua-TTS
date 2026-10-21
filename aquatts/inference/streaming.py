@@ -43,7 +43,7 @@ def finalize_stream_chunk(audio, sr: int, fade_out_ms: int = 15):
     return audio
 
 
-def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None):
+def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None, offline_only=False):
     """Load a BigVGAN model from a pretrained directory. / 从预训练目录加载 BigVGAN 模型。
 
     Args: / 参数：
@@ -51,6 +51,7 @@ def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None):
         use_cuda_kernel: If True, attempt to use the fused CUDA kernel
             (requires Ninja + MSVC on Windows). / 如果为 True，尝试使用融合 CUDA kernel（在 Windows 上需要 Ninja + MSVC）。
         device: Explicit Torch device; None selects the current CUDA device when available.
+        offline_only: Require a local config and generator, with local_files_only=True.
 
     Returns: / 返回值：
         BigVGAN model (eval mode, weight norm removed). / BigVGAN 模型（评估模式，已移除 weight norm）。
@@ -58,6 +59,14 @@ def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None):
     import torch
     from contextlib import nullcontext
     from aquatts.inference.cuda_runtime import resolve_cuda_device
+    from aquatts.inference.offline import require_files
+
+    if not isinstance(offline_only, bool):
+        raise TypeError("offline_only must be a bool")
+    options = {}
+    if offline_only:
+        require_files("BigVGAN", model_dir, ["config.json", "bigvgan_generator.pt"])
+        options["local_files_only"] = True
 
     resolved = resolve_cuda_device(device if device is not None else
                                    ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -65,7 +74,7 @@ def load_bigvgan(model_dir: str, use_cuda_kernel: bool = False, *, device=None):
         raise ValueError("BigVGAN CUDA kernel requires a CUDA device")
     with torch.cuda.device(resolved) if resolved.type == "cuda" else nullcontext():
         from GPT_SoVITS.BigVGAN import bigvgan
-        model = bigvgan.BigVGAN.from_pretrained(model_dir, use_cuda_kernel=use_cuda_kernel)
+        model = bigvgan.BigVGAN.from_pretrained(model_dir, use_cuda_kernel=use_cuda_kernel, **options)
         model.remove_weight_norm()
         model = model.eval()
         if resolved.type == "cuda":

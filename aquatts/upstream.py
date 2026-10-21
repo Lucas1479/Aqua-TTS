@@ -58,6 +58,12 @@ def configure_gpt_sovits(
     directory. Call this before importing :class:`aquatts.TTSInferencer`.
     Aqua's small BigVGAN bridge remains first on ``sys.path`` while the T2S
     model itself is loaded from the selected upstream checkout.
+
+    Configure process-level frontend resources before their first import:
+    G2PW uses cwd-relative GPT_SoVITS/text/G2PWModel and the upstream bert_path
+    environment variable; OpenJTalk and NLTK use their own resource paths.
+    TTSInferencer(offline_only=True) checks those resources before first use,
+    but does not change these paths or install a process-wide network policy.
     """
 
     raw = str(home or os.environ.get("GPT_SOVITS_HOME", "")).strip()

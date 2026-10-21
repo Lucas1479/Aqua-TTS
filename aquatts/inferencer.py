@@ -15,6 +15,7 @@ from aquatts.inference.onset import LeadingSilence, leading_cut
 from aquatts.inference.workspace import resolve_kv_cache_layout
 from aquatts.inference.cuda_runtime import resolve_cuda_device, resolve_vocoder_warmup, warmup_vocoder
 from aquatts.inference.reference_cache import ReferenceCache, normalize_reference, reference_key
+from aquatts.inference.offline import check_frontend, require_checkpoint, require_files, require_transformer
 from aquatts.voice_registry import Voice
 
 from aquatts.inference.checkpoints import PRO_MODELS, detect_sovits_version
@@ -168,7 +169,8 @@ class TTSInferencer:
                  warmup_references=None,
                  warmup_strict=True,
                  bigvgan_warmup_shapes=None,
-                 bigvgan_warmup_repeats=None):
+                 bigvgan_warmup_repeats=None,
+                 offline_only=False):
         """
         Initialize the TTS inferencer.
         初始化TTS推理器
@@ -208,9 +210,15 @@ class TTSInferencer:
             warmup_strict: Raise on warmup failure (default); False reports best-effort results.
             preload_bert: Load Chinese BERT during construction instead of first use.
                 English/Japanese-only requests otherwise leave BERT unloaded.
+            offline_only: Require local model resources without changing global Hub policy.
+                Frontend checks cover en/ja/zh with the documented upstream resource layout.
             kv_cache_layout: "bucket" (independent bucket storage) or "nested"
                 (shared maximum root); None reads AQUATTS_KV_CACHE_LAYOUT once.
         """
+        if not isinstance(offline_only, bool):
+            raise TypeError("offline_only must be a bool")
+        self.offline_only = offline_only
+        self._segmenter = None
         self._bigvgan_warmup_shapes, self._bigvgan_warmup_repeats = resolve_vocoder_warmup(
             bigvgan_warmup_shapes, bigvgan_warmup_repeats)
         self.vocoder_warmup_stats = {"status": "not_applicable"}
@@ -287,6 +295,9 @@ class TTSInferencer:
                     logger.warning(f"必要文件不存在: {path} ({desc})，请确保路径正确")
 
             self._configure_fast_langdetect()
+            if self.offline_only:
+                require_checkpoint("GPT", self.gpt_path)
+                require_checkpoint("SoVITS", self.sovits_path)
 
             # 初始化国际化
             self.i18n = I18nAuto(language=language)
@@ -315,14 +326,23 @@ class TTSInferencer:
             raise
 
     def _configure_fast_langdetect(self):
-        """Point upstream LangSegmenter at the caller-owned model cache."""
+        """Bind this instance to its cache without changing the global detector."""
 
         import fast_langdetect
 
         infer = fast_langdetect.infer
-        infer._default_detector = infer.LangDetector(
-            infer.LangDetectConfig(cache_dir=Path(self.fast_langdetect_path))
-        )
+        from aquatts.inference.language_detector import bind_segmenter
+        config = {"cache_dir": Path(self.fast_langdetect_path)}
+        if self.offline_only:
+            root = require_files("fast-langdetect", self.fast_langdetect_path, ["lid.176.bin"])
+            # custom_model_path is a supported local-only API: even a later
+            # deletion fails locally rather than entering load_with_download.
+            config["custom_model_path"] = str(root / "lid.176.bin")
+        self._language_detector = infer.LangDetector(infer.LangDetectConfig(**config))
+        self._segmenter = bind_segmenter(LangSegmenter.getTexts, self._language_detector)
+
+    def _segment_text(self, text):
+        return (getattr(self, "_segmenter", None) or LangSegmenter.getTexts)(text)
 
     def _get_effective_max_sec(self, override_value):
         """Compute the effective max duration (seconds) for current inference.
@@ -522,8 +542,12 @@ class TTSInferencer:
 
         started = time.perf_counter()
         logger.info("加载BERT模型: %s", self.bert_path)
-        tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
-        model = AutoModelForMaskedLM.from_pretrained(self.bert_path)
+        options = {}
+        if getattr(self, "offline_only", False):
+            require_transformer("BERT", self.bert_path, tokenizer=True)
+            options["local_files_only"] = True
+        tokenizer = AutoTokenizer.from_pretrained(self.bert_path, **options)
+        model = AutoModelForMaskedLM.from_pretrained(self.bert_path, **options)
         if self.is_half:
             model = model.half()
         model = model.to(self.device).eval()
@@ -537,8 +561,9 @@ class TTSInferencer:
 
 
         logger.info(f"加载CNHubert模型: {self.cnhubert_path}")
-        cnhubert.cnhubert_base_path = self.cnhubert_path
-        self.ssl_model = cnhubert.get_model()
+        if getattr(self, "offline_only", False):
+            require_transformer("CNHuBERT", self.cnhubert_path, processor=True)
+        self.ssl_model = cnhubert.CNHubert(self.cnhubert_path).eval()
 
         if self.is_half:
             self.ssl_model = self.ssl_model.half().to(self.device)
@@ -797,6 +822,8 @@ class TTSInferencer:
                     )
         else:
             # 加载预训练模型和LoRA权重
+            if getattr(self, "offline_only", False):
+                require_checkpoint("SoVITS V3 base", self.sovits_pretrain_path)
             if not os.path.exists(self.sovits_pretrain_path):
                 raise FileNotFoundError(f"SoVITS V3底模不存在: {self.sovits_pretrain_path}")
 
@@ -824,6 +851,8 @@ class TTSInferencer:
         if self.is_v2pro:
             from aquatts.inference.speaker import SpeakerEncoder
 
+            if getattr(self, "offline_only", False):
+                require_checkpoint("Pro speaker encoder", self.sv_model_path)
             self.sv_model = SpeakerEncoder(self.sv_model_path, self.device, self.is_half)
         if hasattr(self, "_reference_cache"):
             self.clear_reference_cache()
@@ -840,6 +869,10 @@ class TTSInferencer:
 
             bigvgan_path = self.bigvgan_path
             logger.info(f"加载BigVGAN模型: {bigvgan_path}")
+            options = {}
+            if getattr(self, "offline_only", False):
+                require_files("BigVGAN", bigvgan_path, ["config.json", "bigvgan_generator.pt"])
+                options["local_files_only"] = True
 
             # use_cuda_kernel=True：编译 anti-aliased activation 的融合 CUDA kernel，
             # 减少内存读写，对 CUDA Graph 之后的 L2 cache miss 不敏感。
@@ -875,14 +908,14 @@ class TTSInferencer:
             # 用 torch.cuda.device() 确保 kernel 初始化在正确设备上进行。
             try:
                 with torch.cuda.device(self.device) if self.is_half else nullcontext():
-                    self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=_use_cuda_kernel)
+                    self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=_use_cuda_kernel, **options)
             except Exception as _kernel_err:
                 if _use_cuda_kernel:
                     self.bigvgan_kernel_fallback_reason = str(_kernel_err)
                     _use_cuda_kernel = False
                     logger.warning(f"[BigVGAN] CUDA kernel 编译失败，回退到 PyTorch 实现: {_kernel_err}")
                     with torch.cuda.device(self.device) if self.is_half else nullcontext():
-                        self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=False)
+                        self.bigvgan_model = bigvgan.BigVGAN.from_pretrained(bigvgan_path, use_cuda_kernel=False, **options)
                 else:
                     raise
             self.bigvgan_kernel_mode = "cuda" if _use_cuda_kernel else "pytorch"
@@ -1171,17 +1204,17 @@ class TTSInferencer:
 
             # 处理多语言混合
             if language == "auto":
-                for tmp in LangSegmenter.getTexts(text):
+                for tmp in self._segment_text(text):
                     langlist.append(tmp["lang"])
                     textlist.append(tmp["text"])
             elif language == "auto_yue":
-                for tmp in LangSegmenter.getTexts(text):
+                for tmp in self._segment_text(text):
                     if tmp["lang"] == "zh":
                         tmp["lang"] = "yue"
                     langlist.append(tmp["lang"])
                     textlist.append(tmp["text"])
             else:
-                for tmp in LangSegmenter.getTexts(text):
+                for tmp in self._segment_text(text):
                     if tmp["lang"] == "en":
                         langlist.append(tmp["lang"])
                     else:
@@ -1221,6 +1254,8 @@ class TTSInferencer:
         """Clean text and convert to phoneme sequence.
         清理文本并转换为音素"""
         language = language.replace("all_", "")
+        if getattr(self, "offline_only", False):
+            check_frontend(language, self.sovits_version)
         phones, word2ph, norm_text = clean_text(text, language, self.sovits_version)
         phones = cleaned_text_to_sequence(phones, self.sovits_version)
         return phones, word2ph, norm_text
@@ -1244,6 +1279,8 @@ class TTSInferencer:
             return self.sr_model
         with self._sr_load_lock:
             if self.sr_model is None:
+                if getattr(self, "offline_only", False):
+                    require_files("AP-BWE", "AP_BWE_main/24kto48k", ["config.json", "g_24kto48k.zip"])
                 from tools.audio_sr import AP_BWE
                 self.sr_model = AP_BWE(self.device, DictToAttrRecursive)
         return self.sr_model

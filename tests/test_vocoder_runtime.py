@@ -78,13 +78,18 @@ def test_regular_vocoder_call_counts_shapes_without_synchronize(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA required")
-def test_kernel_failure_falls_back_on_selected_device(monkeypatch):
+@pytest.mark.parametrize("offline", [False, True])
+def test_kernel_failure_falls_back_on_selected_device(monkeypatch, tmp_path, offline):
     value = module.TTSInferencer.__new__(module.TTSInferencer)
     value.device, value._tts_device_idx, value.is_half = torch.device("cuda:0"), 0, True
-    value.model_version, value.bigvgan_path = "v3", "unused"
+    value.model_version, value.bigvgan_path = "v3", str(tmp_path)
+    value.offline_only = offline
+    for name in ("config.json", "bigvgan_generator.pt"):
+        (tmp_path / name).touch()
     value._bigvgan_warmup_shapes, value._bigvgan_warmup_repeats = (), 1
     calls = []
-    def load(_path, *, use_cuda_kernel):
+    def load(_path, *, use_cuda_kernel, **options):
+        assert options == ({"local_files_only": True} if offline else {})
         calls.append((use_cuda_kernel, torch.cuda.current_device()))
         if use_cuda_kernel:
             raise RuntimeError("injected compiler failure")
@@ -99,12 +104,16 @@ def test_kernel_failure_falls_back_on_selected_device(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA required")
-def test_auxiliary_loader_uses_explicit_selected_device(monkeypatch):
+@pytest.mark.parametrize("offline", [False, True])
+def test_auxiliary_loader_uses_explicit_selected_device(monkeypatch, tmp_path, offline):
     from aquatts.inference.streaming import load_bigvgan
     calls = []
-    def load(_path, *, use_cuda_kernel):
+    for name in ("config.json", "bigvgan_generator.pt"):
+        (tmp_path / name).touch()
+    def load(_path, *, use_cuda_kernel, **options):
+        assert options == ({"local_files_only": True} if offline else {})
         calls.append(torch.cuda.current_device())
         return TinyVocoder()
     monkeypatch.setattr(module.bigvgan.BigVGAN, "from_pretrained", load)
-    model = load_bigvgan("unused", device="cuda:0")
+    model = load_bigvgan(str(tmp_path), device="cuda:0", offline_only=offline)
     assert calls == [0] and next(model.parameters()).device == torch.device("cuda:0")

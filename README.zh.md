@@ -559,6 +559,42 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### 本地资源与离线模型加载
+
+构造时传 `offline_only=True`，或在 `examples/basic_usage.py` 中使用
+`--offline-only`，要求资源事先安装到本地；默认值为 `False`。
+BERT 和两个 BigVGAN 加载器会传 `local_files_only=True`；CNHuBERT 上游已使用
+本地加载。缺文件错误给出组件和预期目录。BERT 仍在首次中文使用或显式
+`preload_bert_model()` 时才检查。语言识别使用各实例独立的 detector，以及
+`fast_langdetect_path/lid.176.bin`，离线实例不会回退下载。在线实例保留原有
+下载行为，不共享另一实例的 detector。
+
+前端资源需在首次导入前准备：
+
+- 英文：NLTK 的 `cmudict`、`averaged_perceptron_tagger` zip 资源；NLTK 3.9+
+  还需要 `averaged_perceptron_tagger_eng`。
+- 日文：`OPEN_JTALK_DICT_DIR` 指向完整词典，须在导入 pyopenjtalk 前设置；
+  也可使用包内已安装的默认词典。
+- 中文：上游 G2PW 仍读取相对进程工作目录的 `GPT_SoVITS/text/G2PWModel`，
+  其中需有 config、字符表、发音 JSON 和 `g2pW.onnx`/`g2pw.onnx`。
+  它的 tokenizer 使用上游 `bert_path` 环境变量（须在导入 `text.chinese2`
+  前设置），默认是 `GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large`。
+  这与构造参数 `bert_path` 是两个入口，都必须指向本地资源。进程启动时配置好
+  资源布局；Aqua 推理期间不会切换 cwd。
+- 可选 AP-BWE：工作目录下的 `AP_BWE_main/24kto48k/{config.json,g_24kto48k.zip}`。
+  缺组件时保留既有不执行超分的回退行为。
+
+本轮检查边界覆盖英、日、中及其混合，离线韩语/粤语请求会明确拒绝。这是模型资源
+约束，不是网络沙箱；不会设置 Hub 环境开关或修改 Hub 私有状态，可在 Hub/Transformers
+已导入后使用。上游 LangSegmenter 首次导入仍会设置其进程默认 detector；应先初始化
+该上游模块，再初始化其他使用它全局默认值的调用方，或使用显式 detector 实例。
+此后每个 Aqua 构造器绑定私有函数，不改写上游函数和全局默认值。已核对上游
+`08d627c`、fast-langdetect 1.0.1、split-lang 2.1.1、g2p-en 2.1.0、pyopenjtalk
+0.4.1；分词接口不兼容时在构造阶段报错。
+
+`benchmarks/optional_models_smoke.py --offline-only --config ... --output ...
+--frontend-cwd ...` 会在独立进程拦截网络连接，使用本地真实权重测试英日中和混合推理。
+
 ## 配置
 
 | 环境变量 | 默认值 | 说明 |
