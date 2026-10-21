@@ -959,7 +959,7 @@ class TTSInferencer:
     def _init_reference_cache(self):
         self._reference_generation = 0
         self._reference_state_lock = threading.RLock()
-        self._sovits_decode_lock = threading.RLock()
+        self._sovits_decode_lock = threading.Lock()
         self._reference_cache = ReferenceCache(
             int(os.environ.get("AQUA_SESSION_CACHE_MAX", "8")),
             record_ready=self._record_reference_ready, wait_ready=self._wait_reference_ready)
@@ -2076,7 +2076,7 @@ class TTSInferencer:
                     # v3模型解码（串行化 — CFM/BigVGAN 共享 GPU 资源）
                     import torchaudio
 
-                    with self._sovits_decode_lock:
+                    def decode_chunks():
                         refer = sess.get("refer_spec")
                         if refer is None:
                             refer = self.get_spepc(ref_audio_path).to(self.device)
@@ -2267,6 +2267,9 @@ class TTSInferencer:
                         if hasattr(pause_chunk, 'dtype') and 'float16' in str(pause_chunk.dtype):
                             pause_chunk = pause_chunk.astype(np.float32)
                         yield sr, pause_chunk, ""  # No text for pause / 停顿不需要文本
+
+                    from aquatts.inference.streaming import locked_chunks
+                    yield from locked_chunks(decode_chunks(), self._sovits_decode_lock)
 
         except Exception as e:
             logger.error(f"流式推理失败: {str(e)}")

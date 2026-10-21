@@ -63,6 +63,22 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
     from fastapi.responses import Response, StreamingResponse
     from pydantic import BaseModel
 
+    class ClosingStreamingResponse(StreamingResponse):
+        def __init__(self, *args, close, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._close = close
+
+        async def __call__(self, scope, receive, send):
+            import anyio
+            from starlette.concurrency import run_in_threadpool
+            try:
+                await super().__call__(scope, receive, send)
+            finally:
+                # BackgroundTask is not run on every disconnect/error path.
+                # close may run on a different worker than the last next().
+                with anyio.CancelScope(shield=True):
+                    await run_in_threadpool(self._close)
+
     if voice_registry is None:
         voice_registry = registry_from_env()
 
@@ -205,9 +221,9 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
             raise HTTPException(400, "ref_audio_path or voice is required")
 
         from starlette.concurrency import run_in_threadpool
-        from starlette.background import BackgroundTask
+        from aquatts.inference.streaming import SerializedIterator
 
-        stream = iter(inferencer.infer_stream(
+        stream = SerializedIterator(inferencer.infer_stream(
             text=text,
             ref_audio_path=resolved_path,
             prompt_text=resolved_prompt_text,
@@ -246,7 +262,7 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
             finally:
                 stream.close()
 
-        return StreamingResponse(
+        return ClosingStreamingResponse(
             _generate(),
             media_type="application/octet-stream",
             headers={
@@ -254,7 +270,7 @@ def _create_app(inferencer, voice_registry=None, api_key: Optional[str] = None):
                 "X-Channels": "1",
                 "X-Dtype": "float32",
             },
-            background=BackgroundTask(stream.close),
+            close=stream.close,
         )
 
     @app.post("/tts/file")
