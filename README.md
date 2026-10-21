@@ -409,6 +409,13 @@ capture only. Later environment changes do not alter an existing instance.
 Use `tts.t2s_model.model.cuda_graph_stats["graph_replay_steps"]` after a request
 to verify execution; a successful capture alone does not demonstrate replay.
 
+Requests sharing a decoder Graph workspace are serialized for their complete
+T2S AR generation, including prompt installation and sampling. CUDA events order
+handoff between streams; this does not add per-token device synchronization.
+Different Graph keys and separate decoder instances retain independent ownership.
+Graph-disabled requests use private KV. Counters describe the last completed AR
+request; they are not an aggregate across concurrent requests.
+
 **Adaptive FlashAttention2 T2S path** (preferred automatically when available):
 
 Aqua-TTS can replace the q_len=1 T2S static-KV attention step with
