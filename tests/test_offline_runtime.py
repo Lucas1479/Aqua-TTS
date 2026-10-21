@@ -99,9 +99,16 @@ def test_missing_nltk_resources_do_not_start_download(monkeypatch):
 def test_missing_japanese_dictionary_does_not_download(tmp_path, monkeypatch):
     import pyopenjtalk
     monkeypatch.setattr(pyopenjtalk, "OPEN_JTALK_DICT_DIR", str(tmp_path).encode())
-    monkeypatch.setattr(pyopenjtalk, "_extract_dic", Mock(side_effect=AssertionError("download")))
+    # pyopenjtalk-plus bundles its dictionary and has no _extract_dic.
+    # Guard network access in either distribution, and the legacy downloader
+    # when present, without requiring that private implementation detail.
+    download = Mock(side_effect=AssertionError("download"))
+    monkeypatch.setattr("socket.socket.connect", download)
+    if hasattr(pyopenjtalk, "_extract_dic"):
+        monkeypatch.setattr(pyopenjtalk, "_extract_dic", download)
     with pytest.raises(OfflineResourceError, match="Japanese OpenJTalk"):
         check_frontend("ja", "v2")
+    download.assert_not_called()
 
 
 @pytest.mark.parametrize("language", ["ko", "yue", "unknown"])

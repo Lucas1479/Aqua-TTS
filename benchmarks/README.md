@@ -71,16 +71,17 @@ JSON evidence can be saved with `--json-output result.json`.
 **2026-10-21, Aqua-only retest.** Windows, Python 3.12.10, Torch 2.6.0+cu124,
 upstream `08d627c`, default bucket storage, 15 warmups and seven synchronized
 measurements per fixed shape. Ti SUPER is USB4-attached and drives a desktop;
-Laptop is not a display GPU. Values are median it/s.
+Values are median it/s. The Laptop row is the earlier pre-fix `ad91a3d`
+measurement; that GPU is currently not enumerated and has not been retested.
 
 | GPU / engine | First AR after capture | Short / 448 | Conversation / 512 | Long / 768 |
 |---|---|---|---|---|
-| Ti SUPER · SDPA | 326.1 | 449.3 | 525.3 | 466.0 |
-| Ti SUPER · FA2 | 404.8 | 580.9 | 699.8 | 713.7 |
-| Laptop · FA2 | 276.7 | 435.4 | 501.9 | 501.6 |
+| Ti SUPER · SDPA | 345.6 | 504.3 | 488.8 | 460.8 |
+| Ti SUPER · FA2 | 431.3 | 618.7 | 687.5 | 738.5 |
+| Laptop · FA2 (pre-fix) | 276.7 | 435.4 | 501.9 | 501.6 |
 
 Each configuration ran in a fresh process. FA2 jobs reject SDPA fallback.
-The [report](results/readme-performance-cu124-20261021.md), [all samples](results/readme-performance-cu124-20261021.json)
+The [report](results/latency-fix-20261021.md), [all samples](results/latency-fix-20261021.json)
 and linked telemetry preserve ranges and context. No official engine was rerun.
 The [August upstream comparison](results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md)
 remains historical; it used a different Torch CUDA build and lacks weight hashes.
@@ -109,7 +110,7 @@ trimming is unchanged. `api-pcm` selects a different, post-trim availability met
 The older `aqua_ttfp.py` first-only five-repeat probe remains available, but is
 not the October baseline protocol and does not supply these headline numbers.
 
-The [report](results/readme-performance-cu124-20261021.md) and [all trials](results/readme-performance-cu124-20261021.json) include
+The [report](results/latency-fix-20261021.md) and [all trials](results/latency-fix-20261021.json) include
 current hashes, first use, p95, total time/RTF and GPU telemetry. The earlier
 [cu121 runs](results/readme-performance-20261021.md) used the wrong environment
 and are retained only as nonbaseline observations. Per-trial JSONL records are
@@ -217,7 +218,7 @@ this benchmark process and records that same GPU's utilization, clocks, memory,
 power and temperature every 500 ms. Three seconds of pre-load activity are
 recorded first. The tool does not close other applications or change GPU power
 settings; telemetry therefore describes the actual desktop environment, not an
-isolated GPU. The [2026-10-21 Aqua-only retest](results/readme-performance-cu124-20261021.md)
+isolated GPU. The [2026-10-21 Aqua-only retest](results/latency-fix-20261021.md)
 uses this protocol for the current v2-family README tables. The [2026-09-27 retest](results/v2-model-retest-20260927.md) preserves
 the previous measurements and documents the changed measurement protocol.
 

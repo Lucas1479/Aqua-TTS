@@ -662,7 +662,14 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
     else:
         transformer = dynamic_transformer
 
-    for idx in tqdm(range(1500)):
+    # The sampler sees only the written prefix. Keep its storage fixed so
+    # each token does not allocate and copy the entire semantic history.
+    decode_limit = 1500
+    y_buffer = y.new_empty((bsz, prefix_len + decode_limit))
+    y_buffer.narrow(1, 0, prefix_len).copy_(y)
+    y = y_buffer.narrow(1, 0, prefix_len)
+
+    for idx in tqdm(range(decode_limit)):
         if xy_attn_mask is not None:
             xy_dec, k_cache, v_cache = transformer.process_prompt(
                 xy_pos, xy_attn_mask, None
@@ -769,12 +776,16 @@ def _patched_infer_panel_naive(decoder, x, x_lens, prompts, bert_feature,
             repetition_penalty=repetition_penalty, temperature=temperature
         )[0]
 
-        y = torch.concat([y, samples], dim=1)
+        write_pos = prefix_len + idx
+        y_buffer.narrow(1, write_pos, 1).copy_(samples)
+        y = y_buffer.narrow(1, 0, write_pos + 1)
 
         if early_stop_num != -1 and (y.shape[1] - prefix_len) > early_stop_num:
             stop = True
 
-        if _should_stop_on_eos(logits, samples, decoder.EOS):
+        # The first 11 steps mask EOS out of the vocabulary. Shape metadata
+        # proves neither EOS condition can hold, avoiding a needless host read.
+        if logits.shape[-1] > decoder.EOS and _should_stop_on_eos(logits, samples, decoder.EOS):
             stop = True
 
         if stop:
