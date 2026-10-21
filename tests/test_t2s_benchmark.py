@@ -71,3 +71,39 @@ def test_resolve_file_checks_cwd_then_upstream(tmp_path, monkeypatch):
 def test_parse_buckets_deduplicates_and_sorts():
     benchmark = _load_benchmark_module()
     assert benchmark._parse_buckets("768,448,512,448") == [448, 512, 768]
+
+
+@pytest.mark.parametrize("raise_inside", [False, True])
+def test_fixed_work_preserves_native_eos_and_predicate_work(raise_inside):
+    from types import SimpleNamespace
+
+    benchmark = _load_benchmark_module()
+    decoder = SimpleNamespace(EOS=1024)
+    calls = []
+
+    def native_check(logits, samples, eos):
+        calls.append((logits, samples, eos))
+        return True
+
+    owner = SimpleNamespace(_should_stop_on_eos=native_check)
+    try:
+        with benchmark._fixed_length_eos(decoder, eos_module=owner):
+            assert decoder.EOS == 1024
+            assert owner._should_stop_on_eos("logits", "samples", decoder.EOS) is False
+            if raise_inside:
+                raise RuntimeError("benchmark failure")
+    except RuntimeError:
+        assert raise_inside
+    assert calls == [("logits", "samples", 1024)]
+    assert decoder.EOS == 1024
+    assert owner._should_stop_on_eos is native_check
+
+
+def test_upstream_fixed_work_restores_its_eos_id():
+    from types import SimpleNamespace
+
+    benchmark = _load_benchmark_module()
+    decoder = SimpleNamespace(EOS=1024)
+    with benchmark._fixed_length_eos(decoder):
+        assert decoder.EOS == -1
+    assert decoder.EOS == 1024
