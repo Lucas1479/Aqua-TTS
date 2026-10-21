@@ -559,6 +559,18 @@ python -m aquatts.server ... --voice-registry /data/voices.json
 export AQUA_VOICE_JSON=/data/voices.json
 ```
 
+### 并发 CUDA 工作与 Graph 捕获
+
+Aqua 推理、流式生成器完整生命周期、构造器、参考/BERT 预加载和 vocoder 预热
+共享进程级捕获准入。请求之间仍可并发；有其他工作租约时推迟捕获，本次请求使用
+eager 路径，之后可重试。捕获已获准时，新工作等待捕获结束。流式租约可跨线程池
+线程恢复，HTTP 取消时会关闭释放。
+
+同进程其他 GPU 调用方应从 `aquatts.inference.cuda_execution` 导入
+`cuda_execution`，用同步的 `with cuda_execution.work():` 包住 CUDA 工作。
+绕过该协作准入的外部 CUDA 调用无法由 Aqua 保护。暂停的流会保留租约，直到正常
+耗尽或显式调用 `close()`。
+
 ### V3 语义与声学参考
 
 `infer()` 和 `infer_stream()` 均可传 `semantic_reference`，接受 `Voice` 或包含

@@ -12,7 +12,6 @@ Key optimizations:
 Graceful degradation: CUDA Graph -> static KV -> dynamic KV fallback chain.
 """
 
-import threading
 import time
 import inspect as _inspect
 import os
@@ -26,6 +25,7 @@ from aquatts.inference.presets import (
     resolve_cuda_graph_request,
 )
 from aquatts.inference.workspace import GraphWorkspaceRegistry, resolve_kv_cache_layout
+from aquatts.inference.cuda_execution import cuda_execution, cuda_work
 
 # ---------------------------------------------------------------------------
 # Upstream GPT-SoVITS imports. Aqua patches these objects in-place and does not
@@ -42,8 +42,6 @@ logger = logging.getLogger(__name__)
 
 _GRAPH_INITIAL_LEN_STRIDE = 32
 _SUPPORTED_PATCH_KWARGS = frozenset({"enable_cuda_graph", "enable_static_kv"})
-# Torch's capture allocator is process-global even with per-device streams.
-_CAPTURE_LOCK = threading.RLock()
 
 
 class IncompatibleGPTSoVITSError(RuntimeError):
@@ -384,10 +382,14 @@ def _graph_kv_buffers(decoder, bucket, device, dtype):
 
 def _warmup_and_capture_bucket(decoder, bucket_size, device):
     owner = _workspace_owner(decoder, bucket_size)
-    with decoder._graph_workspaces.lease(owner, device), _CAPTURE_LOCK:
+    with decoder._graph_workspaces.lease(owner, device):
         if bucket_size in decoder.bucket_graphs:
             return True
-        return _capture_bucket(decoder, bucket_size, device)
+        with cuda_execution.try_capture() as admitted:
+            if not admitted:
+                logger.debug("Capture deferred: other CUDA work is active (bucket=%s)", bucket_size)
+                return False
+            return _capture_bucket(decoder, bucket_size, device)
 
 
 @torch.inference_mode(False)
@@ -470,8 +472,9 @@ def _capture_bucket(decoder, bucket_size, device):
             )
         except (ValueError, TypeError):
             _has_capture_error_mode = False  # PyTorch < 2.5
-        # Other owners may replay while this thread prepares a different key.
-        _graph_extra = {"capture_error_mode": "thread_local"} if _has_capture_error_mode else {}
+        # Admission excludes other participating work, including its RNG and
+        # synchronization calls. Keep CUDA's global safety checks enabled.
+        _graph_extra = {"capture_error_mode": "global"} if _has_capture_error_mode else {}
         with torch.cuda.device(device):
             cuda_graph = torch.cuda.CUDAGraph()
             capture_stream.wait_stream(torch.cuda.current_stream(device))
@@ -929,6 +932,7 @@ def apply_cuda_graph_patch(decoder: Text2SemanticDecoder, buckets=None, *, graph
     decoder._aquatts_original_infer_panel = original_infer_panel
     decoder._aquatts_original_infer_panel_naive = decoder.infer_panel_naive
 
+    @cuda_work
     def patched_infer_panel(x, x_lens, prompts, bert_feature,
                             top_k=-100, top_p=100, early_stop_num=-1,
                             temperature=1.0, repetition_penalty=1.35, **kwargs):

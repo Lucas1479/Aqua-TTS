@@ -1,6 +1,7 @@
 """CUDA selection and bounded BigVGAN preparation; Torch stays optional at import."""
 import os
 import time
+from aquatts.inference.cuda_execution import cuda_work
 
 
 def resolve_cuda_device(requested, *, torch_module=None):
@@ -46,6 +47,7 @@ def resolve_vocoder_warmup(shapes=None, repeats=None, *, environ=None):
     return tuple(shapes), repeats
 
 
+@cuda_work
 def warmup_vocoder(model, shapes, repeats):
     import torch
     stats = {"status": "disabled", "shapes": list(shapes), "repeats": repeats,
