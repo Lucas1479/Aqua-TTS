@@ -20,7 +20,7 @@
 
 ---
 
-Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，结合静态 KV 缓存、分桶 CUDA Graph、可选 FlashAttention2 和缓存的 BigVGAN CUDA 内核。2026-10-21 的 Aqua 专项复测中，USB4 外接 RTX 4070 Ti SUPER 的 FA2 吞吐为 **581–714 同步 it/s**，SDPA 为 **449–525 it/s**；RTX 4070 Laptop 的 FA2 为 **435–502 it/s**。V3 在 FA2 路径下的短／中／长输入预热首个原始 PCM（裁切前）中位数为 **225 / 255 / 410 ms**。这些模型侧数字不包含声卡播放，完整协议与负载身份见下文。
+Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，结合静态 KV 缓存、分桶 CUDA Graph、可选 FlashAttention2 和缓存的 BigVGAN CUDA 内核。2026-10-21 的 Aqua 专项复测中，修复后 USB4 外接 RTX 4070 Ti SUPER 的 FA2 吞吐为 **619–739 同步 it/s**，SDPA 为 **461–504 it/s**。Laptop 的旧测量单列于下文，尚未复测本次修复。V3 在 FA2 路径下的短／中／长输入预热首个原始 PCM（裁切前）中位数为 **213 / 256 / 307 ms**。这些模型侧数字不包含声卡播放，完整协议与负载身份见下文。
 
 **新增 v2 系列支持：** Aqua-TTS 现已支持 **v2、v2Pro、v2ProPlus** 权重，
 包括 Pro／Plus 的说话人编码器。下方提供 [v2 系列性能基准](#新增v2-系列性能基准)
@@ -34,12 +34,12 @@ Aqua-TTS 是面向 GPT-SoVITS 角色实时语音对话的 GPU 推理运行时，
 
 | 指标 | Aqua Graph + SDPA | Aqua Graph + FA2 `valid` |
 |---|---|---|
-| T2S 短 / bucket 448 | 449.3 it/s | 580.9 it/s |
-| T2S 对话 / bucket 512 | 525.3 it/s | 699.8 it/s |
-| T2S 长 / bucket 768 | 466.0 it/s | 713.7 it/s |
-| V3 TTFP 短 (3) | 296.4 ms | 224.5 ms |
-| V3 TTFP 中 (19) | 307.2 ms | 254.6 ms |
-| V3 TTFP 长 (64) | 400.2 ms | 410.2 ms |
+| T2S 短 / bucket 448 | 504.3 it/s | 618.7 it/s |
+| T2S 对话 / bucket 512 | 488.8 it/s | 687.5 it/s |
+| T2S 长 / bucket 768 | 460.8 it/s | 738.5 it/s |
+| V3 TTFP 短 (3) | 241.9 ms | 212.8 ms |
+| V3 TTFP 中 (19) | 281.5 ms | 256.5 ms |
+| V3 TTFP 长 (64) | 361.2 ms | 307.2 ms |
 
 环境为 Windows、Python 3.12.10、Torch 2.6.0+cu124、fp16、上游 `08d627c`；
 保持默认 `bucket` KV 布局，关闭 CFM unpadded。T2S 沿用 51／123／180 步固定形状，
@@ -56,7 +56,8 @@ V3 确认使用 BigVGAN CUDA 内核；首页 FA2 数据均在捕获前启用禁�
 | KV 分配 | 每 token 增长 | **按 bucket 预分配并限界** | **按 bucket 预分配并限界** |
 | CUDA Graph | 标准入口无 | **每个准备桶一图，最多 6 图 + 惰性捕获** | **每个准备桶一图，最多 6 图 + 惰性捕获** |
 | Replay 同步 | eager launch | **CUDA stream 保序；无逐 token 设备同步** | **CUDA stream 保序；无逐 token 设备同步** |
-| EOS 主机读取 | 上游条件判断 | **greedy + sampled EOS 合并一次读取** | **greedy + sampled EOS 合并一次读取** |
+| EOS 主机读取 | 上游条件判断 | **前 11 步跳过；随后合并一次读取** | **前 11 步跳过；随后合并一次读取** |
+| 语义历史 | 每 token 拼接 | **请求内复用缓冲，仅暴露有效前缀** | **请求内复用缓冲，仅暴露有效前缀** |
 | Graph 并发 | 不适用 | **按桶或 nested 共享根持有完整 AR 租约** | **按桶或 nested 共享根持有完整 AR 租约** |
 | 失败回退 | 动态 decoder | **Graph → 静态 KV → 动态** | **FA2 → SDPA；Graph → 静态 KV → 动态** |
 | BigVGAN 激活 | 运行时扩展/JIT 路径 | **ABI 缓存 CUDA → 纯 PyTorch 回退** | **ABI 缓存 CUDA → 纯 PyTorch 回退** |
@@ -64,15 +65,15 @@ V3 确认使用 BigVGAN CUDA 内核；首页 FA2 数据均在捕获前启用禁�
 
 Ti SUPER 经 USB4 连接并承担 Windows 桌面显示，桌面活动和主机同步会影响结果。
 请在同一张卡内比较执行方式，不用跨卡数字给显卡性能排名。旧 V3 报告缺少文件哈希，
-同名权重不能证明历史负载逐字节相同。[本轮报告](benchmarks/results/readme-performance-cu124-20261021.md)与[全部样本](benchmarks/results/readme-performance-cu124-20261021.json)
+同名权重不能证明历史负载逐字节相同。[本轮报告](benchmarks/results/latency-fix-20261021.md)与[全部样本](benchmarks/results/latency-fix-20261021.json)
 记录当前哈希、范围、p95、总耗时／RTF 和 GPU 遥测。
 [旧上游对比](benchmarks/results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md)保留归档；
 本轮没有重跑官方列，也没有把旧官方数字混入新表。
 
 ### 8 GB 移动显卡验证
 
-Laptop 不承担显示输出；与 Ti SUPER 的 T2S 测试使用相同当前权重、固定形状、
-软件环境、15 次预热和 7 次正式测量。“捕获后首次 AR”不包含加载模型和准备 Graph。
+下表保留修复前 `ad91a3d` 的 Laptop 测量，本次未重跑：系统目前只枚举 Ti SUPER。
+当时 Laptop 不承担显示输出，使用 Torch 2.6/cu124、同一固定负载、15 次预热和 7 次正式测量。“捕获后首次 AR”不包含加载模型和准备 Graph。
 
 | GPU | 捕获后首次 AR | Short / 448 | Conversation / 512 | Long / 768 |
 |---|---|---|---|---|
@@ -111,30 +112,30 @@ Torch 2.6.0+cu124、fp16、上游 `08d627c`。下表为预热后、起音裁切�
 
 | 模型 / 输入 | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · 短句 | 113.9 ms | 104.0 ms |
-| v2 · 中句 | 188.3 ms | 151.7 ms |
-| v2 · 长句 | 346.8 ms | 230.8 ms |
-| v2Pro · 短句 | 113.0 ms | 145.9 ms |
-| v2Pro · 中句 | 169.3 ms | 206.3 ms |
-| v2Pro · 长句 | 281.1 ms | 320.6 ms |
-| v2ProPlus · 短句 | 151.7 ms | 141.7 ms |
-| v2ProPlus · 中句 | 259.2 ms | 230.7 ms |
-| v2ProPlus · 长句 | 365.7 ms | 322.9 ms |
+| v2 · 短句 | 96.9 ms | 86.1 ms |
+| v2 · 中句 | 162.0 ms | 132.4 ms |
+| v2 · 长句 | 284.1 ms | 211.0 ms |
+| v2Pro · 短句 | 100.7 ms | 88.8 ms |
+| v2Pro · 中句 | 160.6 ms | 128.1 ms |
+| v2Pro · 长句 | 267.2 ms | 211.2 ms |
+| v2ProPlus · 短句 | 97.3 ms | 85.6 ms |
+| v2ProPlus · 中句 | 169.2 ms | 138.9 ms |
+| v2ProPlus · 长句 | 256.9 ms | 203.3 ms |
 
 **短句首个 PCM 包延迟（p95，20 样本最近秩）**
 
 | 模型 / 输入 | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · 短句 | 122.8 ms | 121.9 ms |
-| v2Pro · 短句 | 128.0 ms | 176.7 ms |
-| v2ProPlus · 短句 | 189.5 ms | 166.1 ms |
+| v2 · 短句 | 101.3 ms | 87.7 ms |
+| v2Pro · 短句 | 104.2 ms | 97.8 ms |
+| v2ProPlus · 短句 | 104.1 ms | 94.2 ms |
 
-V2 Pro／FA2 短句最低 **130.2 ms**，p50 **145.9 ms**，p95 **176.7 ms**。
+V2 Pro／FA2 短句最低 **85.2 ms**，p50 **88.8 ms**，p95 **97.8 ms**。
 v2 沿用已有底模，Pro／Plus 沿用 Kurisu 微调权重，请在同一组权重内比较执行方式。
 不同后端的浮点差异可能改变采样 token，因此这是同输入下的实测延迟，不是固定 token
 数量的纯计算加速。v2 系列输出 32 kHz，按文本段解码后分块传输。基准进程单独绕过起音处理，以延续历史统计口径。
 
-[本轮报告](benchmarks/results/readme-performance-cu124-20261021.md)与[原始样本](benchmarks/results/readme-performance-cu124-20261021.json)包含各输入的 p95、模型加载、
+[本轮报告](benchmarks/results/latency-fix-20261021.md)与[原始样本](benchmarks/results/latency-fix-20261021.json)包含各输入的 p95、模型加载、
 首次调用、总耗时／RTF、token 哈希和负载身份。
 [九月报告](benchmarks/results/v2-model-retest-20260927.md)及原有官方基线完整保留归档。
 
@@ -494,11 +495,11 @@ Torch 2.6.0+cu124，预热 15 次，每个形状同步测量 7 次：
 
 | 形状 | SDPA | FA2 | 本轮差值 |
 |---|---|---|---|
-| short / 448 | 449.3 it/s | 580.9 it/s | 29% |
-| conversation / 512 | 525.3 it/s | 699.8 it/s | 33% |
-| long / 768 | 466.0 it/s | 713.7 it/s | 53% |
+| short / 448 | 504.3 it/s | 618.7 it/s | 23% |
+| conversation / 512 | 488.8 it/s | 687.5 it/s | 41% |
+| long / 768 | 460.8 it/s | 738.5 it/s | 60% |
 
-这些是同卡固定 T2S 工作量的实测差值，仍受桌面调度和 GPU P-state 影响，不能用来预测完整管线首包延迟。原始 PCM 的 TTFP 与裁切后的 API 首包是两个指标。正确环境复测仍有部分延迟差距，性能验收尚未通过，完整报告列出了与十月基准的逐项对照。
+这些是同卡固定 T2S 工作量的实测差值，仍受桌面调度和 GPU P-state 影响，不能用来预测完整管线首包延迟。原始 PCM 的 TTFP 与裁切后的 API 首包是两个指标。已将独立 #12 的历史缓冲复用与前 11 步 EOS 跳过整合到迁移栈。同场配对未复现此前的大幅首包差距；报告保留所有批次，并区分代码收益和运行波动。性能验收与 Laptop 补测仍需单独确认。
 
 ```python
 from aquatts import apply_preset, list_presets

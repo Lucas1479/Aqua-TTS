@@ -27,7 +27,7 @@
 
 ---
 
-Aqua-TTS is a GPU-optimized inference runtime for real-time voice conversation with GPT-SoVITS character voices. It combines static KV buffers, bucketed CUDA Graphs, optional FlashAttention2 and cached BigVGAN CUDA kernels. The 2026-10-21 Aqua-only retest measured **581–714 synchronized it/s** with FA2 and **449–525 it/s** with SDPA on an RTX 4070 Ti SUPER over USB4. An RTX 4070 Laptop measured **435–502 it/s** with FA2. V3 warm first raw-PCM medians with FA2 were **225 / 255 / 410 ms** for short/medium/long inputs, before onset trimming. These model-side numbers exclude speaker playback; full protocols and workload identities are linked below.
+Aqua-TTS is a GPU-optimized inference runtime for real-time voice conversation with GPT-SoVITS character voices. It combines static KV buffers, bucketed CUDA Graphs, optional FlashAttention2 and cached BigVGAN CUDA kernels. The 2026-10-21 Aqua-only retest measured **619–739 synchronized it/s** with FA2 and **461–504 it/s** with SDPA after the semantic-history fix on an RTX 4070 Ti SUPER over USB4. The earlier Laptop measurements are retained separately; this fix has not been retested on that GPU. V3 warm first raw-PCM medians with FA2 were **213 / 256 / 307 ms** for short/medium/long inputs, before onset trimming. These model-side numbers exclude speaker playback; full protocols and workload identities are linked below.
 
 **V2-family support:** Aqua-TTS also loads **v2, v2Pro, and v2ProPlus** checkpoints,
 including the Pro/Plus speaker encoder. See the [v2-family benchmarks](#additional-v2-family-benchmarks)
@@ -42,12 +42,12 @@ processing in their own process; normal product inference keeps it enabled.
 
 | Metric | Aqua Graph + SDPA | Aqua Graph + FA2 `valid` |
 |---|---|---|
-| T2S short / bucket 448 | 449.3 it/s | 580.9 it/s |
-| T2S conversation / bucket 512 | 525.3 it/s | 699.8 it/s |
-| T2S long / bucket 768 | 466.0 it/s | 713.7 it/s |
-| V3 TTFP short (3) | 296.4 ms | 224.5 ms |
-| V3 TTFP medium (19) | 307.2 ms | 254.6 ms |
-| V3 TTFP long (64) | 400.2 ms | 410.2 ms |
+| T2S short / bucket 448 | 504.3 it/s | 618.7 it/s |
+| T2S conversation / bucket 512 | 488.8 it/s | 687.5 it/s |
+| T2S long / bucket 768 | 460.8 it/s | 738.5 it/s |
+| V3 TTFP short (3) | 241.9 ms | 212.8 ms |
+| V3 TTFP medium (19) | 281.5 ms | 256.5 ms |
+| V3 TTFP long (64) | 361.2 ms | 307.2 ms |
 
 Windows, Python 3.12.10, Torch 2.6.0+cu124, fp16, upstream `08d627c`;
 default `bucket` KV layout and CFM unpadded off. T2S uses the original fixed
@@ -66,7 +66,8 @@ V3 used the actual BigVGAN CUDA kernel. Headline FA2 jobs rejected fallback befo
 | KV allocation | Grows per token | **Pre-allocated and bounded per bucket** | **Pre-allocated and bounded per bucket** |
 | CUDA Graph | None in the standard entry point | **One per prepared bucket, up to 6 + lazy capture** | **One per prepared bucket, up to 6 + lazy capture** |
 | Replay synchronization | Eager launches | **Stream-ordered; no per-token device sync** | **Stream-ordered; no per-token device sync** |
-| EOS host read | Native condition checks | **Greedy + sampled EOS combined once** | **Greedy + sampled EOS combined once** |
+| EOS host read | Native condition checks | **Skip first 11 steps; then combine once** | **Skip first 11 steps; then combine once** |
+| Semantic history | Per-token concatenation | **Request-local buffer, valid prefix only** | **Request-local buffer, valid prefix only** |
 | Graph concurrency | N/A | **Full AR lease per bucket, or shared nested root** | **Full AR lease per bucket, or shared nested root** |
 | Failure path | Dynamic decoder | **Graph → static KV → dynamic** | **FA2 → SDPA; Graph → static KV → dynamic** |
 | BigVGAN activation | Runtime extension/JIT path | **ABI-keyed CUDA cache → PyTorch fallback** | **ABI-keyed CUDA cache → PyTorch fallback** |
@@ -76,15 +77,16 @@ The Ti SUPER was attached over USB4 and drove a Windows desktop; desktop activit
 and host synchronization affect its measurements. Compare engines on the same card,
 not GPU-to-GPU rates as a hardware ranking. The old V3 report lacks file hashes,
 so identical checkpoint basenames do not prove byte-identical historical workloads.
-The [new report](benchmarks/results/readme-performance-cu124-20261021.md) and [all trials](benchmarks/results/readme-performance-cu124-20261021.json) record current hashes,
+The [new report](benchmarks/results/latency-fix-20261021.md) and [all trials](benchmarks/results/latency-fix-20261021.json) record current hashes,
 ranges, p95, total time/RTF and GPU telemetry. The [old upstream comparison](benchmarks/results/4070ti-super-win-py312-torch251-cu124-upstream-overlay.md)
 is archived; its official column was not rerun or mixed into this table.
 
 ### 8 GB mobile GPU validation
 
-The Laptop was not driving a display. It used the same current checkpoint, fixed
-shapes, software environment, 15 warmups and seven measurements as the Ti SUPER
-T2S jobs. “First AR after capture” excludes model load and graph preparation.
+This table retains the pre-fix `ad91a3d` Laptop measurement. The current system
+only enumerates the Ti SUPER, so the Laptop has not been retested for this fix.
+The earlier run used Torch 2.6/cu124, the same fixed workload, 15 warmups and
+seven measurements; the Laptop was not driving a display. “First AR after capture” excludes model load and graph preparation.
 
 | GPU | First AR after capture | Short / 448 | Conversation / 512 | Long / 768 |
 |---|---|---|---|---|
@@ -127,32 +129,32 @@ captured no new graphs; FA2 jobs rejected SDPA fallback. Only Aqua SDPA and FA2 
 
 | Model / input | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · short | 113.9 ms | 104.0 ms |
-| v2 · medium | 188.3 ms | 151.7 ms |
-| v2 · long | 346.8 ms | 230.8 ms |
-| v2Pro · short | 113.0 ms | 145.9 ms |
-| v2Pro · medium | 169.3 ms | 206.3 ms |
-| v2Pro · long | 281.1 ms | 320.6 ms |
-| v2ProPlus · short | 151.7 ms | 141.7 ms |
-| v2ProPlus · medium | 259.2 ms | 230.7 ms |
-| v2ProPlus · long | 365.7 ms | 322.9 ms |
+| v2 · short | 96.9 ms | 86.1 ms |
+| v2 · medium | 162.0 ms | 132.4 ms |
+| v2 · long | 284.1 ms | 211.0 ms |
+| v2Pro · short | 100.7 ms | 88.8 ms |
+| v2Pro · medium | 160.6 ms | 128.1 ms |
+| v2Pro · long | 267.2 ms | 211.2 ms |
+| v2ProPlus · short | 97.3 ms | 85.6 ms |
+| v2ProPlus · medium | 169.2 ms | 138.9 ms |
+| v2ProPlus · long | 256.9 ms | 203.3 ms |
 
 **Short-input first-PCM latency (p95, nearest rank over 20 samples)**
 
 | Model / input | Aqua Graph + SDPA | Aqua Graph + FA2 |
 |---|---|---|
-| v2 · short | 122.8 ms | 121.9 ms |
-| v2Pro · short | 128.0 ms | 176.7 ms |
-| v2ProPlus · short | 189.5 ms | 166.1 ms |
+| v2 · short | 101.3 ms | 87.7 ms |
+| v2Pro · short | 104.2 ms | 97.8 ms |
+| v2ProPlus · short | 104.1 ms | 94.2 ms |
 
-V2 Pro/FA2 short minimum: **130.2 ms**; p50 **145.9 ms**, p95 **176.7 ms**.
+V2 Pro/FA2 short minimum: **85.2 ms**; p50 **88.8 ms**, p95 **97.8 ms**.
 V2 uses the existing stock checkpoints; Pro/Plus use the existing Kurisu fine-tunes.
 Compare engines within one checkpoint pair. Backend floating-point differences
 can change sampled tokens; these are observed input latencies, not fixed-token
 speedup claims. V2-family output is 32 kHz and decodes each text segment before
 chunk transport. Only benchmark processes bypass onset processing for historical comparability.
 
-The [new report](benchmarks/results/readme-performance-cu124-20261021.md) and [raw trials](benchmarks/results/readme-performance-cu124-20261021.json) include p95 for
+The [new report](benchmarks/results/latency-fix-20261021.md) and [raw trials](benchmarks/results/latency-fix-20261021.json) include p95 for
 every input, model-load time, first use, total duration/RTF, token hashes and
 workload identities. The [September report](benchmarks/results/v2-model-retest-20260927.md)
 remains archived with its original official-baseline results.
@@ -566,15 +568,17 @@ Torch 2.6.0+cu124, 15 warmups and seven synchronized repeats:
 
 | Shape | SDPA | FA2 | This-run difference |
 |---|---|---|---|
-| short / 448 | 449.3 it/s | 580.9 it/s | 29% |
-| conversation / 512 | 525.3 it/s | 699.8 it/s | 33% |
-| long / 768 | 466.0 it/s | 713.7 it/s | 53% |
+| short / 448 | 504.3 it/s | 618.7 it/s | 23% |
+| conversation / 512 | 488.8 it/s | 687.5 it/s | 41% |
+| long / 768 | 460.8 it/s | 738.5 it/s | 60% |
 
 These are observed same-card differences for fixed T2S work. Desktop scheduling
 and GPU P-state can affect them; they do not predict full-pipeline TTFP. In this
 report, raw-PCM TTFP and post-trim API availability are separate metrics.
-The corrected runtime retest still has latency gaps in several cases.
-Performance acceptance remains pending; see the report's October-baseline comparison.
+The separate #12 history-buffer and masked-EOS optimizations are now integrated
+into the migration stack. Same-session paired trials did not reproduce the
+earlier large first-PCM gap. The report separates code effects from batch
+variation; performance acceptance and Laptop follow-up remain separate checks.
 
 ```python
 from aquatts import apply_preset, list_presets
