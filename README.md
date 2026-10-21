@@ -578,7 +578,8 @@ report, raw-PCM TTFP and post-trim API availability are separate metrics.
 The separate #12 history-buffer and masked-EOS optimizations are now integrated
 into the migration stack. Same-session paired trials did not reproduce the
 earlier large first-PCM gap. The report separates code effects from batch
-variation; performance acceptance and Laptop follow-up remain separate checks.
+variation. Version 0.3.0 retains the labeled pre-fix Laptop results; a new
+Laptop measurement is deferred.
 
 ```python
 from aquatts import apply_preset, list_presets

@@ -1,41 +1,62 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
+## [0.3.0] — 2026-10-21
+
 ### Added
 
+- Optional nested KV storage shares a maximum-size root across bucket views.
+  Requests can promote to larger already captured buckets without copying live
+  KV, while newly exposed tails are cleared and fallback preserves full history.
+  The default remains independent `bucket` storage.
+- Public `warm_reference_cache()` and `clear_reference_cache()` APIs, optional
+  constructor reference warmup, bounded cache residency, file/model/device/dtype
+  invalidation, atomic builds and CUDA-event readiness across streams.
+- V3 `semantic_reference` support lets semantic prompts and acoustic conditioning
+  use independently selected references in both ordinary and streaming inference.
+- Per-instance `offline_only` model/resource checks for supported local-loading
+  paths, including actual AP-BWE resource locations. Online segmentation retains
+  its upstream behavior; offline configuration does not change global Hub policy.
+- Explicit BERT preloading through `preload_bert=True` / `preload_bert_model()`,
+  with observable readiness, concurrent first-use protection and retry.
 - Bounded, configurable BigVGAN warmup shapes/repeats with RNG preservation,
   preparation status and actual request shape counts.
-- Public reference warmup, optional constructor reference lists and explicit cache
-  clearing, with shared normalization, bounded residency and strict/best-effort results.
-- Reference file/model/device/dtype invalidation, atomic builds and CUDA-stream
-  readiness handoff; cached V3 references avoid repeated file loading in both APIs.
-- Lazy Chinese BERT loading with `preload_bert=True` / `preload_bert_model()`,
-  observable readiness and load duration, concurrent first-use protection and retry.
-- AP-BWE imports and model construction are deferred to super-resolution requests.
-- One CUDA Graph per computation bucket, shared across real prefix lengths.
-- Optional `kv_cache_layout="nested"` shares a maximum KV root across short
-  bucket views; the default `bucket` layout retains independent bucket storage.
-- A fresh-process `kv_layout_bench.py` reports unique KV storage separately from
-  allocator totals, including sparse capture and legacy-source controls.
-- Nested KV promotes to larger already captured buckets without copying live KV,
-  clears newly exposed tails, and preserves complete history on dynamic fallback.
-- Per-request promotion/path counters and a fixed-work real-weight promotion
-  benchmark, with exported-source controls and strict FA2 fallback detection.
+- Experimental V3 single-item `cfm_unpadded=True` inference, preserving conditioner
+  caches. It remains disabled by default.
+
+### Changed
+
+- Reuse one CUDA Graph per computation bucket across real prefix lengths.
+- Coordinate GPU work and capture admission across requests and instances.
+  Capture is deferred while other work is active; affected requests can use
+  eager inference. Complete pre-capture before serving sustained concurrent work.
+- Load Chinese BERT only when needed, and defer AP-BWE imports/model construction
+  until super-resolution is requested.
+- Reuse one request-local semantic-history buffer and skip EOS host reads during
+  the first 11 steps where EOS is masked out. Sampling and RNG behavior are preserved.
+- Retain historical first-raw-PCM timing in README benchmarks. Current Ti SUPER
+  measurements use Torch 2.6.0+cu124 and the existing compiled BigVGAN kernel;
+  the labeled pre-fix RTX 4070 Laptop measurements are retained pending a later retest.
 
 ### Fixed
 
-- Resolve unindexed CUDA against the actual current device, validate unavailable
-  indexes before model loading, and keep extension caches/calls on that device.
-- Synchronize the selected device for diagnostic timing only; ordinary complete
-  V3 stream chunks no longer force device synchronization for unused timing output.
-- Inference requests inherit the instance CUDA Graph policy by default. Preset,
-  environment overrides and explicit per-request choices share one resolution
-  path; `off` no longer leaves the decoder enabled.
-- Warm up and capture on an explicit stream for the selected CUDA device,
-  avoiding reuse of Torch's implicit capture stream across different GPUs.
+- Inference requests inherit the instance CUDA Graph policy unless explicitly
+  overridden; disabling Graphs also disables startup pre-capture.
+- Resolve unindexed CUDA to the actual current device, reject unavailable indexes
+  before loading models, and keep capture streams, extension caches and vocoder
+  calls on the selected device.
 - Own shared Graph KV and logits for the complete AR request, with CUDA-event
-  stream handoff, exception-safe release and request-local replay counters.
+  stream handoff, exception-safe release and request-local counters.
+- Release V3 decode ownership before yielding audio, and serialize HTTP generator
+  advancement/closure so worker-thread changes, disconnects and cancellation clean up correctly.
+- Validate both newly built and cached references; propagate reference failures
+  before streaming headers rather than continuing with incomplete conditioning.
+- Read V3 reference audio through soundfile instead of torchaudio.load, avoiding
+  a TorchCodec requirement on newer torchaudio versions.
+- Slice semantic output using the actual prompt length, including early-stop cases.
+- Synchronize the selected device only for diagnostic timing; normal complete V3
+  stream chunks avoid device synchronization for unused timing output.
 
 ## [0.2.1] — 2026-10-06
 
@@ -129,6 +150,7 @@
 - TTFP and T2S throughput benchmarks with ablation flags
 - Example scripts for basic and streaming inference
 
+[0.3.0]: https://github.com/Lucas1479/Aqua-TTS/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Lucas1479/Aqua-TTS/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Lucas1479/Aqua-TTS/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Lucas1479/Aqua-TTS/releases/tag/v0.1.0

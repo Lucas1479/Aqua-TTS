@@ -12,7 +12,7 @@ from aquatts.upstream import (
 )
 
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 # ── Internal path configuration (内部路径配置) ──────────────────────────────────────────
 # The bundled namespace bridge only redirects BigVGAN's CUDA extension loader.
