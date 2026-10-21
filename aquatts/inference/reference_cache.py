@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 import threading
 
+REFERENCE_LANGUAGE_CODES = frozenset({"en", "all_zh", "all_ja", "all_ko", "all_yue",
+                                      "zh", "ja", "ko", "yue", "auto", "auto_yue"})
+
 
 @dataclass(frozen=True)
 class NormalizedReference:
@@ -17,9 +20,7 @@ def normalize_reference(audio_path, text, language, *, model_version, languages,
                         splits, fallback_text, fallback_language, ref_free=False):
     path = str(Path(audio_path).expanduser().resolve())
     text = (text or "").strip()
-    internal = {"en", "all_zh", "all_ja", "all_ko", "all_yue", "zh", "ja", "ko",
-                "yue", "auto", "auto_yue"}
-    language = languages.get(language, language if language in internal else fallback_language)
+    language = languages.get(language, language if language in REFERENCE_LANGUAGE_CODES else fallback_language)
     ref_free = bool(ref_free or not text)
     if model_version == "v3":
         if not text:

@@ -14,7 +14,7 @@ import numpy as np
 from aquatts.inference.onset import LeadingSilence, leading_cut
 from aquatts.inference.workspace import resolve_kv_cache_layout
 from aquatts.inference.cuda_runtime import resolve_cuda_device, resolve_vocoder_warmup, warmup_vocoder
-from aquatts.inference.reference_cache import ReferenceCache, normalize_reference, reference_key
+from aquatts.inference.reference_cache import REFERENCE_LANGUAGE_CODES, ReferenceCache, normalize_reference, reference_key
 from aquatts.inference.offline import check_frontend, require_checkpoint, require_files, require_transformer
 from aquatts.voice_registry import Voice
 
@@ -1096,6 +1096,44 @@ class TTSInferencer:
             logger.warning("构建会话缓存失败，回退到逐句计算。", exc_info=True)
             return {}
 
+    def _normalize_semantic_reference(self, value, *, prompt_text, prompt_language, ref_free):
+        if value is None:
+            return None
+        if self.model_version != "v3":
+            raise ValueError("semantic_reference is supported only for V3")
+        if ref_free:
+            raise ValueError("semantic_reference cannot be combined with ref_free=True")
+        if not isinstance(prompt_text, str) or not prompt_text.strip():
+            raise ValueError("Mixed references require an explicit acoustic prompt_text")
+        if isinstance(value, Voice):
+            value = value.to_dict()
+        if not isinstance(value, dict):
+            raise TypeError("semantic_reference must be a Voice or reference dictionary")
+        path, text = value.get("ref_audio_path"), value.get("prompt_text")
+        if not isinstance(path, (str, os.PathLike)) or not os.fspath(path).strip():
+            raise ValueError("semantic_reference requires ref_audio_path")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("semantic_reference requires a nonempty prompt_text")
+        language = value.get("prompt_language", "日文")
+        for component, label in (("acoustic", prompt_language), ("semantic", language)):
+            if not isinstance(label, str) or (label not in self.dict_language and label not in REFERENCE_LANGUAGE_CODES):
+                raise ValueError(f"Unknown {component} reference language: {label!r}")
+        return self._normalize_reference_prompt(path, text, language)
+
+    def _reference_session_for_request(self, acoustic, semantic=None):
+        if semantic is None:
+            return self._build_session_cache(acoustic.audio_path, acoustic.text, acoustic.language)
+        # Keep both lookups in one model generation. A capacity-one cache may
+        # evict the first entry, but the request retains its own complete values.
+        with self._reference_state_lock:
+            acoustic_entry = self._get_reference_entry(acoustic)[0]
+            semantic_entry = self._get_reference_entry(semantic)[0]
+            self._validate_reference_features(acoustic, acoustic_entry)
+            self._validate_reference_features(semantic, semantic_entry)
+            sources = [(semantic_entry, ("prompt", "phones1", "bert1")),
+                       (acoustic_entry, ("refer_spec", "prompt_fea_ref", "prompt_ge", "mel2_norm"))]
+            return {key: self._clone_cached_value(entry[key]) for entry, keys in sources for key in keys}
+
 
     @torch.no_grad()
     def _build_reference_features(self, reference):
@@ -1167,6 +1205,9 @@ class TTSInferencer:
         """Clone cached tensors to avoid mutation by downstream inference paths.
         避免读取会话缓存后被后续推理路径原地复用/污染。"""
         if torch.is_tensor(value):
+            if value.is_cuda:
+                # An entry may be evicted while another stream clones it.
+                value.record_stream(torch.cuda.current_stream(value.device))
             return value.clone()
         if isinstance(value, list):
             return [self._clone_cached_value(item) for item in value]
@@ -1401,7 +1442,8 @@ class TTSInferencer:
               if_sr=False,
               enable_cuda_graph=None,
               enable_static_kv=True,
-              max_sec_override=None):
+              max_sec_override=None,
+              semantic_reference=None):
         """
         Run TTS inference (non-streaming, returns full audio).
         执行TTS推理
@@ -1423,6 +1465,8 @@ class TTSInferencer:
             if_freeze: Whether to reuse previous cache (reduces randomness) / 是否重用上次的缓存
             inp_refs: Additional reference audio paths for voice mixing / 额外的参考音频列表
             if_sr: Whether to use audio super-resolution (v3 only) / 是否使用音频超分辨率
+            semantic_reference: Optional V3 Voice/dict supplying prompt/phones/BERT.
+                The ordinary reference continues to supply acoustic conditions.
 
         Returns:
             tuple: (sample_rate, audio_data) / (采样率, 音频数据)
@@ -1446,6 +1490,8 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
+            semantic = self._normalize_semantic_reference(
+                semantic_reference, prompt_text=prompt_text, prompt_language=prompt_language, ref_free=ref_free)
             reference = self._normalize_reference_prompt(
                 ref_audio_path, prompt_text, prompt_language, ref_free=ref_free)
             ref_audio_path, prompt_text = reference.audio_path, reference.text
@@ -1486,8 +1532,7 @@ class TTSInferencer:
 
             # Process reference audio (prefer session-level cache)
             # 处理参考音频（会话级缓存优先）
-            sess_lang = prompt_language_code if not ref_free else _default_lang_code()
-            sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
+            sess = self._reference_session_for_request(reference, semantic)
             prompt = sess.get("prompt")
 
             # Extract phones and BERT features from reference audio
@@ -1762,7 +1807,8 @@ class TTSInferencer:
                      enable_static_kv=True,
                      chunk_size_seconds: float = None,
                      max_sec_override: float = None,
-                     collect_t2s_stats: bool = False):
+                     collect_t2s_stats: bool = False,
+                     semantic_reference=None):
         """
         Streaming TTS inference — yields audio chunks as they are generated.
         流式执行TTS推理，逐步返回音频块
@@ -1793,6 +1839,8 @@ class TTSInferencer:
             if_sr: Whether to use audio super-resolution (v3 only) / 是否使用音频超分辨率
             chunk_size_seconds: If set, partition output into fixed-duration chunks / 按秒数分块输出
             collect_t2s_stats: Record synchronized T2S token throughput stats / 记录T2S吞吐统计
+            semantic_reference: Optional V3 Voice/dict supplying prompt/phones/BERT.
+                The ordinary reference continues to supply acoustic conditions.
 
         Yields:
             Generator of (sample_rate, audio_chunk, text_segment) tuples.
@@ -1834,6 +1882,8 @@ class TTSInferencer:
                 text_language_code = _default_lang_code()
                 logger.warning(f"未知语言: {text_language}，使用默认语言: {_TTS_OUTPUT_LANGUAGE}")
 
+            semantic = self._normalize_semantic_reference(
+                semantic_reference, prompt_text=prompt_text, prompt_language=prompt_language, ref_free=ref_free)
             reference = self._normalize_reference_prompt(
                 ref_audio_path, prompt_text, prompt_language, ref_free=ref_free)
             ref_audio_path, prompt_text = reference.audio_path, reference.text
@@ -1897,8 +1947,7 @@ class TTSInferencer:
 
             # Process reference audio (prefer session-level cache)
             # 处理参考音频（会话级缓存优先）
-            sess_lang = prompt_language_code if not ref_free else _default_lang_code()
-            sess = self._build_session_cache(ref_audio_path, prompt_text, sess_lang)
+            sess = self._reference_session_for_request(reference, semantic)
             prompt = sess.get("prompt")
 
             # Extract phones and BERT features from reference audio
